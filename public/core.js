@@ -4,6 +4,16 @@ const $ = (s, r) => (r || document).querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const WORDS = ['בסיסי', 'טוב', 'בולט'];
 const wishRank = (c, u) => ((c.wish && c.wish.units) || []).indexOf(u) + 1; // 0 = not wished, 1..3 = rank
+const COMBAT = ['לא מעוניין/ת', 'פתוח/ה', 'מעוניין/ת']; // willingness for a combat role (0..2)
+// chart tooltip: any element with data-tip="value|label" (hover or keyboard focus); text only, never innerHTML
+(function () {
+  let tip; const get = () => { if (!tip) { tip = document.createElement('div'); tip.id = 'charttip'; document.body.appendChild(tip); } return tip; };
+  const fill = (t) => { const el = get(), p = (t.dataset.tip || '').split('|'); el.replaceChildren(); const b = document.createElement('b'); b.textContent = p[0]; b.dir = 'ltr'; b.style.textAlign = 'start'; const s = document.createElement('span'); s.textContent = p[1] || ''; el.append(b, s); el.style.display = 'block'; return el; };
+  const place = (el, x, y) => { const r = el.getBoundingClientRect(); el.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x)) + 'px'; el.style.top = Math.max(8, y - r.height) + 'px'; };
+  document.addEventListener('pointermove', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) place(fill(t), e.clientX + 12, e.clientY - 12); else if (tip) tip.style.display = 'none'; });
+  document.addEventListener('focusin', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) { const r = t.getBoundingClientRect(); place(fill(t), r.left, r.top - 6); } });
+  document.addEventListener('focusout', () => { if (tip) tip.style.display = 'none'; });
+})();
 const LOWHIGH = ['נמוך', 'בינוני', 'גבוה'];
 const LVCLS = ['p-gray', 'p-blue', 'p-green'];
 const REC_CLS = { 'מומלץ': 'p-green', 'מומלץ בהסתייגות': 'p-orange', 'לא מומלץ': 'p-red' };

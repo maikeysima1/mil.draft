@@ -35,15 +35,18 @@ function makeExtra(cf, role, lv, rec, rnd2) {
   return { motivation: Math.max(1, Math.min(5, 2 + Math.floor(rnd2() * 3) + (sum >= 6 ? 1 : 0))), discipline: Math.min(2, Math.floor(rnd2() * 2.4) + (sum >= 7 ? 1 : 0)), potential: sum >= 7 ? 2 : (sum >= 5 ? 1 : (rnd2() < .3 ? 1 : 0)), confidence: 1 + (rnd2() > .45 ? 1 : 0), second: rnd2() < .55 ? others[Math.floor(rnd2() * others.length)] : '', follow: rec === C.RECS[2] || rnd2() < .14, medNote: '' };
 }
 // soldier's own wishes (informational): preferred role + up to 3 ranked units. The draft itself follows unit needs.
-function makeWish(cf, role, pref, rnd2) {
+function makeWish(cf, role, pref, rnd2, motivation) {
   const others = cf.units.map((u) => u.name).filter((n) => n !== pref), units = [pref];
   while (units.length < 3 && others.length) { if (rnd2() < .7 || units.length < 2) units.push(others.splice(Math.floor(rnd2() * others.length), 1)[0]); else break; }
-  return { role: rnd2() < .62 ? role : cf.roles[Math.floor(rnd2() * cf.roles.length)], units };
+  const wr = rnd2() < .62 ? role : cf.roles[Math.floor(rnd2() * cf.roles.length)], r = rnd2();
+  // willingness for a combat role: 0 = not interested, 1 = open, 2 = interested (loosely tied to motivation)
+  const combat = motivation >= 4 ? (r < .72 ? 2 : (r < .93 ? 1 : 0)) : (motivation === 3 ? (r < .38 ? 2 : (r < .72 ? 1 : 0)) : (r < .16 ? 1 : 0.0 + (r < .5 ? 0 : 1)));
+  return { role: wr, units, combat };
 }
 function cleanWish(cf, w) {
   const names = cf.units.map((u) => u.name), units = [];
   (Array.isArray(w.units) ? w.units : []).forEach((n) => { if (names.includes(n) && !units.includes(n) && units.length < 3) units.push(n); });
-  return { role: cf.roles.includes(w.role) ? w.role : '', units };
+  return { role: cf.roles.includes(w.role) ? w.role : '', units, combat: [0, 1, 2].includes(parseInt(w.combat, 10)) ? parseInt(w.combat, 10) : 1 };
 }
 function cleanExtra(cf, x, old) {
   const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
@@ -99,7 +102,7 @@ function seedCands() {
         extra: makeExtra(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2]), rnd2),
         summary: makeSummary(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2])), evaluated: true, evalBy: 'מגבש/ת צוות ' + (1 + (i % 4)), source: 'מאגר קיים',
       });
-      { const cd = out[key][out[key].length - 1]; cd.wish = makeWish(cf, role, cd.pref, rnd2); }
+      { const cd = out[key][out[key].length - 1]; cd.wish = makeWish(cf, role, cd.pref, rnd2, cd.extra.motivation); }
       n++;
     }
   });
@@ -108,7 +111,7 @@ function seedCands() {
 
 function freshState() {
   const cands = seedCands();
-  const st = { corps: {}, log: [], version: 1, schema: 4 };
+  const st = { corps: {}, log: [], version: 1, schema: 5 };
   Object.keys(C.corps).forEach((k) => {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
@@ -119,7 +122,7 @@ function freshState() {
 }
 
 let state;
-try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 4) state = null; } catch (e) { state = null; }
+try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 5) state = null; } catch (e) { state = null; }
 let saveTimer = null;
 function save() {
   state.version++;
@@ -323,7 +326,7 @@ http.createServer(async (req, res) => {
           cs.cands.push({
             id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats,
             rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72),
-            area: '—', pref: '—', wish: { role: '', units: [] }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
+            area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
           });
           added++;
         });
