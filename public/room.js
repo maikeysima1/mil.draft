@@ -79,7 +79,7 @@ SCREENS.room = (k) => {
    <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
    ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
-     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn sm" data-act="pick" data-id="${x.id}">בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
+     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
    <div class="card"><h2>יומן בחירות</h2>${log}</div>
    ${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}`;
 };
@@ -129,7 +129,7 @@ function drawer(k, id) {
     ${((c.wish && c.wish.units) || []).map((u, i) => { const un = unitOf(k, u), open = (un.quota[c.role] || 0) > countRole(k, u, c.role); return `<div class="row spread" style="padding:4px 0"><span>${i + 1}. ${esc(u)}${u === myUnitName(k) ? ' (שלכם)' : ''}</span><span class="pill ${open ? 'p-green' : 'p-gray'}">${open ? 'יש צורך פתוח בתפקיד' : 'אין צורך פתוח בתפקיד'}</span></div>`; }).join('') || '<div class="mut small">לא הוגשה העדפת יחידה</div>'}</div>
    <div><b>התרשמות המגבש/ת</b><p style="margin:4px 0">${esc(c.obs) || '<span class="mut">טרם הוזנה</span>'}</p>${c.summary ? `<p class="mut small" style="margin:0">סיכום: ${esc(c.summary)}</p>` : ''}</div>
    <div class="card" style="padding:12px"><b>התאמה לכל יחידה ב${esc(cf(k).label)}</b>${cf(k).units.map((u0) => { const u = unitOf(k, u0.name), bad = fitBad(k, c, u); return `<div class="row spread" style="padding:5px 0"><span>${esc(u.name)}${u.name === myUnitName(k) ? ' (שלכם)' : ''}</span>${bad.length ? `<span class="pill p-orange">חסר: ${esc(bad.map((x) => x.s).join(', '))}</span>` : '<span class="pill p-green">עומד/ת בכל התנאים</span>'}</div>`; }).join('')}</div>
-   ${myTurn ? `<button class="btn" style="padding:13px" data-act="pick" data-id="${id}">בחירה ל${esc(A.me.unit)}</button>` : ''}
+   ${myTurn ? `<div class="pickbar"><button class="btn pickbtn xl" data-act="pick" data-id="${id}">${icon('check', 24)}בחירה ל${esc(A.me.unit)}</button></div>` : ''}
    ${R().pages.includes('eval') && A.me.role !== 'מגבש/ת' ? `<a href="#/eval" class="small" data-act="goEval" data-id="${id}">תיק מועמד מלא ודף מגבש ←</a>` : ''}</aside></div>`;
 }
 
