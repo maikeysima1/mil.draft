@@ -95,6 +95,7 @@ L.handle = function (p, userId, b) {
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ייבאה ' + added + ' מועמדים' });
     save(); return { ok: true, added, skipped };
   }
+  if (p === 'undo') { needCorps(); if (!(user.role === 'מפקד/ת הכשרה' || (user.role === 'שלישות' && user.corps === k))) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
   if (p === 'reset') { needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {
     needCorps(); if (user.role === 'מגבש/ת') throw new Error('אין הרשאה');

@@ -56,7 +56,7 @@ SCREENS.room = (k) => {
   const sel = (id, label, opts, val) => `<label>${label}<select id="${id}" data-chg="flt" data-f="${id.slice(2)}">${opts.map((o) => `<option ${o === (val || 'הכול') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
   const log = d.picks.slice().reverse().slice(0, 12).map((p) => `<div class="row" style="padding:5px 0;border-bottom:1px solid #EEF0EA"><b>#${p.n}</b><span>${esc(p.unit)} בחרה את ${esc(candOf(k, p.id).name)} (${esc(candOf(k, p.id).role)})${p.auto ? ' <span class="mut small">· אוטומטי</span>' : ''}</span></div>`).join('') || '<span class="mut">עדיין לא בוצעו בחירות</span>';
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר בחירה – ${esc(c.label)}</h1><div class="mut small">דראפט נפרד לכל חיל · סדר בחירה מתחלף בכל סבב</div></div>
-    ${isHumanMine(k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>
+    ${isHumanMine(k) || A.me.role === 'מפקד/ת הכשרה' ? `<div class="row"><button class="btn sec" data-act="undo" ${d.picks.length ? '' : 'disabled'}>ביטול הבחירה האחרונה</button>${isHumanMine(k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>` : ''}</div>
    <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? c.rounds : d.slot.r} מתוך ${c.rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
    ${unitChips(k)}${clockCard(k)}
    ${isHumanMine(k) ? needsCard(k) : '<div class="demo-note">צפייה בלבד – רק שלישות היחידה בוחרת. היחידות האחרות בוחרות אוטומטית כשאין משתמש מחובר.</div>'}
@@ -141,6 +141,7 @@ Object.assign(ACTIONS, {
     try { await api('pick', { corps: k, id: d.id }); A.ui.cand = null; toast('הבחירה נשמרה: ' + c.name); rerender(); } catch (x) { /* toast shown */ }
   },
   reset: async () => { if (confirm('לאפס את הדראפט של החיל? כל הבחירות יימחקו.')) { await api('reset', { corps: corpsKey() }); toast('הדראפט אופס'); } },
+  undo: async () => { const k = corpsKey(), l = draftInfo(k).picks.slice(-1)[0]; if (!l) return; await api('undo', { corps: k }); toast('הבחירה האחרונה בוטלה'); },
   editTh: () => { A.ui.editTh = true; rerender(); },
   closeTh: () => { A.ui.editTh = false; rerender(); },
   saveTh: async () => {

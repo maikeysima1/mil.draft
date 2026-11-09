@@ -5,7 +5,10 @@ const path = require('path');
 const C = require('./config');
 
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'data', 'state.json');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) { /* ignore */ }
+const DATA_FILE = path.join(DATA_DIR, 'state.json');
+const ACCESS_CODE = process.env.ACCESS_CODE || '';
 const PUB = path.join(__dirname, 'public');
 const CLOCK_SECONDS = 120;   // time a human unit has to pick
 const BOT_DELAY_MS = 1500;   // delay between automatic picks
@@ -20,6 +23,11 @@ const USERS = [
   { id: 'u5', title: 'מגבש/ת מודיעין', unit: 'סדנת מיון מודיעין', corps: 'intel', group: 2, role: 'מגבש/ת', initial: 'מג' },
   { id: 'u7', title: 'מגבש/ת קשר', unit: 'סדנת מיון קשר ותקשוב', corps: 'signals', group: 1, role: 'מגבש/ת', initial: 'מג' },
 ];
+// one שלישות user per unit, so every unit can have its own person in a shared draft
+Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
+  if (USERS.some((x) => x.role === 'שלישות' && x.unit === u.name)) return;
+  USERS.push({ id: 's-' + k + '-' + i, title: 'שלישות ' + u.name.replace(/^(חטיבת|יחידת|גדוד) /, ''), unit: u.name, corps: k, role: 'שלישות', initial: 'ש' });
+}));
 const userById = (id) => USERS.find((u) => u.id === id);
 
 // ---------- seed data ----------
@@ -205,6 +213,9 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   try {
+    if (p === '/healthz') return json(res, 200, { ok: true });
+    if (p === '/api/ping') return json(res, 200, { needCode: !!ACCESS_CODE });
+    if (ACCESS_CODE && p.startsWith('/api/') && (req.headers['x-code'] || url.searchParams.get('code')) !== ACCESS_CODE) return json(res, 401, { error: 'קוד גישה שגוי' });
     if (p === '/api/config') return json(res, 200, { corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
     if (p === '/api/state') return json(res, 200, snapshot());
     if (p === '/api/events') {
@@ -274,6 +285,14 @@ http.createServer(async (req, res) => {
         });
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} ייבאה ${added} מועמדים` });
         save(); return json(res, 200, { ok: true, added, skipped });
+      }
+      if (p === '/api/undo') {
+        needCorps(); if (!(user.role === 'מפקד/ת הכשרה' || (user.role === 'שלישות' && user.corps === k))) throw new Error('אין הרשאה');
+        const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול');
+        const last = cst.picks.pop(), c = cst.cands.find((x) => x.id === last.id);
+        cst.turnStartedAt = Date.now();
+        state.log.push({ ts: Date.now(), corps: k, text: `${user.title} ביטל/ה את הבחירה של ${last.unit}: ${c ? c.name : last.id}` });
+        save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/reset') {
         needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה');

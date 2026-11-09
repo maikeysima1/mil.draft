@@ -1,0 +1,12 @@
+# Render Blueprint – deploy with: New + > Blueprint > pick this repo
+services:
+  - type: web
+    name: mil-draft
+    runtime: node
+    plan: free
+    buildCommand: echo "no build step"
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: ACCESS_CODE        # optional: shared code required to open the app (set a value in the Render dashboard)
+        sync: false

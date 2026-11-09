@@ -11,12 +11,14 @@ function toast(msg, err) {
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ''; }, 3200);
 }
 async function api(path, body) {
-  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-User': A.me ? A.me.id : '' }, body: JSON.stringify(body || {}) });
+  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-User': A.me ? A.me.id : '', 'X-Code': codeVal() }, body: JSON.stringify(body || {}) });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && j.error === 'קוד גישה שגוי') { localStorage.removeItem('mil-code'); location.reload(); }
   if (!r.ok) { toast(j.error || 'שגיאה', true); throw new Error(j.error); }
   return j;
 }
-async function refresh() { A.S = await (await fetch('/api/state')).json(); A.skew = A.S.serverNow - Date.now(); }
+const codeVal = () => localStorage.getItem('mil-code') || '';
+async function refresh() { const r = await fetch('/api/state', { headers: { 'X-Code': codeVal() } }); if (r.status === 401) { localStorage.removeItem('mil-code'); location.reload(); return; } A.S = await r.json(); A.skew = A.S.serverNow - Date.now(); }
 const nowS = () => Date.now() + A.skew;
 
 // ---- domain helpers ----
@@ -155,7 +157,7 @@ window.addEventListener('hashchange', () => { A.ui.cand = null; render(); });
 // ---- live updates ----
 function connectSSE() {
   if (A.es) A.es.close();
-  A.es = new EventSource('/api/events?user=' + (A.me ? A.me.id : ''));
+  A.es = new EventSource('/api/events?user=' + (A.me ? A.me.id : '') + '&code=' + encodeURIComponent(codeVal()));
   A.es.onmessage = async (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { await refresh(); rerender(true); }

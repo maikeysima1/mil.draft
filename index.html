@@ -200,6 +200,11 @@ const USERS = [
   { id: 'u5', title: 'מגבש/ת מודיעין', unit: 'סדנת מיון מודיעין', corps: 'intel', group: 2, role: 'מגבש/ת', initial: 'מג' },
   { id: 'u7', title: 'מגבש/ת קשר', unit: 'סדנת מיון קשר ותקשוב', corps: 'signals', group: 1, role: 'מגבש/ת', initial: 'מג' },
 ];
+// one שלישות user per unit, so every unit can have its own person in a shared draft
+Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
+  if (USERS.some((x) => x.role === 'שלישות' && x.unit === u.name)) return;
+  USERS.push({ id: 's-' + k + '-' + i, title: 'שלישות ' + u.name.replace(/^(חטיבת|יחידת|גדוד) /, ''), unit: u.name, corps: k, role: 'שלישות', initial: 'ש' });
+}));
 const userById = (id) => USERS.find((u) => u.id === id);
 
 // ---------- seed data ----------
@@ -404,6 +409,7 @@ L.handle = function (p, userId, b) {
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ייבאה ' + added + ' מועמדים' });
     save(); return { ok: true, added, skipped };
   }
+  if (p === 'undo') { needCorps(); if (!(user.role === 'מפקד/ת הכשרה' || (user.role === 'שלישות' && user.corps === k))) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
   if (p === 'reset') { needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {
     needCorps(); if (user.role === 'מגבש/ת') throw new Error('אין הרשאה');
@@ -432,12 +438,14 @@ function toast(msg, err) {
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ''; }, 3200);
 }
 async function api(path, body) {
-  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-User': A.me ? A.me.id : '' }, body: JSON.stringify(body || {}) });
+  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-User': A.me ? A.me.id : '', 'X-Code': codeVal() }, body: JSON.stringify(body || {}) });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && j.error === 'קוד גישה שגוי') { localStorage.removeItem('mil-code'); location.reload(); }
   if (!r.ok) { toast(j.error || 'שגיאה', true); throw new Error(j.error); }
   return j;
 }
-async function refresh() { A.S = await (await fetch('/api/state')).json(); A.skew = A.S.serverNow - Date.now(); }
+const codeVal = () => localStorage.getItem('mil-code') || '';
+async function refresh() { const r = await fetch('/api/state', { headers: { 'X-Code': codeVal() } }); if (r.status === 401) { localStorage.removeItem('mil-code'); location.reload(); return; } A.S = await r.json(); A.skew = A.S.serverNow - Date.now(); }
 const nowS = () => Date.now() + A.skew;
 
 // ---- domain helpers ----
@@ -576,7 +584,7 @@ window.addEventListener('hashchange', () => { A.ui.cand = null; render(); });
 // ---- live updates ----
 function connectSSE() {
   if (A.es) A.es.close();
-  A.es = new EventSource('/api/events?user=' + (A.me ? A.me.id : ''));
+  A.es = new EventSource('/api/events?user=' + (A.me ? A.me.id : '') + '&code=' + encodeURIComponent(codeVal()));
   A.es.onmessage = async (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { await refresh(); rerender(true); }
@@ -660,7 +668,7 @@ SCREENS.room = (k) => {
   const sel = (id, label, opts, val) => `<label>${label}<select id="${id}" data-chg="flt" data-f="${id.slice(2)}">${opts.map((o) => `<option ${o === (val || 'הכול') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
   const log = d.picks.slice().reverse().slice(0, 12).map((p) => `<div class="row" style="padding:5px 0;border-bottom:1px solid #EEF0EA"><b>#${p.n}</b><span>${esc(p.unit)} בחרה את ${esc(candOf(k, p.id).name)} (${esc(candOf(k, p.id).role)})${p.auto ? ' <span class="mut small">· אוטומטי</span>' : ''}</span></div>`).join('') || '<span class="mut">עדיין לא בוצעו בחירות</span>';
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר בחירה – ${esc(c.label)}</h1><div class="mut small">דראפט נפרד לכל חיל · סדר בחירה מתחלף בכל סבב</div></div>
-    ${isHumanMine(k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>
+    ${isHumanMine(k) || A.me.role === 'מפקד/ת הכשרה' ? `<div class="row"><button class="btn sec" data-act="undo" ${d.picks.length ? '' : 'disabled'}>ביטול הבחירה האחרונה</button>${isHumanMine(k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>` : ''}</div>
    <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? c.rounds : d.slot.r} מתוך ${c.rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
    ${unitChips(k)}${clockCard(k)}
    ${isHumanMine(k) ? needsCard(k) : '<div class="demo-note">צפייה בלבד – רק שלישות היחידה בוחרת. היחידות האחרות בוחרות אוטומטית כשאין משתמש מחובר.</div>'}
@@ -745,6 +753,7 @@ Object.assign(ACTIONS, {
     try { await api('pick', { corps: k, id: d.id }); A.ui.cand = null; toast('הבחירה נשמרה: ' + c.name); rerender(); } catch (x) { /* toast shown */ }
   },
   reset: async () => { if (confirm('לאפס את הדראפט של החיל? כל הבחירות יימחקו.')) { await api('reset', { corps: corpsKey() }); toast('הדראפט אופס'); } },
+  undo: async () => { const k = corpsKey(), l = draftInfo(k).picks.slice(-1)[0]; if (!l) return; await api('undo', { corps: k }); toast('הבחירה האחרונה בוטלה'); },
   editTh: () => { A.ui.editTh = true; rerender(); },
   closeTh: () => { A.ui.editTh = false; rerender(); },
   saveTh: async () => {
