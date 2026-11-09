@@ -95,8 +95,24 @@ function shell(inner) {
 }
 
 // ---- login ----
+// selection order: training commander → שלישות (combat, intel, signals) → evaluators in the same corps order
+const CORPS_ORDER = ['combat', 'intel', 'signals'];
+const CORPS_SHORT = { combat: 'לוחמים', intel: 'מודיעין', signals: 'קשר' };
+function loginGroups() {
+  const us = A.cfg.users, unitIdx = (u) => cfRaw(u.corps).units.findIndex((x) => x.name === u.unit);
+  const byCorps = (role, k) => us.filter((u) => u.role === role && u.corps === k).sort((a, b) => unitIdx(a) - unitIdx(b));
+  return [{ title: 'מפקד/ת הכשרה', users: us.filter((u) => u.role === 'מפקד/ת הכשרה') }]
+    .concat(CORPS_ORDER.map((k) => ({ title: 'שלישות ' + CORPS_SHORT[k], users: byCorps('שלישות', k) })))
+    .concat([{ title: 'מגבשים', users: [].concat(...CORPS_ORDER.map((k) => byCorps('מגבש/ת', k))) }])
+    .filter((g) => g.users.length);
+}
+const loginOrder = () => [].concat(...loginGroups().map((g) => g.users));
+function loginList(sel) {
+  let n = 0;
+  return loginGroups().map((g) => `<div class="mut small" style="margin-top:8px;font-weight:700">${esc(g.title)}</div>` + g.users.map((x) => { n++; return `<button class="user ${x.id === sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="mut" style="width:22px;text-align:center;font-weight:700">${n}</span><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span style="flex:1"><b>${esc(x.title)}</b><span class="mut small" style="display:block">${esc(x.unit)}${x.corps ? ' · ' + esc(cf(x.corps).corps) : ' · כל החילות'}${x.group ? ' · קבוצה ' + x.group : ''}</span></span><span class="pill ${roleStyle(x.role)[1]}">סיווג: ${esc(x.role)}</span></button>`; }).join('')).join('');
+}
 function loginView() {
-  const sel = A.ui.sel || 'u1';
+  const sel = A.ui.sel || loginOrder()[0].id;
   const u = A.cfg.users.find((x) => x.id === sel);
   const perms = PAGES.map((p) => { const ok = u.role !== 'מגבש/ת' || !p.full; return `<div class="row spread" style="padding:4px 0"><span>${p.name}</span><span class="pill ${ok ? 'p-green' : 'p-gray'}">${ok ? 'פתוח' : 'נעול'}</span></div>`; }).join('');
   const desc = { 'שלישות': 'גישה מלאה: חדר בחירה, לוח הדראפט, תמונת מצב, ייבוא וצפייה בדפי מגבש. רואה רק את מועמדי החיל שלה.', 'מפקד/ת הכשרה': 'גישה מלאה לצפייה בכל המסכים, כולל דפי המגבש, כדי להכיר את החיילים לפני תחילת ההכשרה.', 'מגבש/ת': 'גישה לדף המגבש בלבד: הזנת התרשמות על מועמדי הקבוצה שלו/ה. אין גישה לחדר הבחירה ולתוצאות הדראפט.' }[u.role];
@@ -106,9 +122,9 @@ function loginView() {
    <p class="mut" style="font-size:16px">מגבשים מזינים התרשמות מקצועית, יחידות בוחרות בחדר בחירה משותף לפי מערך, ומפקדי ההכשרה מקבלים את התמונה המלאה.</p>
    <div class="demo-note">אב־טיפוס לדמו – המשתמשים פיקטיביים. במערכת אמיתית הכניסה תהיה בהזדהות מאובטחת.</div></section>
    <section style="display:flex;flex-direction:column;gap:12px"><h2 style="font-size:28px;font-weight:800">כניסה למערכת</h2><p class="mut" style="margin:0">בחרו משתמש. ההרשאות נקבעות לפי הסיווג שלו.</p>
-   ${A.cfg.users.map((x) => `<button class="user ${x.id === sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span style="flex:1"><b>${esc(x.title)}</b><span class="mut small" style="display:block">${esc(x.unit)}${x.corps ? ' · ' + esc(cf(x.corps).corps) : ' · כל החילות'}${x.group ? ' · קבוצה ' + x.group : ''}</span></span><span class="pill ${roleStyle(x.role)[1]}">סיווג: ${esc(x.role)}</span></button>`).join('')}
+   ${loginList(sel)}
    <div class="card"><h3 style="margin-bottom:6px">הרשאות – ${esc(u.role)}</h3>${perms}<p class="mut small" style="margin:8px 0 0">${desc}</p></div>
-   <div class="row"><button class="btn" style="padding:13px 26px;font-size:17px" data-act="login">כניסה כ${esc(u.title)} ←</button><span class="mut small">ייפתח: ${target}</span></div></section></div>`;
+   <div class="row" style="position:sticky;bottom:0;background:var(--bg);padding:10px 0;z-index:5"><button class="btn" style="padding:13px 26px;font-size:17px" data-act="login">כניסה כ${esc(u.title)} ←</button><span class="mut small">ייפתח: ${target}</span></div></section></div>`;
 }
 
 // ---- render loop ----
@@ -141,7 +157,7 @@ function rerender(live) { if (live && A.ui.editTh) return; /* don't wipe an open
 // ---- global actions ----
 const ACTIONS = {
   sel: (d) => { A.ui.sel = d.id; rerender(); },
-  login: () => { A.me = A.cfg.users.find((x) => x.id === (A.ui.sel || 'u1')); localStorage.setItem('mil-user', A.me.id); connectSSE(); go(homeFor()); render(); },
+  login: () => { A.me = A.cfg.users.find((x) => x.id === (A.ui.sel || loginOrder()[0].id)); localStorage.setItem('mil-user', A.me.id); connectSSE(); go(homeFor()); render(); },
   logout: () => { localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
   corps: (d) => { A.ui.corps = d.k; A.ui.cand = null; rerender(); },
 };
