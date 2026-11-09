@@ -32,7 +32,7 @@ function needsCard(k) {
    <div><b>תנאי סף של היחידה</b><div class="mut">${th.length ? esc(th.join(' · ')) : 'אין תנאי סף'}</div></div>
    <div class="mut small" style="margin-top:6px">נימוק הביקוש: ${esc(unit.why)}</div>
    <div class="row spread" style="margin-top:10px"><span class="mut small">המערכת בודקת עמידה בתנאי סף ומסמנת פערים. היא לא מדרגת אנשים ולא מחשבת ציון מסכם.</span>
-   ${isHumanMine(k) ? '<button class="btn sec sm" data-act="editTh">עריכת תנאי סף</button>' : ''}</div></div>`;
+   ${isHumanMine(k) ? '<button class="btn sec sm" data-act="editTh">עריכת מכסות ותנאי סף</button>' : ''}</div></div>`;
 }
 
 function filtered(k) {
@@ -93,6 +93,11 @@ function statBars(k, c) {
   }).join('');
 }
 
+function navBar(id) {
+  const nav = A.ui.nav || [], i = nav.indexOf(id); if (i < 0 || nav.length < 2) return '';
+  const nm = (x) => { const c = candOf(corpsKey(), x); return c ? c.name : ''; };
+  return `<div class="row spread" style="background:#F3F4F0;border-radius:10px;padding:6px 8px"><button class="btn sec sm" data-act="navPrev" aria-label="הקודם">→ ${esc(nm(nav[(i - 1 + nav.length) % nav.length]))}</button><b class="small">${i + 1} מתוך ${nav.length}</b><button class="btn sec sm" data-act="navNext" aria-label="הבא">${esc(nm(nav[(i + 1) % nav.length]))} ←</button></div><div class="mut small" style="text-align:center;margin-top:-8px">אפשר גם עם החצים במקלדת (← הבא, → הקודם)</div>`;
+}
 function drawer(k, id) {
   const c = candOf(k, id); if (!c) return '';
   const d = draftInfo(k), tk = d.takenBy[id], unit = unitOf(k, myUnitName(k));
@@ -100,6 +105,7 @@ function drawer(k, id) {
   const miss = missingOf(k, c);
   return `<div class="drawer-bg" data-act="closeCand"><aside class="drawer" role="dialog" aria-label="תיק מועמד">
    <div class="row spread"><div><div class="small" style="color:var(--orange);font-weight:600">תיק מועמד · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small">${c.id} · ${esc(c.role)} · אזור ${esc(c.area)} · קבוצה ${c.group}</div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
+   ${navBar(id)}
    <div class="row">${recPill(c.rec)}<span class="pill p-gray">פרופיל ${c.profile} · ${esc(c.med)}</span>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : ''}${miss.length ? `<span class="pill p-orange">חסר בתיק: ${esc(miss.join(', '))}</span>` : ''}</div>
    <div class="card" style="padding:12px">${statBars(k, c)}<div class="mut small">הסימון הכתום: ממוצע המאגר. תיאור בלבד, לא דירוג.</div></div>
    <div style="text-align:center">${radar(k, c)}</div>
@@ -113,7 +119,10 @@ function drawer(k, id) {
 function thModal(k) {
   const u = unitOf(k, A.me.unit);
   return `<div class="drawer-bg" style="align-items:center" data-act="closeTh"><div class="modal" role="dialog" aria-label="עריכת תנאי סף">
-   <h2 style="margin:0">עריכת תנאי סף – ${esc(u.name)}</h2><p class="mut small" style="margin:0">השאירו ריק כדי לבטל תנאי. עדכון התנאים ישפיע מיד על סימוני ההתאמה.</p>
+   <h2 style="margin:0">עריכת צרכים – ${esc(u.name)}</h2>
+   <div><b>מכסות לפי תפקיד</b><div class="mut small">כמה מועמדים נדרשים לכל תפקיד (0 = לא נדרש). אפשר להוריד מתחת למה שכבר נבחר.</div>
+   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:8px">${cf(k).roles.map((r, i) => `<label class="row spread">${esc(r)} <span class="row" style="gap:4px"><span class="mut small">נבחרו ${countRole(k, u.name, r)}</span><input type="number" min="0" max="9" id="q-${i}" style="width:70px" value="${u.quota[r] || 0}"></span></label>`).join('')}</div></div>
+   <b>תנאי סף</b><p class="mut small" style="margin:0">השאירו ריק כדי לבטל תנאי. עדכון התנאים ישפיע מיד על סימוני ההתאמה.</p>
    ${cf(k).stats.map((s) => `<label class="row spread">${esc(s.l)} (${s.low ? 'עד' : 'לפחות'}, ${esc(s.u)})<input type="number" step="any" id="th-${s.k}" style="width:120px" value="${u.th[s.k] == null ? '' : u.th[s.k]}"></label>`).join('')}
    <label class="row"><input type="checkbox" id="th-med" ${u.noMed ? 'checked' : ''}> ללא מגבלות רפואיות</label>
    <div class="row"><button class="btn" data-act="saveTh">שמירה</button><button class="btn sec" data-act="closeTh">ביטול</button></div></div></div>`;
@@ -121,7 +130,9 @@ function thModal(k) {
 
 Object.assign(ACTIONS, {
   flt: (d, t) => { A.ui.f = Object.assign({}, A.ui.f, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); rerender(); },
-  cand: (d) => { A.ui.cand = d.id; rerender(); },
+  cand: (d) => { A.ui.nav = filtered(corpsKey()).map((x) => x.id); A.ui.cand = d.id; rerender(); },
+  navPrev: () => navStep(-1),
+  navNext: () => navStep(1),
   closeCand: () => { A.ui.cand = null; rerender(); },
   goEval: (d) => { A.ui.evalCand = d.id; A.ui.cand = null; },
   pick: async (d, t, e) => {
@@ -134,11 +145,25 @@ Object.assign(ACTIONS, {
   closeTh: () => { A.ui.editTh = false; rerender(); },
   saveTh: async () => {
     const k = corpsKey(), th = {}; cf(k).stats.forEach((s) => { const v = $('#th-' + s.k).value; if (v !== '') th[s.k] = Number(v); });
-    await api('thresholds', { corps: k, th, noMed: $('#th-med').checked }); A.ui.editTh = false; toast('תנאי הסף עודכנו'); rerender();
+    const quota = {}; cf(k).roles.forEach((r, i) => { quota[r] = $('#q-' + i).value; });
+    await api('thresholds', { corps: k, th, quota, noMed: $('#th-med').checked }); A.ui.editTh = false; toast('המכסות ותנאי הסף עודכנו'); rerender();
   },
 });
 
 // ---------------- live board ----------------
+function standoutOf(k) {
+  const d = draftInfo(k), units = cf(k).units;
+  return cs(k).cands.filter((x) => !d.takenBy[x.id]).map((x) => ({ x, s: strengths(k, x), fits: units.filter((u) => !fitBad(k, x, u).length).length }))
+    .sort((a, b) => b.s.length - a.s.length || b.fits - a.fits).slice(0, 6);
+}
+function navStep(dir) {
+  const nav = A.ui.nav || [], i = nav.indexOf(A.ui.cand); if (i < 0 || nav.length < 2) return;
+  A.ui.cand = nav[(i + dir + nav.length) % nav.length]; rerender();
+}
+document.addEventListener('keydown', (e) => {
+  if (!A.ui.cand || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) return;
+  if (e.key === 'ArrowLeft') navStep(1); else if (e.key === 'ArrowRight') navStep(-1); else if (e.key === 'Escape') { A.ui.cand = null; rerender(); }
+});
 SCREENS.board = (k) => {
   const c = cf(k), d = draftInfo(k), P = d.picks;
   const last = P[P.length - 1];
@@ -148,8 +173,7 @@ SCREENS.board = (k) => {
     const isNow = idx === P.length, mine = uname === (isHumanMine(k) ? A.me.unit : c.myUnit);
     return `<td><div class="cell ${p ? 'pick' : ''} ${isNow ? 'clock' : ''} ${mine ? 'mine' : ''}"><div class="mut small">#${idx + 1}${isNow ? ' · על השעון' : ''}</div>${cand ? `<b>${esc(cand.name)}</b><div class="small">${esc(cand.role)}</div>` : (isNow ? 'בוחרים כעת…' : '—')}</div></td>`;
   };
-  const standout = cs(k).cands.filter((x) => !d.takenBy[x.id]).map((x) => ({ x, s: strengths(k, x), fits: unit.filter((u) => !fitBad(k, x, unitOf(k, u.name)).length).length }))
-    .sort((a, b) => b.s.length - a.s.length || b.fits - a.fits).slice(0, 6);
+  const standout = standoutOf(k);
   const wanted = {}, got = {};
   unit.forEach((u) => Object.keys(u.quota).forEach((r) => { wanted[r] = (wanted[r] || 0) + u.quota[r]; got[r] = (got[r] || 0) + Math.min(u.quota[r], countRole(k, u.name, r)); }));
   return `<div class="row spread">${corpsSwitcher()}<span class="pill p-green">● שידור חי</span></div>
@@ -165,5 +189,5 @@ SCREENS.board = (k) => {
 Object.assign(ACTIONS, {
   simNext: () => api('advance', { corps: corpsKey(), steps: 1 }),
   reset2: async () => { if (confirm('לאפס את הדראפט של החיל?')) { await api('advance', { corps: corpsKey(), rounds: 0 }); toast('הדראפט אופס'); } },
-  boardCand: (d) => { A.ui.cand = d.id; rerender(); },
+  boardCand: (d) => { A.ui.nav = standoutOf(corpsKey()).map((o) => o.x.id); A.ui.cand = d.id; rerender(); },
 });

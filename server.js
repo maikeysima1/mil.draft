@@ -23,6 +23,11 @@ const USERS = [
 const userById = (id) => USERS.find((u) => u.id === id);
 
 // ---------- seed data ----------
+const CLOSERS = { 'מומלץ': 'מומלץ לשבץ ביחידה עם מכסה פתוחה בתפקיד.', 'מומלץ בהסתייגות': 'מומלץ בהסתייגות – כדאי לוודא התאמה לתנאי הסף לפני בחירה.', 'לא מומלץ': 'לא מומלץ לשיבוץ בשלב זה.' };
+function makeSummary(cf, role, lv, rec) {
+  const str = cf.traits.filter((t, j) => lv[j] === 2), low = cf.traits.filter((t, j) => lv[j] === 0);
+  return 'מתאים/ה לתפקיד ' + role + '. ' + (str.length ? 'חוזקות בולטות: ' + str.join(', ') + '.' : 'ביצוע טוב ברוב המשימות, ללא חוזקה בולטת במיוחד.') + (low.length ? ' לחיזוק: ' + low.join(', ') + '.' : '') + ' ' + CLOSERS[rec];
+}
 function seedCands() {
   let seed = 11;
   const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
@@ -54,7 +59,7 @@ function seedCands() {
         area: C.AREAS[Math.floor(rnd() * C.AREAS.length)], pref: cf.units[Math.floor(rnd() * cf.units.length)].name,
         group: 1 + (i % 4), skills: cf.skills[role] || [],
         obs: cf.obs[role] + ' ' + cf.good[top] + (lv[weak] < 2 ? ' ' + cf.weak[weak] : ''),
-        summary: '', evaluated: true, source: 'מאגר קיים',
+        summary: makeSummary(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2])), evaluated: true, evalBy: 'מגבש/ת קבוצה ' + (1 + (i % 4)), source: 'מאגר קיים',
       });
       n++;
     }
@@ -64,18 +69,18 @@ function seedCands() {
 
 function freshState() {
   const cands = seedCands();
-  const st = { corps: {}, log: [], version: 1 };
+  const st = { corps: {}, log: [], version: 1, schema: 2 };
   Object.keys(C.corps).forEach((k) => {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
-      units: C.corps[k].units.map((u) => ({ name: u.name, th: Object.assign({}, u.th), noMed: u.noMed })),
+      units: C.corps[k].units.map((u) => ({ name: u.name, th: Object.assign({}, u.th), noMed: u.noMed, quota: Object.assign({}, u.quota) })),
     };
   });
   return st;
 }
 
 let state;
-try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { state = null; }
+try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 2) state = null; } catch (e) { state = null; }
 let saveTimer = null;
 function save() {
   state.version++;
@@ -89,7 +94,7 @@ const cfg = (k) => C.corps[k];
 const unitCfg = (k, name) => {
   const base = cfg(k).units.find((u) => u.name === name);
   const ov = state.corps[k].units.find((u) => u.name === name);
-  return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed } : {});
+  return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed, quota: ov.quota || base.quota } : {});
 };
 function orderOf(k) {
   const c = cfg(k), o = [];
@@ -244,7 +249,9 @@ http.createServer(async (req, res) => {
         needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה');
         const ov = state.corps[k].units.find((u) => u.name === user.unit);
         const th = {}; cfg(k).stats.forEach((s) => { const v = num((b.th || {})[s.k]); if (v != null) th[s.k] = v; });
-        ov.th = th; ov.noMed = !!b.noMed; save(); return json(res, 200, { ok: true });
+        ov.th = th; ov.noMed = !!b.noMed;
+        if (b.quota) { const q = {}; cfg(k).roles.forEach((r) => { const n = Math.max(0, Math.min(9, parseInt((b.quota || {})[r], 10) || 0)); if (n) q[r] = n; }); ov.quota = q; }
+        save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/import') {
         needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('רק שלישות החיל מייבאת מועמדים');

@@ -20,12 +20,14 @@ async function refresh() { A.S = await (await fetch('/api/state')).json(); A.ske
 const nowS = () => Date.now() + A.skew;
 
 // ---- domain helpers ----
-const cf = (k) => A.cfg.corps[k];
+const cfRaw = (k) => A.cfg.corps[k];
+// corps config with each unit's live overrides (quota / thresholds) applied
+function cf(k) { const base = A.cfg.corps[k]; if (!A.S || !A.S.corps[k]) return base; return Object.assign({}, base, { units: base.units.map((u) => unitOf(k, u.name)) }); }
 const cs = (k) => A.S.corps[k];
 function unitOf(k, name) {
-  const base = cf(k).units.find((u) => u.name === name);
+  const base = cfRaw(k).units.find((u) => u.name === name);
   const ov = cs(k).units.find((u) => u.name === name);
-  return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed } : {});
+  return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed, quota: ov.quota || base.quota } : {});
 }
 function orderOf(k) {
   const c = cf(k), o = [];
@@ -132,7 +134,7 @@ function restoreFocus(k) {
   const e = document.getElementById(k.id); if (!e) return;
   e.focus(); try { e.setSelectionRange(k.s, k.e); } catch (x) { /* not text */ }
 }
-function rerender() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
+function rerender(live) { if (live && A.ui.editTh) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
 
 // ---- global actions ----
 const ACTIONS = {
@@ -156,7 +158,7 @@ function connectSSE() {
   A.es = new EventSource('/api/events?user=' + (A.me ? A.me.id : ''));
   A.es.onmessage = async (e) => {
     const m = JSON.parse(e.data);
-    if (m.type === 'state') { await refresh(); rerender(); }
+    if (m.type === 'state') { await refresh(); rerender(true); }
     else if (m.type === 'tick') { const c = $('#clk'); if (c) c.textContent = clockText(); }
   };
 }
