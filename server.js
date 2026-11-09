@@ -22,7 +22,11 @@ const USERS = [
   { id: 'u4', title: 'מגבש/ת רגלים', unit: 'גיבוש לוחמה', corps: 'combat', group: 3, role: 'מגבש/ת', initial: 'מג' },
   { id: 'u5', title: 'מגבש/ת מודיעין', unit: 'סדנת מיון מודיעין', corps: 'intel', group: 2, role: 'מגבש/ת', initial: 'מג' },
   { id: 'u7', title: 'מגבש/ת קשר', unit: 'סדנת מיון קשר ותקשוב', corps: 'signals', group: 1, role: 'מגבש/ת', initial: 'מג' },
+  { id: 'h1', title: 'ראש מטה', unit: 'מטה ההכשרות', corps: null, role: 'ראש מטה', initial: 'רמ' },
+  { id: 'o1', title: 'צופה/ת', unit: 'צפייה בלבד', corps: null, role: 'צופה/ת', initial: 'צו' },
+  { id: 'a1', title: 'מנהל/ת מערכת', unit: 'צוות המערכת', corps: null, role: 'מנהל/ת מערכת', initial: 'מנ' },
 ];
+const canDo = C.canDo;
 // one שלישות user per unit, so every unit can have its own person in a shared draft
 Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
   if (USERS.some((x) => x.role === 'שלישות' && x.unit === u.name)) return;
@@ -216,7 +220,7 @@ http.createServer(async (req, res) => {
     if (p === '/healthz') return json(res, 200, { ok: true });
     if (p === '/api/ping') return json(res, 200, { needCode: !!ACCESS_CODE });
     if (ACCESS_CODE && p.startsWith('/api/') && (req.headers['x-code'] || url.searchParams.get('code')) !== ACCESS_CODE) return json(res, 401, { error: 'קוד גישה שגוי' });
-    if (p === '/api/config') return json(res, 200, { corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+    if (p === '/api/config') return json(res, 200, { roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
     if (p === '/api/state') return json(res, 200, snapshot());
     if (p === '/api/events') {
       const user = userById(url.searchParams.get('user'));
@@ -232,14 +236,14 @@ http.createServer(async (req, res) => {
       if (!user) return json(res, 401, { error: 'לא מחובר' });
       const k = b.corps;
       const needCorps = () => { if (!C.corps[k]) throw new Error('חיל לא מוכר'); };
-      const canView = () => { if (user.role !== 'מפקד/ת הכשרה' && user.corps !== k) throw new Error('אין הרשאה לחיל זה'); };
+      const canView = () => { if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('אין הרשאה לחיל זה'); };
       if (p === '/api/pick') {
-        needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('רק שלישות היחידה יכולה לבחור');
+        needCorps(); if (!canDo(user, 'pick', k)) throw new Error('רק שלישות היחידה יכולה לבחור');
         doPick(k, user.unit, b.id, false); return json(res, 200, { ok: true });
       }
       if (p === '/api/eval') {
         needCorps(); canView();
-        if (user.role !== 'מגבש/ת') throw new Error('רק מגבש/ת מזינ/ה התרשמות');
+        if (!canDo(user, 'eval', k)) throw new Error('רק מגבש/ת מזינ/ה התרשמות');
         const c = state.corps[k].cands.find((x) => x.id === b.id);
         if (!c) throw new Error('מועמד לא נמצא');
         if (c.group !== user.group) throw new Error('המועמד אינו בקבוצה שלך');
@@ -257,7 +261,7 @@ http.createServer(async (req, res) => {
         save(); return json(res, 200, { ok: true, cand: c });
       }
       if (p === '/api/thresholds') {
-        needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה');
+        needCorps(); if (!canDo(user, 'thresholds', k)) throw new Error('אין הרשאה');
         const ov = state.corps[k].units.find((u) => u.name === user.unit);
         const th = {}; cfg(k).stats.forEach((s) => { const v = num((b.th || {})[s.k]); if (v != null) th[s.k] = v; });
         ov.th = th; ov.noMed = !!b.noMed;
@@ -265,7 +269,7 @@ http.createServer(async (req, res) => {
         save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/import') {
-        needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('רק שלישות החיל מייבאת מועמדים');
+        needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה לייבא מועמדים');
         const cf = cfg(k), cs = state.corps[k];
         let max = cs.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0);
         const used = new Set(cs.cands.map((c) => c.name));
@@ -287,7 +291,7 @@ http.createServer(async (req, res) => {
         save(); return json(res, 200, { ok: true, added, skipped });
       }
       if (p === '/api/undo') {
-        needCorps(); if (!(user.role === 'מפקד/ת הכשרה' || (user.role === 'שלישות' && user.corps === k))) throw new Error('אין הרשאה');
+        needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה');
         const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול');
         const last = cst.picks.pop(), c = cst.cands.find((x) => x.id === last.id);
         cst.turnStartedAt = Date.now();
@@ -295,16 +299,17 @@ http.createServer(async (req, res) => {
         save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/reset') {
-        needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה');
+        needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה');
         state.corps[k].picks = []; playUntilMine(k);
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} איפסה את הדראפט` });
         save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/factory-reset') {
+        if (!canDo(user, 'factory', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לאפס את המערכת');
         const fresh = freshState(); state.corps = fresh.corps; state.log = []; Object.keys(C.corps).forEach(playUntilMine); save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/advance') { // demo helper: auto-play the draft up to the end of round N (0 = reset, 4 = finish)
-        needCorps(); if (user.role === 'מגבש/ת') throw new Error('אין הרשאה');
+        needCorps(); if (!canDo(user, 'advance', k)) throw new Error('אין הרשאה');
         const cs = state.corps[k], order = orderOf(k), target = b.steps ? Math.min(order.length, cs.picks.length + (b.steps | 0)) : Math.max(0, Math.min(4, b.rounds | 0)) * cfg(k).units.length;
         if (target < cs.picks.length) cs.picks = cs.picks.slice(0, target);
         while (cs.picks.length < target) { const slot = order[cs.picks.length]; const c = chooseFor(k, slot.u); if (!c) break; doPick(k, slot.u, c.id, true); }

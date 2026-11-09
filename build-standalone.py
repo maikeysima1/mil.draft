@@ -43,18 +43,18 @@ setInterval(() => {
 window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(); if (f) { state = f; if (L.onChange) L.onChange(); } } });
 
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-L.config = () => ({ corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+L.config = () => ({ roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
 L.snapshot = () => { const o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-60).reverse() }; Object.keys(C.corps).forEach((k) => { o.corps[k] = state.corps[k]; }); return JSON.parse(JSON.stringify(o)); };
 L.handle = function (p, userId, b) {
   const user = userById(userId); L.me = user;
   if (!user) throw new Error('לא מחובר');
   const k = b.corps;
   const needCorps = () => { if (!C.corps[k]) throw new Error('חיל לא מוכר'); };
-  const canView = () => { if (user.role !== 'מפקד/ת הכשרה' && user.corps !== k) throw new Error('אין הרשאה לחיל זה'); };
-  if (p === 'pick') { needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('רק שלישות היחידה יכולה לבחור'); doPick(k, user.unit, b.id, false); return { ok: true }; }
+  const canView = () => { if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('אין הרשאה לחיל זה'); };
+  if (p === 'pick') { needCorps(); if (!canDo(user, 'pick', k)) throw new Error('רק שלישות היחידה יכולה לבחור'); doPick(k, user.unit, b.id, false); return { ok: true }; }
   if (p === 'eval') {
     needCorps(); canView();
-    if (user.role !== 'מגבש/ת') throw new Error('רק מגבש/ת מזינ/ה התרשמות');
+    if (!canDo(user, 'eval', k)) throw new Error('רק מגבש/ת מזינ/ה התרשמות');
     const c = state.corps[k].cands.find((x) => x.id === b.id); if (!c) throw new Error('מועמד לא נמצא');
     if (c.group !== user.group) throw new Error('המועמד אינו בקבוצה שלך');
     const cf = cfg(k);
@@ -71,7 +71,7 @@ L.handle = function (p, userId, b) {
     save(); return { ok: true };
   }
   if (p === 'thresholds') {
-    needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה');
+    needCorps(); if (!canDo(user, 'thresholds', k)) throw new Error('אין הרשאה');
     const ov = state.corps[k].units.find((u) => u.name === user.unit), th = {};
     cfg(k).stats.forEach((s) => { const v = num((b.th || {})[s.k]); if (v != null) th[s.k] = v; });
     ov.th = th; ov.noMed = !!b.noMed;
@@ -79,7 +79,7 @@ L.handle = function (p, userId, b) {
     save(); return { ok: true };
   }
   if (p === 'import') {
-    needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('רק שלישות החיל מייבאת מועמדים');
+    needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה לייבא מועמדים');
     const cf = cfg(k), cst = state.corps[k];
     let max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0);
     const used = new Set(cst.cands.map((c) => c.name)); let added = 0, skipped = 0;
@@ -95,16 +95,17 @@ L.handle = function (p, userId, b) {
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ייבאה ' + added + ' מועמדים' });
     save(); return { ok: true, added, skipped };
   }
-  if (p === 'undo') { needCorps(); if (!(user.role === 'מפקד/ת הכשרה' || (user.role === 'שלישות' && user.corps === k))) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
-  if (p === 'reset') { needCorps(); if (user.role !== 'שלישות' || user.corps !== k) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
+  if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
+  if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {
-    needCorps(); if (user.role === 'מגבש/ת') throw new Error('אין הרשאה');
+    needCorps(); if (!canDo(user, 'advance', k)) throw new Error('אין הרשאה');
     const cst = state.corps[k], order = orderOf(k);
     const target = b.steps ? Math.min(order.length, cst.picks.length + (b.steps | 0)) : Math.max(0, Math.min(4, b.rounds | 0)) * cfg(k).units.length;
     if (target < cst.picks.length) cst.picks = cst.picks.slice(0, target);
     while (cst.picks.length < target) { const slot = order[cst.picks.length]; const c = chooseFor(k, slot.u); if (!c) break; doPick(k, slot.u, c.id, true); }
     cst.turnStartedAt = Date.now(); save(); return { ok: true };
   }
+  if (p === 'factory-reset') { if (!canDo(user, 'factory', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לאפס את המערכת'); L.factoryReset(); return { ok: true }; }
   throw new Error('פעולה לא מוכרת');
 };
 L.factoryReset = () => { state = freshState(); Object.keys(C.corps).forEach(playUntilMine); save(); };
@@ -138,6 +139,7 @@ def js(s): return s.replace('</script', '<\\/script')
 html = """<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MIL-DRAFT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>""" + rd('public/style.css') + """</style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 """+SHIM+"""<script>""" + js(xlsx) + """</script>

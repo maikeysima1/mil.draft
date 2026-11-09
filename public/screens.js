@@ -21,7 +21,7 @@ SCREENS.eval = (k) => {
   const allSkills = Array.from(new Set(Object.values(c.skills).flat()));
   const prev = f && (() => {
     const str = c.traits.filter((t, i) => f.lv[i] === 2);
-    return `<div class="card" style="background:#FAFAF7"><div class="mut small">תצוגה מקדימה – כך זה ייכנס לתיק המועמד</div><h3>${esc(cur.name)} <span class="mut small">· תיק מועמד · ${esc(c.corps)}</span></h3>
+    return `<div class="card" style="background:var(--bg2)"><div class="mut small">תצוגה מקדימה – כך זה ייכנס לתיק המועמד</div><h3>${esc(cur.name)} <span class="mut small">· תיק מועמד · ${esc(c.corps)}</span></h3>
      <div class="small"><b>תפקיד מומלץ:</b> ${esc(f.role)} · <b>חוזקות בולטות:</b> ${esc(str.join(', ') || '—')} · <b>המלצה:</b> ${esc(f.rec || '—')} · <b>מגבלות:</b> ${esc(f.med)}</div>
      <div class="small">${c.stats.map((s) => `<b>${esc(s.l)}:</b> ${fmtStat(s, f.stats[s.k] === '' ? null : f.stats[s.k])}`).join(' · ')}</div>
      <div class="small"><b>כישורים:</b> ${esc(f.skills.join(' · ') || '—')}</div><p class="small" style="margin:4px 0">${esc(f.obs) || '—'}</p>
@@ -101,9 +101,9 @@ SCREENS.command = (k) => {
     const colors = ['#3F5530', '#2F5A8A', '#C2741F', '#8A5A9A', '#5A6472'];
     const counts = c.units.map((u) => d.picks.filter((p) => p.unit === u.name).length), sum = counts.reduce((a, b) => a + b, 0) || 1;
     let off = 0; const segs = counts.map((n, i) => { const len = n / sum * 339.3, s = `<circle cx="70" cy="70" r="54" fill="none" stroke="${colors[i % 5]}" stroke-width="18" stroke-dasharray="${len} ${339.3 - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`; off += len; return s; }).join('');
-    body = `<div class="grid g2"><div class="card"><h2>מגויסים לכל יחידה</h2><div class="row"><svg viewBox="0 0 140 140" width="170" role="img" aria-label="תרשים טבעת"><circle cx="70" cy="70" r="54" fill="none" stroke="#EEF0EA" stroke-width="18"/>${segs}<text x="70" y="68" text-anchor="middle" font-size="22" font-weight="800">${d.picks.length}</text><text x="70" y="86" text-anchor="middle" font-size="10" fill="#5A6472">בחירות</text></svg>
+    body = `<div class="grid g2"><div class="card"><h2>מגויסים לכל יחידה</h2><div class="row"><svg viewBox="0 0 140 140" width="170" role="img" aria-label="תרשים טבעת"><circle cx="70" cy="70" r="54" fill="none" stroke="var(--line2)" stroke-width="18"/>${segs}<text x="70" y="68" text-anchor="middle" font-size="22" font-weight="800">${d.picks.length}</text><text x="70" y="86" text-anchor="middle" font-size="10" fill="#5A6472">בחירות</text></svg>
      <div>${c.units.map((u, i) => `<div class="row" style="gap:8px"><span class="mark" style="background:${colors[i % 5]}"></span>${esc(u.name)} <b>${counts[i]}</b></div>`).join('')}</div></div></div>
-     <div class="card"><h2>מה כל יחידה מחפשת</h2>${c.units.map((u) => `<div style="padding:6px 0;border-bottom:1px solid #EEF0EA"><b>${esc(u.name)}</b> <span class="mut small">${esc(u.why)}</span><div class="small">${Object.keys(u.quota).map((r) => `${esc(r)} ×${u.quota[r]}`).join(' · ')}</div></div>`).join('')}</div></div>`;
+     <div class="card"><h2>מה כל יחידה מחפשת</h2>${c.units.map((u) => `<div style="padding:6px 0;border-bottom:1px solid var(--line2)"><b>${esc(u.name)}</b> <span class="mut small">${esc(u.why)}</span><div class="small">${Object.keys(u.quota).map((r) => `${esc(r)} ×${u.quota[r]}`).join(' · ')}</div></div>`).join('')}</div></div>`;
   }
   if (tab === 'forum') {
     const dl = dilemmas(k), full = cs(k).cands.length - dl.miss;
@@ -118,12 +118,13 @@ SCREENS.command = (k) => {
      <div class="row no-print" style="margin-top:10px"><button class="btn" data-act="print">הדפסה / שמירה כ־PDF</button><button class="btn sec" data-act="exportPicks">ייצוא שיבוצים CSV</button></div></div>`;
   }
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תמונת מצב – ${esc(c.corps)}</h1><div class="mut small">להצגה לראשי מטה, לקצינות שלישות ולמפקדי הכשרות</div></div>
-   <div class="row no-print"><span class="mut small">מצב הדראפט להדגמה:</span><select data-chg="demoState"><option value="">בחירה…</option><option value="1">אחרי סבב 1</option><option value="2">אחרי סבב 2</option><option value="3">אחרי סבב 3</option><option value="4">הדראפט הסתיים</option></select></div></div>
+   <div class="row no-print">${can('factory', k) ? '<button class="btn sec sm" data-act="factory">איפוס מערכת</button>' : ''}${can('advance', k) ? `<span class="mut small">מצב הדראפט להדגמה:</span><select data-chg="demoState"><option value="">בחירה…</option><option value="1">אחרי סבב 1</option><option value="2">אחרי סבב 2</option><option value="3">אחרי סבב 3</option><option value="4">הדראפט הסתיים</option></select>` : ''}</div></div>
    <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))"><div class="kpi"><b>${d.picks.length} / ${cs(k).cands.length}</b><span>שובצו · מועמדים ב${esc(c.label)}</span></div><div class="kpi"><b>${tot.q ? Math.round(tot.g / tot.q * 100) : 0}%</b><span>מכסות שמולאו (${tot.g} מתוך ${tot.q})</span></div><div class="kpi"><b>${gapR}</b><span>פערים פתוחים</span></div><div class="kpi"><b>${done} / ${c.units.length}</b><span>יחידות שהושלמו</span></div></div>
    <div class="tabs no-print">${tabs.map((t) => `<button class="${tab === t[0] ? 'on' : ''}" data-act="tab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>${body}`;
 };
 Object.assign(ACTIONS, {
   tab: (d) => { A.ui.tab = d.t; rerender(); },
+  factory: async () => { if (confirm('לאפס את כל הנתונים בכל החילות?')) { await api('factory-reset', {}); toast('המערכת אופסה'); } },
   print: () => window.print(),
   demoState: async (d, t) => { if (!t.value) return; await api('advance', { corps: corpsKey(), rounds: +t.value }); t.value = ''; toast('מצב הדראפט עודכן'); },
   exportPicks: () => { const k = corpsKey(), d = draftInfo(k); csvDownload('draft-' + k + '.csv', [['#', 'יחידה', 'מועמד', 'מס׳', 'תפקיד', 'המלצה']].concat(d.picks.map((p) => [p.n, p.unit, candOf(k, p.id).name, p.id, candOf(k, p.id).role, candOf(k, p.id).rec || '']))); },
@@ -157,18 +158,18 @@ function buildRows(k) {
   });
 }
 SCREENS.import = (k) => {
-  const c = cf(k), im = A.ui.imp, can = A.me.role === 'שלישות' && A.me.corps === k, started = cs(k).picks.length > 0;
+  const c = cf(k), im = A.ui.imp, canImp = can('import', k), started = cs(k).picks.length > 0;
   const rows = im ? buildRows(k) : [], ok = rows.filter((r) => !r.errs.length);
   const miss = cs(k).cands.filter((x) => missingOf(k, x).length).length;
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הזנה וייבוא</h1><div class="mut small">קליטת מועמדים מקובץ אקסל או CSV, לפי חיל</div></div></div>
    <div class="grid g3"><div class="kpi"><b>${cs(k).cands.length}</b><span>מועמדים במאגר</span></div><div class="kpi"><b>${A.ui.imported || 0}</b><span>יובאו בטעינה זו</span></div><div class="kpi"><b>${miss}</b><span>תיקים עם נתונים חסרים</span></div></div>
    <div class="card"><h2>1. בחירת קובץ</h2><p class="mut small">עמודות נדרשות: שם, תפקיד, המלצת מגבש, מגבלות רפואיות, פרופיל, ${c.stats.map((s) => esc(s.l + ' (' + s.u + ')')).join(', ')}. שורה אחת לכל מועמד/ת.</p>
-    ${!can ? '<div class="demo-note">ייבוא זמין לשלישות החיל בלבד.</div>' : ''}${started ? '<div class="demo-note">הדראפט כבר התחיל – מועמדים חדשים יצטרפו למאגר הפנויים.</div>' : ''}
-    <div class="drop"><input type="file" id="file" accept=".xlsx,.xls,.csv" data-chg="file" ${can ? '' : 'disabled'}><div class="row" style="justify-content:center;margin-top:10px"><button class="btn sec sm" data-act="sample" ${can ? '' : 'disabled'}>טעינת קובץ לדוגמה</button><button class="btn sec sm" data-act="template">הורדת תבנית אקסל</button></div><div class="mut small" style="margin-top:6px">הקובץ נקרא בדפדפן ונשלח לשרת רק בלחיצה על ״ייבוא״. אין להעלות נתוני אמת באב־טיפוס.</div></div></div>
+    ${!canImp ? '<div class="demo-note">ייבוא זמין לשלישות החיל בלבד.</div>' : ''}${started ? '<div class="demo-note">הדראפט כבר התחיל – מועמדים חדשים יצטרפו למאגר הפנויים.</div>' : ''}
+    <div class="drop"><input type="file" id="file" accept=".xlsx,.xls,.csv" data-chg="file" ${canImp ? '' : 'disabled'}><div class="row" style="justify-content:center;margin-top:10px"><button class="btn sec sm" data-act="sample" ${canImp ? '' : 'disabled'}>טעינת קובץ לדוגמה</button><button class="btn sec sm" data-act="template">הורדת תבנית אקסל</button></div><div class="mut small" style="margin-top:6px">הקובץ נקרא בדפדפן ונשלח לשרת רק בלחיצה על ״ייבוא״. אין להעלות נתוני אמת באב־טיפוס.</div></div></div>
    ${im ? `<div class="card"><h2>2. התאמת עמודות</h2><div class="row">${importFields(k).map(([key, label]) => `<label class="small mut">${esc(label)}<br><select data-chg="map" data-f="${esc(key)}" style="min-width:150px"><option value="-1">— לא ממופה —</option>${im.headers.map((h, i) => `<option value="${i}" ${im.map[key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div></div>
    <div class="card"><h2>3. בדיקה וייבוא</h2><p>${rows.length} שורות · <b style="color:var(--green)">${ok.length} תקינות</b> · <b style="color:var(--red)">${rows.length - ok.length} עם בעיות (ידולגו)</b></p>
     <div style="overflow:auto;max-height:320px"><table><thead><tr><th>שורה</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>מדדים חסרים</th><th>בדיקה</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.n}</td><td>${esc(r.name)}</td><td>${esc(r.role)}</td><td>${esc(r.rec || '—')}</td><td>${c.stats.filter((s) => r.stats[s.k] === '' || r.stats[s.k] == null).map((s) => esc(s.l)).join(', ') || '—'}</td><td>${r.errs.length ? `<span class="pill p-red">${esc(r.errs.join(', '))}</span>` : '<span class="pill p-green">תקין</span>'}</td></tr>`).join('')}</tbody></table></div>
-    <div class="row" style="margin-top:10px"><button class="btn" data-act="doImport" ${can && ok.length ? '' : 'disabled'}>ייבוא ${ok.length} מועמדים</button><button class="btn sec" data-act="impClear">ביטול</button></div></div>` : ''}
+    <div class="row" style="margin-top:10px"><button class="btn" data-act="doImport" ${canImp && ok.length ? '' : 'disabled'}>ייבוא ${ok.length} מועמדים</button><button class="btn sec" data-act="impClear">ביטול</button></div></div>` : ''}
    <div class="card"><div class="row spread"><h2 style="margin:0">המאגר הנוכחי – ${esc(c.corps)}</h2><div class="row"><button class="btn sec sm" data-act="exportX">ייצוא לאקסל</button><button class="btn sec sm" data-act="exportC">ייצוא CSV</button></div></div>
     <div style="overflow:auto;max-height:420px;margin-top:8px"><table><thead><tr><th>מס׳</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>חסר בתיק</th><th>מקור</th></tr></thead><tbody>${cs(k).cands.map((x) => `<tr><td>${x.id}</td><td>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${esc(missingOf(k, x).join(', ') || 'מלא')}</td><td>${esc(x.source || 'מאגר קיים')}</td></tr>`).join('')}</tbody></table></div>
     <div class="mut small" style="margin-top:8px">הנתונים נשמרים בשרת (data/state.json).</div></div>`;

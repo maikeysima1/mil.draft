@@ -61,18 +61,37 @@ function fmtStat(s, v) { return v == null ? 'חסר' : v + ' ' + s.u; }
 
 // ---- permissions / routing ----
 const PAGES = [
-  { id: 'room', name: 'חדר בחירה', full: true },
-  { id: 'board', name: 'לוח הדראפט', full: true },
-  { id: 'eval', name: 'דף מגבש', full: false },
-  { id: 'command', name: 'תמונת מצב', full: true },
-  { id: 'import', name: 'הזנה וייבוא', full: true },
+  { id: 'room', name: 'חדר בחירה', icon: 'users' },
+  { id: 'board', name: 'לוח הדראפט', icon: 'grid' },
+  { id: 'eval', name: 'דף מגבש', icon: 'clip' },
+  { id: 'command', name: 'תמונת מצב', icon: 'chart' },
+  { id: 'import', name: 'הזנה וייבוא', icon: 'upload' },
 ];
-const allowed = (p) => !!A.me && (A.me.role !== 'מגבש/ת' || !p.full);
-const homeFor = () => (A.me.role === 'מגבש/ת' ? 'eval' : 'room');
+const ICONS = {
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
+  clip: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  chart: '<path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-9"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+  out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
+};
+const icon = (n, s) => `<svg class="ic" width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+const R = () => A.cfg.roles[A.me.role];
+const roleOf = (name) => A.cfg.roles[name];
+const allowed = (p) => !!A.me && R().pages.includes(p.id);
+const homeFor = () => R().home;
+// can the current user run `action` on corps k (mirrors the server's canDo)
+const can = (action, k) => !!A.me && R().can.includes(action) && (R().scope === 'all' || A.me.corps === k);
+const canFile = () => !!A.me && R().pages.includes('room'); // may open candidate files
+const SCOPE_TXT = { all: 'כל החילות', corps: 'החיל שלו/ה', group: 'הקבוצה שלו/ה' };
 function route() { return (location.hash.replace('#/', '') || '').split('?')[0]; }
 function go(r) { location.hash = '#/' + r; }
 
-// corps shown on screens: שלישות/מגבש fixed to their corps; commander can switch
+// corps shown on screens: users bound to a corps are fixed to it; others can switch
 function corpsKey() {
   if (A.me.corps) return A.me.corps;
   return A.ui.corps || 'combat';
@@ -81,50 +100,70 @@ function corpsSwitcher() {
   if (A.me.corps) return `<span class="chip navy">${esc(cf(A.me.corps).corps)}</span>`;
   return `<div class="row"><span class="mut small">חיל:</span><div class="tabs">${A.cfg.corps && Object.keys(A.cfg.corps).map((k) => `<button class="${corpsKey() === k ? 'on' : ''}" data-act="corps" data-k="${k}">${esc(cf(k).corps)}</button>`).join('')}</div></div>`;
 }
-function roleStyle(role) {
-  return { 'שלישות': ['background:#3F5530;color:#fff', 'p-green'], 'מפקד/ת הכשרה': ['background:#2F5A8A;color:#fff', 'p-blue'], 'מגבש/ת': ['background:#C2741F;color:#fff', 'p-orange'] }[role];
-}
+const LPILL = ['', 'p-dark', 'p-blue', 'p-violet', 'p-green', 'p-orange', 'p-gray'];
+function roleStyle(role) { const l = roleOf(role).layer; return [`background:var(--l${l});color:#fff`, LPILL[l]]; }
+
+// ---- theme ----
+function applyTheme() { document.documentElement.dataset.theme = localStorage.getItem('mil-theme') === 'dark' ? 'dark' : 'light'; }
+applyTheme();
 
 // ---- shell ----
 function shell(inner) {
-  const nav = PAGES.filter(allowed).map((p) => `<a href="#/${p.id}" class="${route() === p.id ? 'on' : ''}">${p.name}</a>`).join('');
-  return `<header class="top"><span class="brand">MIL-DRAFT</span><nav class="nav">${nav}</nav>
-   <div class="who"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span>${esc(A.me.title)}<small>${esc(A.me.unit)}${A.me.corps ? ' · ' + esc(cf(A.me.corps).corps) : ' · כל החילות'}</small></span>
-   <button class="btn link sm" data-act="logout">החלפת משתמש</button></div></header>
-   <main><div class="demo-note">אב־טיפוס לדמו – כל השמות והנתונים פיקטיביים. במערכת אמיתית הכניסה תהיה בהזדהות מאובטחת.</div>${inner}</main>`;
+  const nav = PAGES.filter(allowed).map((p) => `<a href="#/${p.id}" class="${route() === p.id ? 'on' : ''}">${icon(p.icon)}<span>${p.name}</span></a>`).join('');
+  const page = PAGES.find((p) => p.id === route());
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const k = A.me.corps || A.ui.corps;
+  const scope = A.me.corps ? cf(A.me.corps).corps : 'כל החילות';
+  return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>MIL-DRAFT</span></div><nav class="nav">${nav}</nav>
+    <div class="side-foot"><div class="meta">אב־טיפוס לדמו · כל הנתונים פיקטיביים</div>
+    <div class="usercard"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span class="uc-t"><b>${esc(A.me.title)}</b><small>${esc(A.me.unit)}</small></span></div>
+    <div class="row" style="gap:6px"><span class="lbadge">שכבה ${R().layer} · ${esc(A.me.role)}</span></div></div></aside>
+   <div class="content"><header class="tbar"><div class="bar-t"><span class="bar-page">${page ? page.name : ''}</span><span class="bar-sub">${esc(scope)}</span></div>
+    <div class="bar-r"><span class="live"><i></i>חי</span><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="החלפת ערכת נושא">${icon(dark ? 'sun' : 'moon', 18)}</button><button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header>
+    <main>${inner}</main></div></div>`;
 }
 
 // ---- login ----
-// selection order: training commander → שלישות (combat, intel, signals) → evaluators in the same corps order
+// selection order: training commander → שלישות (combat, intel, signals) → evaluators → oversight roles
 const CORPS_ORDER = ['combat', 'intel', 'signals'];
 const CORPS_SHORT = { combat: 'לוחמים', intel: 'מודיעין', signals: 'קשר' };
 function loginGroups() {
   const us = A.cfg.users, unitIdx = (u) => cfRaw(u.corps).units.findIndex((x) => x.name === u.unit);
   const byCorps = (role, k) => us.filter((u) => u.role === role && u.corps === k).sort((a, b) => unitIdx(a) - unitIdx(b));
-  return [{ title: 'מפקד/ת הכשרה', users: us.filter((u) => u.role === 'מפקד/ת הכשרה') }]
+  const byRole = (r) => us.filter((u) => u.role === r);
+  return [{ title: 'מפקד/ת הכשרה', users: byRole('מפקד/ת הכשרה') }]
     .concat(CORPS_ORDER.map((k) => ({ title: 'שלישות ' + CORPS_SHORT[k], users: byCorps('שלישות', k) })))
     .concat([{ title: 'מגבשים', users: [].concat(...CORPS_ORDER.map((k) => byCorps('מגבש/ת', k))) }])
+    .concat([{ title: 'ניהול ופיקוח', users: byRole('ראש מטה').concat(byRole('צופה/ת'), byRole('מנהל/ת מערכת')) }])
     .filter((g) => g.users.length);
 }
 const loginOrder = () => [].concat(...loginGroups().map((g) => g.users));
 function loginList(sel) {
   let n = 0;
-  return loginGroups().map((g) => `<div class="mut small" style="margin-top:8px;font-weight:700">${esc(g.title)}</div>` + g.users.map((x) => { n++; return `<button class="user ${x.id === sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="mut" style="width:22px;text-align:center;font-weight:700">${n}</span><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span style="flex:1"><b>${esc(x.title)}</b><span class="mut small" style="display:block">${esc(x.unit)}${x.corps ? ' · ' + esc(cf(x.corps).corps) : ' · כל החילות'}${x.group ? ' · קבוצה ' + x.group : ''}</span></span><span class="pill ${roleStyle(x.role)[1]}">סיווג: ${esc(x.role)}</span></button>`; }).join('')).join('');
+  return loginGroups().map((g) => `<div class="grp"><div class="grp-t">${esc(g.title)}</div>` + g.users.map((x) => { n++; return `<button class="user ${x.id === sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="num">${n}</span><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.title)}</b><small>${esc(x.unit)}${x.corps ? ' · ' + esc(cf(x.corps).corps) : ' · ' + SCOPE_TXT[roleOf(x.role).scope]}${x.group ? ' · קבוצה ' + x.group : ''}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`; }).join('') + '</div>').join('');
+}
+const ACTION_TXT = { pick: 'בחירה', thresholds: 'עריכת מכסות', import: 'ייבוא', reset: 'איפוס', undo: 'ביטול בחירה', advance: 'הדמיה', eval: 'הזנת התרשמות', factory: 'איפוס מערכת' };
+function layerMatrix(selRole) {
+  const rows = Object.keys(A.cfg.roles).sort((a, b) => roleOf(a).layer - roleOf(b).layer);
+  return `<div class="card matrix"><h2>שכבות סיווג והרשאות</h2><div class="mut small" style="margin-bottom:10px">כל שכבה רואה ומפעילה רק את מה שנקבע לה (העמודות: חדר בחירה, לוח, דף מגבש, תמונת מצב, ייבוא). השרת בודק כל פעולה מחדש.</div>
+   <div style="overflow:auto"><table><thead><tr><th>שכבה</th>${PAGES.map((p) => `<th class="c" title="${p.name}">${icon(p.icon, 17)}</th>`).join('')}<th>היקף</th><th class="act">פעולות</th></tr></thead><tbody>
+   ${rows.map((r) => { const o = roleOf(r); return `<tr class="${r === selRole ? 'sel' : ''}"><td><span class="pill ${LPILL[o.layer]}">${o.layer} · ${esc(r)}</span></td>${PAGES.map((p) => `<td class="c">${o.pages.includes(p.id) ? `<span class="ok">${icon('check', 15)}</span>` : '<span class="mut">—</span>'}</td>`).join('')}<td class="small">${SCOPE_TXT[o.scope]}</td><td class="small mut act">${o.can.map((a) => ACTION_TXT[a]).join(' · ') || 'צפייה בלבד'}</td></tr>`; }).join('')}
+   </tbody></table></div></div>`;
 }
 function loginView() {
   const sel = A.ui.sel || loginOrder()[0].id;
-  const u = A.cfg.users.find((x) => x.id === sel);
-  const perms = PAGES.map((p) => { const ok = u.role !== 'מגבש/ת' || !p.full; return `<div class="row spread" style="padding:4px 0"><span>${p.name}</span><span class="pill ${ok ? 'p-green' : 'p-gray'}">${ok ? 'פתוח' : 'נעול'}</span></div>`; }).join('');
-  const desc = { 'שלישות': 'גישה מלאה: חדר בחירה, לוח הדראפט, תמונת מצב, ייבוא וצפייה בדפי מגבש. רואה רק את מועמדי החיל שלה.', 'מפקד/ת הכשרה': 'גישה מלאה לצפייה בכל המסכים, כולל דפי המגבש, כדי להכיר את החיילים לפני תחילת ההכשרה.', 'מגבש/ת': 'גישה לדף המגבש בלבד: הזנת התרשמות על מועמדי הקבוצה שלו/ה. אין גישה לחדר הבחירה ולתוצאות הדראפט.' }[u.role];
-  const target = u.role === 'מגבש/ת' ? 'דף מגבש' : 'חדר בחירה';
-  return `<div class="login"><section style="display:flex;flex-direction:column;gap:18px"><div class="brand" style="color:var(--navy);font-size:22px">MIL-DRAFT</div>
-   <h1 style="font-size:38px;font-weight:900;line-height:1.2">מהגיבוש ועד השיבוץ – תמונה אחת של כל מועמד</h1>
-   <p class="mut" style="font-size:16px">מגבשים מזינים התרשמות מקצועית, יחידות בוחרות בחדר בחירה משותף לפי מערך, ומפקדי ההכשרה מקבלים את התמונה המלאה.</p>
+  const u = A.cfg.users.find((x) => x.id === sel), o = roleOf(u.role);
+  const target = PAGES.find((p) => p.id === o.home).name;
+  return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-DRAFT</span></div>
+   <h1>מהגיבוש ועד השיבוץ – <em>תמונה אחת</em> של כל מועמד</h1>
+   <p>מגבשים מזינים התרשמות מקצועית, יחידות בוחרות בחדר בחירה משותף לפי מערך, ומפקדי ההכשרה מקבלים את התמונה המלאה.</p>
+   <div class="chips"><span>דראפט חי</span><span>6 שכבות סיווג</span><span>3 חילות</span></div>
+   ${layerMatrix(u.role)}
    <div class="demo-note">אב־טיפוס לדמו – המשתמשים פיקטיביים. במערכת אמיתית הכניסה תהיה בהזדהות מאובטחת.</div></section>
-   <section style="display:flex;flex-direction:column;gap:12px"><h2 style="font-size:28px;font-weight:800">כניסה למערכת</h2><p class="mut" style="margin:0">בחרו משתמש. ההרשאות נקבעות לפי הסיווג שלו.</p>
+   <section class="picker"><div class="row spread"><h2>כניסה למערכת</h2><button class="iconbtn" data-act="theme" aria-label="החלפת ערכת נושא">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 18)}</button></div><p class="mut" style="margin:0">בחרו משתמש. ההרשאות נקבעות לפי שכבת הסיווג שלו.</p>
    ${loginList(sel)}
-   <div class="card"><h3 style="margin-bottom:6px">הרשאות – ${esc(u.role)}</h3>${perms}<p class="mut small" style="margin:8px 0 0">${desc}</p></div>
-   <div class="row" style="position:sticky;bottom:0;background:var(--bg);padding:10px 0;z-index:5"><button class="btn" style="padding:13px 26px;font-size:17px" data-act="login">כניסה כ${esc(u.title)} ←</button><span class="mut small">ייפתח: ${target}</span></div></section></div>`;
+   <div class="card sel-info"><div class="row spread"><b>שכבה ${o.layer} · ${esc(u.role)}</b><span class="pill ${LPILL[o.layer]}">${SCOPE_TXT[o.scope]}</span></div><p class="mut small" style="margin:6px 0 0">${esc(o.desc)}</p></div>
+   <div class="enter"><button class="btn lg" data-act="login">כניסה כ${esc(u.title)} ←</button><span class="mut small">ייפתח: ${target}</span></div></section></div>`;
 }
 
 // ---- render loop ----
@@ -158,6 +197,7 @@ function rerender(live) { if (live && A.ui.editTh) return; /* don't wipe an open
 const ACTIONS = {
   sel: (d) => { A.ui.sel = d.id; rerender(); },
   login: () => { A.me = A.cfg.users.find((x) => x.id === (A.ui.sel || loginOrder()[0].id)); localStorage.setItem('mil-user', A.me.id); connectSSE(); go(homeFor()); render(); },
+  theme: () => { localStorage.setItem('mil-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); rerender(); },
   logout: () => { localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
   corps: (d) => { A.ui.corps = d.k; A.ui.cand = null; rerender(); },
 };
@@ -185,7 +225,8 @@ function clockText() {
   const left = Math.max(0, A.S.clockSeconds - Math.floor((nowS() - cst.turnStartedAt) / 1000));
   return String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
 }
-setInterval(() => { const c = $('#clk'); if (c) c.textContent = clockText(); }, 1000);
+function clockPct() { const k = corpsKey(), cst = cs(k); if (!cst) return 0; return Math.max(0, 100 - (nowS() - cst.turnStartedAt) / 10 / A.S.clockSeconds); }
+setInterval(() => { const c = $('#clk'); if (c) c.textContent = clockText(); const r = $('#clkring'); if (r) r.style.setProperty('--p', clockPct().toFixed(1)); }, 1000);
 
 // ---- small UI pieces ----
 function recPill(r) { return r ? `<span class="pill ${REC_CLS[r]}">${esc(r)}</span>` : '<span class="pill p-red">חסר: המלצה</span>'; }

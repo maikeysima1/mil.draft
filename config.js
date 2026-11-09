@@ -55,4 +55,16 @@ const corps = {
       }
     };
 Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
-module.exports={corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
+// Classification layers: who can open which screen, which actions they may run, and how much data they see.
+// scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
+const ALL_PAGES = ['room', 'board', 'eval', 'command', 'import'];
+const ROLES = {
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES, can: ['undo', 'reset', 'import', 'advance', 'factory'], desc: 'שליטה מלאה בכל החילות: ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש, וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
+  'ראש מטה': { layer: 3, scope: 'all', home: 'command', pages: ['board', 'command'], can: [], desc: 'צפייה בלבד בלוח הדראפט ובתמונת המצב של כל החילות. אין גישה לתיקי מועמדים או לדפי מגבש.' },
+  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה רק את מועמדי החיל שלה.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'eval', pages: ['eval'], can: ['eval'], desc: 'דף המגבש בלבד: הזנת התרשמות על מועמדי הקבוצה שלו/ה. אין גישה לחדר הבחירה ולתוצאות הדראפט.' },
+  'צופה/ת': { layer: 6, scope: 'all', home: 'board', pages: ['board'], can: [], desc: 'צפייה בלוח הדראפט החי בלבד (שמות ובחירות), ללא תיקים, מדדים או הרשאות פעולה.' },
+};
+const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
+module.exports={ROLES,canDo,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};

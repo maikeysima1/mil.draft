@@ -9,7 +9,7 @@ function clockCard(k) {
   const next = d.order[d.picks.length + 1];
   return `<div class="clock ${myTurn ? 'me' : ''}"><div><div class="small">${myTurn ? 'התור שלכם לבחור' : 'על השעון'}</div><h2 style="color:#fff;margin:0">${esc(d.slot.u)}</h2>
    <div class="small">סבב ${d.slot.r} · בחירה ${d.picks.length + 1} מתוך ${d.order.length} · הבאה בתור: ${esc(next ? next.u : '—')}</div></div>
-   <div style="text-align:center"><div class="t" id="clk">${clockText()}</div><div class="small">זמן לבחירה</div></div></div>`;
+   <div class="ringwrap"><div class="ring" id="clkring" style="--p:${clockPct().toFixed(1)}"><div class="t" id="clk">${clockText()}</div></div><div class="small">זמן לבחירה</div></div></div>`;
 }
 
 function unitChips(k) {
@@ -54,9 +54,9 @@ SCREENS.room = (k) => {
   const rows = filtered(k);
   const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit;
   const sel = (id, label, opts, val) => `<label>${label}<select id="${id}" data-chg="flt" data-f="${id.slice(2)}">${opts.map((o) => `<option ${o === (val || 'הכול') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
-  const log = d.picks.slice().reverse().slice(0, 12).map((p) => `<div class="row" style="padding:5px 0;border-bottom:1px solid #EEF0EA"><b>#${p.n}</b><span>${esc(p.unit)} בחרה את ${esc(candOf(k, p.id).name)} (${esc(candOf(k, p.id).role)})${p.auto ? ' <span class="mut small">· אוטומטי</span>' : ''}</span></div>`).join('') || '<span class="mut">עדיין לא בוצעו בחירות</span>';
+  const log = d.picks.slice().reverse().slice(0, 12).map((p) => `<div class="row" style="padding:5px 0;border-bottom:1px solid var(--line2)"><b>#${p.n}</b><span>${esc(p.unit)} בחרה את ${esc(candOf(k, p.id).name)} (${esc(candOf(k, p.id).role)})${p.auto ? ' <span class="mut small">· אוטומטי</span>' : ''}</span></div>`).join('') || '<span class="mut">עדיין לא בוצעו בחירות</span>';
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר בחירה – ${esc(c.label)}</h1><div class="mut small">דראפט נפרד לכל חיל · סדר בחירה מתחלף בכל סבב</div></div>
-    ${isHumanMine(k) || A.me.role === 'מפקד/ת הכשרה' ? `<div class="row"><button class="btn sec" data-act="undo" ${d.picks.length ? '' : 'disabled'}>ביטול הבחירה האחרונה</button>${isHumanMine(k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>` : ''}</div>
+    ${can('undo', k) || can('reset', k) ? `<div class="row">${can('undo', k) ? `<button class="btn sec" data-act="undo" ${d.picks.length ? '' : 'disabled'}>ביטול הבחירה האחרונה</button>` : ''}${can('reset', k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>` : ''}</div>
    <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? c.rounds : d.slot.r} מתוך ${c.rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
    ${unitChips(k)}${clockCard(k)}
    ${isHumanMine(k) ? needsCard(k) : '<div class="demo-note">צפייה בלבד – רק שלישות היחידה בוחרת. היחידות האחרות בוחרות אוטומטית כשאין משתמש מחובר.</div>'}
@@ -77,9 +77,9 @@ function radar(k, c) {
   const pt = (i, r) => [cx + r * Math.sin(2 * Math.PI * i / n), cy - r * Math.cos(2 * Math.PI * i / n)];
   const ring = (f) => t.map((_, i) => pt(i, R * f).map((v) => v.toFixed(1)).join(',')).join(' ');
   const val = t.map((_, i) => pt(i, R * (0.2 + 0.4 * c.lv[i])).map((v) => v.toFixed(1)).join(',')).join(' ');
-  return `<svg viewBox="0 0 260 240" width="260" role="img" aria-label="תרשים חוזקות">${[1, .66, .33].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="#E3E6E0"/>`).join('')}
-   <polygon points="${val}" fill="rgba(63,85,48,.25)" stroke="#3F5530" stroke-width="2"/>
-   ${t.map((x, i) => { const p = pt(i, i === 0 ? 100 : 98); return `<text x="${p[0].toFixed(1)}" y="${(p[1] + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="#3A4452">${esc(x)}</text><text x="${p[0].toFixed(1)}" y="${(p[1] + 16).toFixed(1)}" text-anchor="middle" font-size="10" fill="#5A6472">${WORDS[c.lv[i]]}</text>`; }).join('')}</svg>`;
+  return `<svg viewBox="0 0 260 240" width="260" role="img" aria-label="תרשים חוזקות">${[1, .66, .33].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)"/>`).join('')}
+   <polygon points="${val}" fill="var(--green)" fill-opacity=".22" stroke="var(--green)" stroke-width="2"/>
+   ${t.map((x, i) => { const p = pt(i, i === 0 ? 100 : 98); return `<text x="${p[0].toFixed(1)}" y="${(p[1] + 4).toFixed(1)}" text-anchor="middle" font-size="11" class="svgt">${esc(x)}</text><text x="${p[0].toFixed(1)}" y="${(p[1] + 16).toFixed(1)}" text-anchor="middle" font-size="10" class="svgm">${WORDS[c.lv[i]]}</text>`; }).join('')}</svg>`;
 }
 
 function statBars(k, c) {
@@ -96,7 +96,7 @@ function statBars(k, c) {
 function navBar(id) {
   const nav = A.ui.nav || [], i = nav.indexOf(id); if (i < 0 || nav.length < 2) return '';
   const nm = (x) => { const c = candOf(corpsKey(), x); return c ? c.name : ''; };
-  return `<div class="row spread" style="background:#F3F4F0;border-radius:10px;padding:6px 8px"><button class="btn sec sm" data-act="navPrev" aria-label="הקודם">→ ${esc(nm(nav[(i - 1 + nav.length) % nav.length]))}</button><b class="small">${i + 1} מתוך ${nav.length}</b><button class="btn sec sm" data-act="navNext" aria-label="הבא">${esc(nm(nav[(i + 1) % nav.length]))} ←</button></div><div class="mut small" style="text-align:center;margin-top:-8px">אפשר גם עם החצים במקלדת (← הבא, → הקודם)</div>`;
+  return `<div class="row spread" style="background:var(--bg2);border-radius:10px;padding:6px 8px"><button class="btn sec sm" data-act="navPrev" aria-label="הקודם">→ ${esc(nm(nav[(i - 1 + nav.length) % nav.length]))}</button><b class="small">${i + 1} מתוך ${nav.length}</b><button class="btn sec sm" data-act="navNext" aria-label="הבא">${esc(nm(nav[(i + 1) % nav.length]))} ←</button></div><div class="mut small" style="text-align:center;margin-top:-8px">אפשר גם עם החצים במקלדת (← הבא, → הקודם)</div>`;
 }
 function drawer(k, id) {
   const c = candOf(k, id); if (!c) return '';
@@ -113,7 +113,7 @@ function drawer(k, id) {
    <div><b>התרשמות המגבש/ת</b><p style="margin:4px 0">${esc(c.obs) || '<span class="mut">טרם הוזנה</span>'}</p>${c.summary ? `<p class="mut small" style="margin:0">סיכום: ${esc(c.summary)}</p>` : ''}</div>
    <div class="card" style="padding:12px"><b>התאמה לכל יחידה ב${esc(cf(k).label)}</b>${cf(k).units.map((u0) => { const u = unitOf(k, u0.name), bad = fitBad(k, c, u); return `<div class="row spread" style="padding:5px 0"><span>${esc(u.name)}${u.name === myUnitName(k) ? ' (שלכם)' : ''}</span>${bad.length ? `<span class="pill p-orange">חסר: ${esc(bad.map((x) => x.s).join(', '))}</span>` : '<span class="pill p-green">עומד/ת בכל התנאים</span>'}</div>`; }).join('')}</div>
    ${myTurn ? `<button class="btn" style="padding:13px" data-act="pick" data-id="${id}">בחירה ל${esc(A.me.unit)}</button>` : ''}
-   ${A.me.role !== 'מגבש/ת' ? `<a href="#/eval" class="small" data-act="goEval" data-id="${id}">תיק מועמד מלא ודף מגבש ←</a>` : ''}</aside></div>`;
+   ${R().pages.includes('eval') && A.me.role !== 'מגבש/ת' ? `<a href="#/eval" class="small" data-act="goEval" data-id="${id}">תיק מועמד מלא ודף מגבש ←</a>` : ''}</aside></div>`;
 }
 
 function thModal(k) {
@@ -172,18 +172,18 @@ SCREENS.board = (k) => {
   const cellFor = (r, uname) => {
     const idx = d.order.findIndex((o) => o.r === r && o.u === uname), p = P[idx], cand = p && candOf(k, p.id);
     const isNow = idx === P.length, mine = uname === (isHumanMine(k) ? A.me.unit : c.myUnit);
-    return `<td><div class="cell ${p ? 'pick' : ''} ${isNow ? 'clock' : ''} ${mine ? 'mine' : ''}"><div class="mut small">#${idx + 1}${isNow ? ' · על השעון' : ''}</div>${cand ? `<b>${esc(cand.name)}</b><div class="small">${esc(cand.role)}</div>` : (isNow ? 'בוחרים כעת…' : '—')}</div></td>`;
+    return `<td><div class="cell ${p ? 'pick' : ''} ${isNow ? 'now' : ''} ${mine ? 'mine' : ''}"><div class="mut small">#${idx + 1}${isNow ? ' · על השעון' : ''}</div>${cand ? `<b>${esc(cand.name)}</b><div class="small">${esc(cand.role)}</div>` : (isNow ? 'בוחרים כעת…' : '—')}</div></td>`;
   };
   const standout = standoutOf(k);
   const wanted = {}, got = {};
   unit.forEach((u) => Object.keys(u.quota).forEach((r) => { wanted[r] = (wanted[r] || 0) + u.quota[r]; got[r] = (got[r] || 0) + Math.min(u.quota[r], countRole(k, u.name, r)); }));
-  return `<div class="row spread">${corpsSwitcher()}<span class="pill p-green">● שידור חי</span></div>
+  return `<div class="row spread">${corpsSwitcher()}</div>
    <div class="grid g2"><div class="card"><h2>${d.finished ? 'הדראפט הסתיים' : 'על השעון · ' + esc(c.corps)}</h2>${d.finished ? '<p>כל הבחירות בוצעו.</p>' : `<div class="row spread"><div><h2 style="font-size:26px;margin:0">${esc(d.slot.u)}</h2><div class="mut small">סבב ${d.slot.r} · בחירה ${P.length + 1} מתוך ${d.order.length}</div><div class="mut small">מחפשת: ${Object.keys(unitOf(k, d.slot.u).quota).map((r) => r + ' ×' + (unitOf(k, d.slot.u).quota[r] - countRole(k, d.slot.u, r))).filter((s) => !/×0$|×-/.test(s)).join(', ') || '—'}</div></div><div style="text-align:center"><div style="font-size:38px;font-weight:900" id="clk">${clockText()}</div><div class="mut small">זמן לבחירה</div></div></div>`}
-   ${A.me.role !== 'מגבש/ת' ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
+   ${can('advance', k) ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
    <div class="card"><h2>הבחירה האחרונה</h2>${last ? `<div class="row spread"><div><b style="font-size:22px">${esc(candOf(k, last.id).name)}</b><div class="mut">${esc(candOf(k, last.id).role)} · נבחר/ה ע״י ${esc(last.unit)} · #${last.n}</div></div><div>${strengthChips(k, candOf(k, last.id))}</div></div>` : '<span class="mut">טרם נבחר איש</span>'}</div></div>
    <div class="card board"><h2>לוח הדראפט – ${esc(c.label)}</h2><div class="mut small" style="margin-bottom:8px">${P.length} מתוך ${d.order.length} בחירות · סדר מתחלף בכל סבב</div>
    <table><thead><tr><th></th>${unit.map((u) => `<th>${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${Array.from({ length: c.rounds }, (_, i) => `<tr><th>סבב ${i + 1}<div class="mut small">${i % 2 ? '← משמאל' : '→ מימין'}</div></th>${unit.map((u) => cellFor(i + 1, u.name)).join('')}</tr>`).join('')}</tbody></table></div>
-   <div class="grid g2"><div class="card"><h2>הפנויים הבולטים</h2><div class="mut small" style="margin-bottom:6px">לפי מספר החוזקות הבולטות מהגיבוש · לא ציון</div>${standout.map((o, i) => `<div class="row spread clk" style="padding:7px 0;border-bottom:1px solid #EEF0EA;cursor:pointer" data-act="boardCand" data-id="${o.x.id}"><div><b>${i + 1}. ${esc(o.x.name)} · ${esc(o.x.role)}</b><div class="mut small">${esc(o.s.join(' · ') || '—')}</div></div><span class="pill p-blue">עומד/ת בתנאי הסף של ${o.fits} מתוך ${unit.length} יחידות</span></div>`).join('')}</div>
+   <div class="grid g2">${canFile() ? `<div class="card"><h2>הפנויים הבולטים</h2><div class="mut small" style="margin-bottom:6px">לפי מספר החוזקות הבולטות מהגיבוש · לא ציון</div>${standout.map((o, i) => `<div class="row spread clk" style="padding:7px 0;border-bottom:1px solid var(--line2);cursor:pointer" data-act="boardCand" data-id="${o.x.id}"><div><b>${i + 1}. ${esc(o.x.name)} · ${esc(o.x.role)}</b><div class="mut small">${esc(o.s.join(' · ') || '—')}</div></div><span class="pill p-blue">עומד/ת בתנאי הסף של ${o.fits} מתוך ${unit.length} יחידות</span></div>`).join('')}</div>` : ''}
    <div class="card"><h2>בחירות לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">נבחרו / מבוקשים בכל היחידות</div>${c.roles.map((r) => `<div class="row" style="margin:7px 0"><span style="min-width:110px">${esc(r)}</span><div class="bar"><i style="width:${wanted[r] ? got[r] / wanted[r] * 100 : 0}%"></i></div><b>${got[r] || 0} / ${wanted[r] || 0}</b></div>`).join('')}</div></div>
    ${A.ui.cand ? drawer(k, A.ui.cand) : ''}`;
 };
