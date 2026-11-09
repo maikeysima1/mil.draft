@@ -257,9 +257,10 @@ setInterval(() => {
 if (!state) { state = freshState(); Object.keys(C.corps).forEach(playUntilMine); }
 
 // ---------- SSE ----------
-function snapshot() {
+// favorites are private: every client only receives its own list
+function snapshot(userId) {
   const o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-60).reverse() };
-  Object.keys(C.corps).forEach((k) => { o.corps[k] = state.corps[k]; });
+  Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: userId && f[userId] ? { [userId]: f[userId] } : {} }); });
   return o;
 }
 function broadcast() { const d = 'data: ' + JSON.stringify({ type: 'state', version: state.version }) + '\n\n'; clients.forEach((c) => c.res.write(d)); }
@@ -279,7 +280,7 @@ http.createServer(async (req, res) => {
     if (p === '/api/ping') return json(res, 200, { needCode: !!ACCESS_CODE });
     if (ACCESS_CODE && p.startsWith('/api/') && (req.headers['x-code'] || url.searchParams.get('code')) !== ACCESS_CODE) return json(res, 401, { error: 'קוד גישה שגוי' });
     if (p === '/api/config') return json(res, 200, { roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
-    if (p === '/api/state') return json(res, 200, snapshot());
+    if (p === '/api/state') return json(res, 200, snapshot(req.headers['x-user']));
     if (p === '/api/events') {
       const user = userById(url.searchParams.get('user'));
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -375,6 +376,12 @@ http.createServer(async (req, res) => {
       if (p === '/api/baseline-clear') {
         needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה'); delete state.corps[k].baseline;
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} מחקה את נתוני הייחוס` }); save(); return json(res, 200, { ok: true });
+      }
+      if (p === '/api/fav') {
+        needCorps(); if (!canDo(user, 'fav', k)) throw new Error('אין הרשאה לסמן מועדפים');
+        const cst = state.corps[k]; if (!cst.cands.some((x) => x.id === b.id)) throw new Error('מועמד לא נמצא');
+        cst.favs = cst.favs || {}; const set = new Set(cst.favs[user.id] || []); if (b.on) set.add(b.id); else set.delete(b.id); cst.favs[user.id] = Array.from(set);
+        save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/undo') {
         needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה');

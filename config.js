@@ -59,10 +59,10 @@ Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
 const ALL_PAGES = ['room', 'board', 'eval', 'command', 'import'];
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES, can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup'], desc: 'שליטה מלאה בכל החילות: ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance', 'regroup'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש, העברת מועמדים בין צוותים וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES, can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav'], desc: 'שליטה מלאה בכל החילות: ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance', 'regroup', 'fav'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש, העברת מועמדים בין צוותים וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'command', pages: ['board', 'command'], can: [], desc: 'צפייה בלבד בלוח הדראפט ובתמונת המצב של כל החילות. אין גישה לתיקי מועמדים או לדפי מגבש.' },
-  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה רק את מועמדי החיל שלה.' },
+  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance', 'fav'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה רק את מועמדי החיל שלה.' },
   'מגבש/ת': { layer: 5, scope: 'group', home: 'eval', pages: ['eval'], can: ['eval', 'regroup'], desc: 'אחראי/ת על צוות אחד: הזנת התרשמות על מועמדי הצוות שלו/ה והעברת מועמד לצוות אחר. אין גישה לחדר הבחירה ולתוצאות הדראפט.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'board', pages: ['board'], can: [], desc: 'צפייה בלוח הדראפט החי בלבד (שמות ובחירות), ללא תיקים, מדדים או הרשאות פעולה.' },
 };

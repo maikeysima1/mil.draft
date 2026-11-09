@@ -44,7 +44,7 @@ window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(
 
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 L.config = () => ({ roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
-L.snapshot = () => { const o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-60).reverse() }; Object.keys(C.corps).forEach((k) => { o.corps[k] = state.corps[k]; }); return JSON.parse(JSON.stringify(o)); };
+L.snapshot = () => { const uid = L.me && L.me.id, o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-60).reverse() }; Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: uid && f[uid] ? { [uid]: f[uid] } : {} }); }); return JSON.parse(JSON.stringify(o)); };
 L.handle = function (p, userId, b) {
   const user = userById(userId); L.me = user;
   if (!user) throw new Error('לא מחובר');
@@ -120,6 +120,12 @@ L.handle = function (p, userId, b) {
     save(); return { ok: true, count: rows.length, skipped: (b.rows || []).length - rows.length };
   }
   if (p === 'baseline-clear') { needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה'); delete state.corps[k].baseline; save(); return { ok: true }; }
+  if (p === 'fav') {
+    needCorps(); if (!canDo(user, 'fav', k)) throw new Error('אין הרשאה לסמן מועדפים');
+    const cst = state.corps[k]; if (!cst.cands.some((x) => x.id === b.id)) throw new Error('מועמד לא נמצא');
+    cst.favs = cst.favs || {}; const set = new Set(cst.favs[user.id] || []); if (b.on) set.add(b.id); else set.delete(b.id); cst.favs[user.id] = Array.from(set);
+    save(); return { ok: true };
+  }
   if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
   if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {
@@ -148,8 +154,8 @@ async function api(path, body) {
 async function refresh() { A.S = LocalServer.snapshot(); A.skew = 0; }
 function connectSSE() { LocalServer.me = A.me; LocalServer.onChange = async () => { await refresh(); rerender(true); }; }
 (async function boot() {
-  A.cfg = LocalServer.config(); await refresh();
-  A.me = A.cfg.users.find((u) => u.id === localStorage.getItem('mil-user')) || null;
+  A.cfg = LocalServer.config();
+  A.me = A.cfg.users.find((u) => u.id === localStorage.getItem('mil-user')) || null; LocalServer.me = A.me; await refresh();
   if (A.me) { connectSSE(); if (!route()) go(homeFor()); }
   render();
 })();

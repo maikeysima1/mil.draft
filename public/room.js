@@ -49,6 +49,7 @@ function filtered(k) {
     if (f.rec && f.rec !== 'הכול' && x.rec !== f.rec) return false;
     if (f.fit && fitBad(k, x, unit).length) return false;
     if (f.wish && !wishRank(x, myUnitName(k))) return false;
+    if (f.fav && !isFav(k, x.id)) return false;
     if (f.free && d.takenBy[x.id]) return false;
     return true;
   });
@@ -69,12 +70,13 @@ SCREENS.room = (k) => {
    <div class="card"><h2>מאגר מועמדים – ${esc(c.corps)} (${cs(k).cands.length})</h2><div class="mut small" style="margin-bottom:10px">רק מועמדים שסווגו ל${esc(c.label)} · העדפת החייל מוצגת כמידע בלבד – השיבוץ נקבע לפי צורכי היחידות</div>
    <div class="filters">${sel('f-role', 'סינון לפי תפקיד', ['הכול'].concat(c.roles), f.role)}${sel('f-trait', 'חוזקה נדרשת', ['הכול'].concat(c.traits), f.trait)}${sel('f-rec', 'המלצת מגבש', ['הכול'].concat(A.cfg.RECS), f.rec)}
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
+    ${can('fav', k) ? `<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fav" data-chg="flt" data-f="fav" ${f.fav ? 'checked' : ''}> ♥ מועדפים שלי (${favList(k).length})</label>` : ''}
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
    <div style="overflow:auto"><table><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
    ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
-     <td>${myTurn && !tk ? `<button class="btn sm" data-act="pick" data-id="${x.id}">בחירה</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
+     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn sm" data-act="pick" data-id="${x.id}">בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
    <div class="card"><h2>יומן בחירות</h2>${log}</div>
    ${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}`;
 };
@@ -111,7 +113,7 @@ function drawer(k, id) {
   const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit && !tk;
   const miss = missingOf(k, c);
   return `<div class="drawer-bg" data-act="closeCand"><aside class="drawer" role="dialog" aria-label="תיק מועמד">
-   <div class="row spread"><div><div class="small" style="color:var(--orange);font-weight:600">תיק מועמד · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small">${c.id} · ${esc(c.role)} · אזור ${esc(c.area)} · צוות ${c.group}</div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
+   <div class="row spread" style="flex-wrap:nowrap;align-items:flex-start">${can('fav', k) ? favBtn(k, id, 'lg') : ''}<div style="flex:1"><div class="small" style="color:var(--orange);font-weight:600">תיק מועמד · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small">${c.id} · ${esc(c.role)} · אזור ${esc(c.area)} · צוות ${c.group}</div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
    ${navBar(id)}
    <div class="row">${recPill(c.rec)}<span class="pill p-gray">פרופיל ${c.profile} · ${esc(c.med)}</span>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : ''}${miss.length ? `<span class="pill p-orange">חסר בתיק: ${esc(miss.join(', '))}</span>` : ''}</div>
    <div class="card" style="padding:12px">${statBars(k, c)}<div class="mut small">הסימון הכתום: ממוצע המאגר. תיאור בלבד, לא דירוג.</div></div>
@@ -163,11 +165,24 @@ Object.assign(ACTIONS, {
   },
 });
 
+
+// card for שלישות / commanders: live status of the candidates they marked ♥ (private to the user)
+function favCard(k, d, favOnly) {
+  const items = favList(k).map((id) => candOf(k, id)).filter(Boolean), unit = unitOf(k, myUnitName(k));
+  const free = items.filter((x) => !d.takenBy[x.id]), taken = items.filter((x) => d.takenBy[x.id]);
+  const row = (x) => { const tk = d.takenBy[x.id], bad = fitBad(k, x, unit);
+    return `<div class="row spread clk favrow" style="padding:8px 0;border-bottom:1px solid var(--line2);cursor:pointer;gap:8px" data-act="favCand" data-id="${x.id}"><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="favmark">${heartIcon(true, 15)}</span><div><b>${esc(x.name)}</b> <span class="mut small">${esc(x.role)}</span><div class="mut small">${esc(strengths(k, x).join(' · ') || 'ללא חוזקה בולטת')}</div></div></div>
+      <div class="row" style="gap:6px;justify-content:flex-end">${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)} · #${tk.n}</span>` : '<span class="pill p-green">פנוי/ה</span>'}${bad.length ? `<span class="pill p-orange" title="תנאי סף שלא מתקיימים">חסר: ${esc(bad.map((e) => e.s).join(', '))}</span>` : '<span class="pill p-blue">עומד/ת בתנאי הסף</span>'}${wishRank(x, myUnitName(k)) ? `<span class="pill p-violet">ביקש/ה אתכם · ${wishRank(x, myUnitName(k))}</span>` : ''}</div></div>`; };
+  return `<div class="card"><div class="row spread"><h2 style="margin:0">♥ המועדפים שלי</h2><span class="mut small">${items.length ? `${free.length} מתוך ${items.length} עדיין פנויים${taken.length ? ' · ' + taken.length + ' כבר נבחרו' : ''}` : 'פרטי – רק אתם רואים את הסימונים'}</span></div>
+   <div style="margin-top:6px">${items.length ? free.concat(taken).map(row).join('') : '<div class="mut">עדיין לא סימנתם מועדפים. לחצו על הלב בכרטיס המועמד (או בטבלת חדר הבחירה) כדי לעקוב אחריהם כאן לפני הבחירה.</div>'}</div></div>`;
+}
+
 // ---------------- live board ----------------
 function standoutOf(k) {
-  const d = draftInfo(k), units = cf(k).units;
-  return cs(k).cands.filter((x) => !d.takenBy[x.id]).map((x) => ({ x, s: strengths(k, x), fits: units.filter((u) => !fitBad(k, x, u).length).length }))
-    .sort((a, b) => b.s.length - a.s.length || b.fits - a.fits).slice(0, 6);
+  const d = draftInfo(k), units = cf(k).units, fo = can('fav', k) && A.ui.favOnly;
+  const r = cs(k).cands.filter((x) => !d.takenBy[x.id] && (!fo || isFav(k, x.id))).map((x) => ({ x, s: strengths(k, x), fits: units.filter((u) => !fitBad(k, x, u).length).length }))
+    .sort((a, b) => b.s.length - a.s.length || b.fits - a.fits);
+  return fo ? r : r.slice(0, 6);
 }
 function navStep(dir) {
   const nav = A.ui.nav || [], i = nav.indexOf(A.ui.cand); if (i < 0 || nav.length < 2) return;
@@ -184,22 +199,27 @@ SCREENS.board = (k) => {
   const cellFor = (r, uname) => {
     const idx = d.order.findIndex((o) => o.r === r && o.u === uname), p = P[idx], cand = p && candOf(k, p.id);
     const isNow = idx === P.length, mine = uname === (isHumanMine(k) ? A.me.unit : c.myUnit);
-    return `<td><div class="cell ${p ? 'pick' : ''} ${isNow ? 'now' : ''} ${mine ? 'mine' : ''}"><div class="mut small">#${idx + 1}${isNow ? ' · על השעון' : ''}</div>${cand ? `<b>${esc(cand.name)}</b><div class="small">${esc(cand.role)}</div>` : (isNow ? 'בוחרים כעת…' : '—')}</div></td>`;
+    const fv = !!cand && can('fav', k) && isFav(k, cand.id), dim = A.ui.favOnly && can('fav', k) && p && !fv;
+    return `<td><div class="cell ${p ? 'pick' : ''} ${isNow ? 'now' : ''} ${mine ? 'mine' : ''} ${dim ? 'dim' : ''} ${fv ? 'favcell' : ''}"><div class="mut small">#${idx + 1}${isNow ? ' · על השעון' : ''}</div>${cand ? `<b>${fv ? `<span class="favmark" title="מועדף">${heartIcon(true, 13)}</span> ` : ''}${esc(cand.name)}</b><div class="small">${esc(cand.role)}</div>` : (isNow ? 'בוחרים כעת…' : '—')}</div></td>`;
   };
-  const standout = standoutOf(k);
+  const standout = standoutOf(k), canFav = can('fav', k), favOnly = canFav && !!A.ui.favOnly, favs = favList(k);
   const wanted = {}, got = {};
   unit.forEach((u) => Object.keys(u.quota).forEach((r) => { wanted[r] = (wanted[r] || 0) + u.quota[r]; got[r] = (got[r] || 0) + Math.min(u.quota[r], countRole(k, u.name, r)); }));
-  return `<div class="row spread">${corpsSwitcher()}</div>
+  return `<div class="row spread">${corpsSwitcher()}${canFav ? `<div class="tabs" role="group" aria-label="סינון מועדפים"><button class="${favOnly ? '' : 'on'}" data-act="favOnly" data-v="0">כל המועמדים</button><button class="${favOnly ? 'on' : ''}" data-act="favOnly" data-v="1">♥ המועדפים שלי (${favs.length})</button></div>` : ''}</div>
+   ${canFav ? favCard(k, d, favOnly) : ''}
    <div class="grid g2"><div class="card"><h2>${d.finished ? 'הדראפט הסתיים' : 'על השעון · ' + esc(c.corps)}</h2>${d.finished ? '<p>כל הבחירות בוצעו.</p>' : `<div class="row spread"><div><h2 style="font-size:26px;margin:0">${esc(d.slot.u)}</h2><div class="mut small">סבב ${d.slot.r} · בחירה ${P.length + 1} מתוך ${d.order.length}</div><div class="mut small">מחפשת: ${Object.keys(unitOf(k, d.slot.u).quota).map((r) => r + ' ×' + (unitOf(k, d.slot.u).quota[r] - countRole(k, d.slot.u, r))).filter((s) => !/×0$|×-/.test(s)).join(', ') || '—'}</div></div><div style="text-align:center"><div style="font-size:38px;font-weight:900" id="clk">${clockText()}</div><div class="mut small">זמן לבחירה</div></div></div>`}
-   ${can('advance', k) ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
+   ${canFav ? '' : ''}${can('advance', k) ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
    <div class="card"><h2>הבחירה האחרונה</h2>${last ? `<div class="row spread"><div><b style="font-size:22px">${esc(candOf(k, last.id).name)}</b><div class="mut">${esc(candOf(k, last.id).role)} · נבחר/ה ע״י ${esc(last.unit)} · #${last.n}</div></div><div>${strengthChips(k, candOf(k, last.id))}</div></div>` : '<span class="mut">טרם נבחר איש</span>'}</div></div>
    <div class="card board"><h2>לוח הדראפט – ${esc(c.label)}</h2><div class="mut small" style="margin-bottom:8px">${P.length} מתוך ${d.order.length} בחירות · סדר מתחלף בכל סבב</div>
    <table><thead><tr><th></th>${unit.map((u) => `<th>${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${Array.from({ length: c.rounds }, (_, i) => `<tr><th>סבב ${i + 1}<div class="mut small">${i % 2 ? '← משמאל' : '→ מימין'}</div></th>${unit.map((u) => cellFor(i + 1, u.name)).join('')}</tr>`).join('')}</tbody></table></div>
-   <div class="grid g2">${canFile() ? `<div class="card"><h2>הפנויים הבולטים</h2><div class="mut small" style="margin-bottom:6px">לפי מספר החוזקות הבולטות מהגיבוש · לא ציון</div>${standout.map((o, i) => `<div class="row spread clk" style="padding:7px 0;border-bottom:1px solid var(--line2);cursor:pointer" data-act="boardCand" data-id="${o.x.id}"><div><b>${i + 1}. ${esc(o.x.name)} · ${esc(o.x.role)}</b><div class="mut small">${esc(o.s.join(' · ') || '—')}</div></div><span class="pill p-blue">עומד/ת בתנאי הסף של ${o.fits} מתוך ${unit.length} יחידות</span></div>`).join('')}</div>` : ''}
+   <div class="grid g2">${canFile() ? `<div class="card"><h2>${favOnly ? 'המועדפים הפנויים שלי' : 'הפנויים הבולטים'}</h2><div class="mut small" style="margin-bottom:6px">${favOnly ? 'מועמדים שסימנתם ♥ ועדיין לא נבחרו' : 'לפי מספר החוזקות הבולטות מהגיבוש · לא ציון'}</div>${standout.length ? '' : '<div class="mut">אין מועדפים פנויים כרגע.</div>'}${standout.map((o, i) => `<div class="row spread clk" style="padding:7px 0;border-bottom:1px solid var(--line2);cursor:pointer" data-act="boardCand" data-id="${o.x.id}"><div><b>${i + 1}. ${esc(o.x.name)} · ${esc(o.x.role)}</b><div class="mut small">${esc(o.s.join(' · ') || '—')}</div></div><span class="pill p-blue">עומד/ת בתנאי הסף של ${o.fits} מתוך ${unit.length} יחידות</span></div>`).join('')}</div>` : ''}
    <div class="card"><h2>בחירות לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">נבחרו / מבוקשים בכל היחידות</div>${c.roles.map((r) => `<div class="row" style="margin:7px 0"><span style="min-width:110px">${esc(r)}</span><div class="bar"><i style="width:${wanted[r] ? got[r] / wanted[r] * 100 : 0}%"></i></div><b>${got[r] || 0} / ${wanted[r] || 0}</b></div>`).join('')}</div></div>
    ${A.ui.cand ? drawer(k, A.ui.cand) : ''}`;
 };
 Object.assign(ACTIONS, {
+  fav: async (d) => { const k = corpsKey(), on = !isFav(k, d.id); try { await api('fav', { corps: k, id: d.id, on }); toast(on ? 'נוסף למועדפים ♥' : 'הוסר מהמועדפים'); } catch (e) { /* toast shown */ } },
+  favOnly: (d) => { A.ui.favOnly = d.v === '1'; rerender(); },
+  favCand: (d) => { const k = corpsKey(), tk = draftInfo(k).takenBy, ids = favList(k).filter((id) => candOf(k, id)); A.ui.nav = ids.filter((id) => !tk[id]).concat(ids.filter((id) => tk[id])); A.ui.cand = d.id; rerender(); },
   simNext: () => api('advance', { corps: corpsKey(), steps: 1 }),
   reset2: async () => { if (confirm('לאפס את הדראפט של החיל?')) { await api('advance', { corps: corpsKey(), rounds: 0 }); toast('הדראפט אופס'); } },
   boardCand: (d) => { A.ui.nav = standoutOf(corpsKey()).map((o) => o.x.id); A.ui.cand = d.id; rerender(); },

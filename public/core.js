@@ -30,7 +30,7 @@ async function api(path, body) {
   return j;
 }
 const codeVal = () => localStorage.getItem('mil-code') || '';
-async function refresh() { const r = await fetch('/api/state', { headers: { 'X-Code': codeVal() } }); if (r.status === 401) { localStorage.removeItem('mil-code'); location.reload(); return; } A.S = await r.json(); A.skew = A.S.serverNow - Date.now(); }
+async function refresh() { const r = await fetch('/api/state', { headers: { 'X-Code': codeVal(), 'X-User': A.me ? A.me.id : '' } }); if (r.status === 401) { localStorage.removeItem('mil-code'); location.reload(); return; } A.S = await r.json(); A.skew = A.S.serverNow - Date.now(); }
 const nowS = () => Date.now() + A.skew;
 
 // ---- domain helpers ----
@@ -90,9 +90,15 @@ const ICONS = {
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
   check: '<path d="m5 12 5 5 9-10"/>',
+  heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
 };
 const icon = (n, s) => `<svg class="ic" width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 const R = () => A.cfg.roles[A.me.role];
+// favorites (private, per user): ♥ marks candidates a unit/commander wants to keep an eye on
+const favList = (k) => (cs(k).favs && A.me && cs(k).favs[A.me.id]) || [];
+const isFav = (k, id) => favList(k).includes(id);
+const heartIcon = (on, s) => `<svg class="ic" width="${s || 18}" height="${s || 18}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.heart}</svg>`;
+const favBtn = (k, id, cls) => `<button class="favbtn ${isFav(k, id) ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" aria-pressed="${isFav(k, id)}" title="${isFav(k, id) ? 'הסרה מהמועדפים' : 'סימון כמועדף'}" aria-label="${isFav(k, id) ? 'הסרה מהמועדפים' : 'סימון כמועדף'}">${heartIcon(isFav(k, id))}</button>`;
 const roleOf = (name) => A.cfg.roles[name];
 const allowed = (p) => !!A.me && R().pages.includes(p.id);
 const homeFor = () => R().home;
@@ -208,7 +214,7 @@ function rerender(live) { if (live && A.ui.editTh) return; /* don't wipe an open
 // ---- global actions ----
 const ACTIONS = {
   sel: (d) => { A.ui.sel = d.id; rerender(); },
-  login: () => { A.me = A.cfg.users.find((x) => x.id === (A.ui.sel || loginOrder()[0].id)); localStorage.setItem('mil-user', A.me.id); connectSSE(); go(homeFor()); render(); },
+  login: async () => { A.me = A.cfg.users.find((x) => x.id === (A.ui.sel || loginOrder()[0].id)); localStorage.setItem('mil-user', A.me.id); connectSSE(); await refresh(); go(homeFor()); render(); },
   theme: () => { localStorage.setItem('mil-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); rerender(); },
   logout: () => { localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
   corps: (d) => { A.ui.corps = d.k; A.ui.cand = null; rerender(); },
