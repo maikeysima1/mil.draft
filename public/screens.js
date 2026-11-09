@@ -7,7 +7,7 @@ function evalForm(k, c) { // working copy kept in A.ui.form until sent
     let draft = null; try { draft = JSON.parse(localStorage.getItem(evalDraftKey(k, c.id))); } catch (e) { /* none */ }
     A.ui.form = draft && draft.id === c.id ? draft : { id: c.id, k, lv: c.lv.slice(), role: c.role, skills: (c.skills || []).slice(), stats: Object.assign({}, c.stats), rec: c.rec || '', med: c.med, obs: c.obs || '', summary: c.summary || '' };
     A.ui.form.extra = Object.assign({ motivation: 3, discipline: 1, potential: 0, confidence: 1, second: '', follow: false, medNote: '' }, c.extra, A.ui.form.extra);
-    if (!A.ui.form.pref) A.ui.form.pref = c.pref || '—';
+    if (!A.ui.form.wish) A.ui.form.wish = { role: (c.wish && c.wish.role) || '', units: [0, 1, 2].map((i) => (c.wish && c.wish.units[i]) || '') };
   }
   return A.ui.form;
 }
@@ -35,8 +35,9 @@ SCREENS.eval = (k) => {
     return `<div class="card" style="background:var(--bg2)"><div class="mut small">תצוגה מקדימה – כך זה ייכנס לתיק המועמד</div><h3>${esc(cur.name)} <span class="mut small">· תיק מועמד · ${esc(c.corps)}</span></h3>
      <div class="small"><b>תפקיד מומלץ:</b> ${esc(f.role)} · <b>חוזקות בולטות:</b> ${esc(str.join(', ') || '—')} · <b>המלצה:</b> ${esc(f.rec || '—')} · <b>מגבלות:</b> ${esc(f.med)}</div>
      <div class="small">${c.stats.map((s) => `<b>${esc(s.l)}:</b> ${fmtStat(s, f.stats[s.k] === '' ? null : f.stats[s.k])}`).join(' · ')}</div>
+     <div class="small"><b>העדפת החייל:</b> תפקיד ${esc(f.wish.role || '—')} · יחידות ${esc(f.wish.units.filter(Boolean).join(' › ') || '—')}</div>
      <div class="small"><b>כישורים:</b> ${esc(f.skills.join(' · ') || '—')}</div>
-     <div class="small"><b>ערכים נוספים:</b> מוטיבציה ${f.extra.motivation}/5 · משמעת ${WORDS[f.extra.discipline]} · פוטנציאל פיקודי ${LOWHIGH[f.extra.potential]} · ביטחון בהערכה ${LOWHIGH[f.extra.confidence]}${f.extra.second ? ' · תפקיד חלופי ' + esc(f.extra.second) : ''}${f.pref && f.pref !== '—' ? ' · מעדיף/ה ' + esc(f.pref) : ''}${f.extra.follow ? ' · <b>דורש מעקב</b>' : ''}</div><p class="small" style="margin:4px 0">${esc(f.obs) || '—'}</p>
+     <div class="small"><b>ערכים נוספים:</b> מוטיבציה ${f.extra.motivation}/5 · משמעת ${WORDS[f.extra.discipline]} · פוטנציאל פיקודי ${LOWHIGH[f.extra.potential]} · ביטחון בהערכה ${LOWHIGH[f.extra.confidence]}${f.extra.second ? ' · תפקיד חלופי ' + esc(f.extra.second) : ''}${f.extra.follow ? ' · <b>דורש מעקב</b>' : ''}</div><p class="small" style="margin:4px 0">${esc(f.obs) || '—'}</p>
      <div class="small mut">סיכום המגבש: ${esc(f.summary) || `מתאים/ה לתפקיד ${esc(f.role)}. חוזקות בולטות: ${esc(str.join(', ') || '—')}. המלצה: ${esc(f.rec || '—')}.`}</div></div>`;
   })();
   return `<div class="row spread"><div><span class="chip navy">${esc(c.eventName)} · ${esc(c.corps)}</span><h1 style="font-size:28px;font-weight:800;margin-top:6px">דף מגבש – צוות ${g}</h1>${!ro ? `<div class="mut small">אתם אחראים על צוות ${g} בלבד</div>` : ''}</div>
@@ -63,9 +64,11 @@ SCREENS.eval = (k) => {
       <div><b class="small">ביטחון בהערכה</b><br>${segW(f, 'confidence', LOWHIGH)}</div></div>
      <div class="row" style="margin-top:10px;align-items:flex-end">
       <label class="small mut">תפקיד חלופי<br><select data-chg="exfld" data-f="second"><option value="">— אין —</option>${c.roles.filter((r) => r !== f.role).map((r) => `<option ${r === f.extra.second ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
-      <label class="small mut">יחידה מועדפת<br><select data-chg="fld" data-f="pref"><option value="—">— אין העדפה —</option>${c.units.map((u) => `<option ${u.name === f.pref ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>
       <label class="row small" style="gap:6px;min-height:38px"><input type="checkbox" data-chg="exfld" data-f="follow" ${f.extra.follow ? 'checked' : ''}> דורש מעקב</label>
       <label class="small mut" style="flex:1;min-width:200px">הערה רפואית (אופציונלי)<br><input type="text" style="width:100%" id="x-med" data-inp="exfld" data-f="medNote" value="${esc(f.extra.medNote)}"></label></div></div>
+    <div><h3 style="font-size:16px">העדפת החייל</h3><div class="mut small">מה החייל ביקש בראיון. זו העדפה בלבד – השיבוץ נקבע לפי צורכי היחידות.</div>
+     <div class="row" style="margin-top:6px;align-items:flex-end"><label class="small mut">תפקיד מבוקש<br><select data-chg="wishrole"><option value="">— לא צוין —</option>${c.roles.map((r) => `<option ${r === f.wish.role ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
+      ${[0, 1, 2].map((i) => `<label class="small mut">יחידה – בחירה ${i + 1}<br><select data-chg="wishunit" data-i="${i}"><option value="">— אין —</option>${c.units.map((u) => `<option ${u.name === f.wish.units[i] ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>`).join('')}</div></div>
     <label><b>תצפיות והתרשמות כללית</b><textarea id="f-obs" data-inp="fld" data-f="obs">${esc(f.obs)}</textarea></label>
     <label><b>סיכום המגבש</b> <span class="mut small">– יוצג בתיק המועמד בחדר הבחירה</span><textarea id="f-sum" data-inp="fld" data-f="summary" style="min-height:60px">${esc(f.summary)}</textarea></label>
     ${ro ? '' : `<div class="row"><button class="btn sec" type="button" data-act="evalDraft">שמירה כטיוטה ומעבר לבא</button><button class="btn" type="button" data-act="evalSend">שליחה לתיק המועמד</button></div>`}
@@ -74,6 +77,8 @@ SCREENS.eval = (k) => {
 };
 Object.assign(ACTIONS, {
   team: (d) => { A.ui.group = +d.g; A.ui.evalCand = null; A.ui.form = null; rerender(); },
+  wishrole: (d, t) => { A.ui.form.wish.role = t.value; rerender(); },
+  wishunit: (d, t) => { const u = A.ui.form.wish.units; u.forEach((x, j) => { if (t.value && x === t.value) u[j] = ''; }); u[+d.i] = t.value; rerender(); },
   ex: (d) => { A.ui.form.extra[d.f] = +d.v; rerender(); },
   exfld: (d, t) => { A.ui.form.extra[d.f] = t.type === 'checkbox' ? t.checked : t.value; if (t.tagName === 'SELECT' || t.type === 'checkbox') rerender(); },
   regroup: async (d, t) => {
@@ -97,7 +102,7 @@ Object.assign(ACTIONS, {
   evalSend: async () => {
     const k = corpsKey(), f = A.ui.form;
     if (!f.rec) { toast('בחרו המלצת מגבש לפני השליחה', true); return; }
-    await api('eval', { corps: k, id: f.id, lv: f.lv, role: f.role, skills: f.skills, stats: f.stats, rec: f.rec, med: f.med, obs: f.obs, summary: f.summary, extra: f.extra, pref: f.pref });
+    await api('eval', { corps: k, id: f.id, lv: f.lv, role: f.role, skills: f.skills, stats: f.stats, rec: f.rec, med: f.med, obs: f.obs, summary: f.summary, extra: f.extra, wish: { role: f.wish.role, units: f.wish.units.filter(Boolean) } });
     localStorage.removeItem(evalDraftKey(k, f.id)); A.ui.form = null; toast('ההתרשמות נשמרה בתיק המועמד. אפשר לעדכן ולשלוח שוב.'); rerender();
   },
 });
@@ -115,7 +120,11 @@ function dilemmas(k) {
   const miss = cs(k).cands.filter((x) => missingOf(k, x).length).length; if (miss) pts.push(`${miss} תיקים עם נתונים חסרים – כדאי להשלים מול המגבשים לפני הבחירה.`);
   const bad = free.filter((x) => x.rec === 'לא מומלץ').length; if (bad) pts.push(`${bad} מועמדים פנויים עם המלצה שלילית – נדרשת החלטה מי מהיחידות מוכנה לקלוט.`);
   const hp = c.units.filter((u) => u.prio === 0).reduce((a, u) => a + Object.keys(u.quota).reduce((x, r) => x + Math.max(0, u.quota[r] - countRole(k, u.name, r)), 0), 0);
-  return { pts, contested, hp, miss };
+  const wr = (p) => wishRank(candOf(k, p.id), p.unit), wp = d.picks.filter((p) => wr(p) > 0).length, w1 = d.picks.filter((p) => wr(p) === 1).length;
+  if (d.picks.length) pts.push(`התאמה להעדפות: ${wp} מתוך ${d.picks.length} שובצו ליחידה שביקשו (${w1} בבחירה הראשונה). ההעדפה היא שיקול משני – השיבוץ נקבע לפי צורכי היחידות.`);
+  const diffRole = free.filter((x) => x.wish && x.wish.role && x.wish.role !== x.role).length; if (diffRole) pts.push(`${diffRole} מועמדים פנויים ביקשו תפקיד שונה מהתפקיד שהמגבש המליץ עליו.`);
+  const noNeed = free.filter((x) => x.wish && x.wish.units.length && x.wish.units.every((u) => !((unitOf(k, u).quota[x.role] || 0) > countRole(k, u, x.role)))).length; if (noNeed) pts.push(`${noNeed} מועמדים פנויים ביקשו רק יחידות שאין להן כרגע צורך פתוח בתפקידם – סביר שהשיבוץ לא יהיה לפי ההעדפה.`);
+  return { pts, contested, hp, miss, wp, wtot: d.picks.length };
 }
 SCREENS.command = (k) => {
   const c = cf(k), d = draftInfo(k), tab = A.ui.tab || 'units';
@@ -139,13 +148,13 @@ SCREENS.command = (k) => {
   }
   if (tab === 'forum') {
     const dl = dilemmas(k), full = cs(k).cands.length - dl.miss;
-    body = `<div class="grid g3"><div class="kpi"><b>${full}/${cs(k).cands.length}</b><span>תיקים מלאים</span></div><div class="kpi"><b>${dl.contested.length}</b><span>מועמדים במחלוקת</span></div><div class="kpi"><b>${dl.hp}</b><span>צרכי קדימות גבוהה פתוחים</span></div></div>
+    body = `<div class="grid g3"><div class="kpi"><b>${full}/${cs(k).cands.length}</b><span>תיקים מלאים</span></div><div class="kpi"><b>${dl.contested.length}</b><span>מועמדים במחלוקת</span></div><div class="kpi"><b>${dl.hp}</b><span>צרכי קדימות גבוהה פתוחים</span></div><div class="kpi"><b>${dl.wp}/${dl.wtot}</b><span>שובצו ליחידה שביקשו</span></div></div>
      <div class="card"><h2>נקודות לדיון</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.8">${dl.pts.map((p) => `<li>${esc(p)}</li>`).join('') || '<li>אין נקודות חריגות כרגע.</li>'}</ul><div class="mut small" style="margin-top:8px">נוצר מכללים שקופים על הנתונים: תחרות, חוסרים וחריגות. אין כאן המלצה על אדם או יחידה.</div></div>`;
   }
   if (tab === 'report') {
     body = `<div class="card"><div class="row spread"><h2 style="font-size:24px;margin:0">דוח מצב דראפט כוח אדם – ${esc(c.corps)}</h2><span class="mut small">${new Date().toLocaleDateString('he-IL')}</span></div>
      <p>שובצו ${d.picks.length} מתוך ${d.order.length} בחירות · מכסות שמולאו ${tot.g}/${tot.q} · יחידות שהושלמו ${done}/${c.units.length}.</p>${matrix}
-     <h3 style="margin:14px 0 6px">שיבוצים</h3><table><thead><tr><th>#</th><th>יחידה</th><th>מועמד/ת</th><th>תפקיד</th><th>המלצה</th></tr></thead><tbody>${d.picks.map((p) => `<tr><td>${p.n}</td><td>${esc(p.unit)}</td><td>${esc(candOf(k, p.id).name)}</td><td>${esc(candOf(k, p.id).role)}</td><td>${esc(candOf(k, p.id).rec || '—')}</td></tr>`).join('')}</tbody></table>
+     <h3 style="margin:14px 0 6px">שיבוצים</h3><table><thead><tr><th>#</th><th>יחידה</th><th>מועמד/ת</th><th>תפקיד</th><th>המלצה</th><th>העדפת החייל</th></tr></thead><tbody>${d.picks.map((p) => `<tr><td>${p.n}</td><td>${esc(p.unit)}</td><td>${esc(candOf(k, p.id).name)}</td><td>${esc(candOf(k, p.id).role)}</td><td>${esc(candOf(k, p.id).rec || '—')}</td><td>${wishRank(candOf(k, p.id), p.unit) ? 'בחירה ' + wishRank(candOf(k, p.id), p.unit) : 'לא ביקש/ה'}</td></tr>`).join('')}</tbody></table>
      <div class="mut small" style="margin-top:10px">הדוח נוצר מכללים שקופים ואינו המלצה על אדם או יחידה.</div>
      <div class="row no-print" style="margin-top:10px"><button class="btn" data-act="print">הדפסה / שמירה כ־PDF</button><button class="btn sec" data-act="exportPicks">ייצוא שיבוצים CSV</button></div></div>`;
   }

@@ -3,6 +3,7 @@ const A = { cfg: null, S: null, me: null, ui: {}, skew: 0 };
 const $ = (s, r) => (r || document).querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const WORDS = ['בסיסי', 'טוב', 'בולט'];
+const wishRank = (c, u) => ((c.wish && c.wish.units) || []).indexOf(u) + 1; // 0 = not wished, 1..3 = rank
 const LOWHIGH = ['נמוך', 'בינוני', 'גבוה'];
 const LVCLS = ['p-gray', 'p-blue', 'p-green'];
 const REC_CLS = { 'מומלץ': 'p-green', 'מומלץ בהסתייגות': 'p-orange', 'לא מומלץ': 'p-red' };

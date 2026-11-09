@@ -35,6 +35,11 @@ function needsCard(k) {
    ${isHumanMine(k) ? '<button class="btn sec sm" data-act="editTh">עריכת מכסות ותנאי סף</button>' : ''}</div></div>`;
 }
 
+function wishCell(k, x) {
+  const w = x.wish || { role: '', units: [] }, r = wishRank(x, myUnitName(k)), short = (n) => n.replace(/^(חטיבת|יחידת|גדוד) /, '');
+  const a = r ? `<span class="pill p-violet">ביקש/ה אתכם · בחירה ${r}</span>` : (w.units.length ? `<span class="mut small">${esc(short(w.units[0]))}${w.units.length > 1 ? ' +' + (w.units.length - 1) : ''}</span>` : '<span class="mut">—</span>');
+  return a + (w.role && w.role !== x.role ? ` <span class="pill p-gray" title="התפקיד שהחייל ביקש שונה מהמלצת המגבש">רוצה ${esc(w.role)}</span>` : '');
+}
 function filtered(k) {
   const f = A.ui.f || {}, unit = unitOf(k, myUnitName(k)), d = draftInfo(k), c = cf(k);
   const ti = c.traits.indexOf(f.trait);
@@ -43,6 +48,7 @@ function filtered(k) {
     if (ti >= 0 && x.lv[ti] !== 2) return false;
     if (f.rec && f.rec !== 'הכול' && x.rec !== f.rec) return false;
     if (f.fit && fitBad(k, x, unit).length) return false;
+    if (f.wish && !wishRank(x, myUnitName(k))) return false;
     if (f.free && d.takenBy[x.id]) return false;
     return true;
   });
@@ -60,12 +66,13 @@ SCREENS.room = (k) => {
    <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? c.rounds : d.slot.r} מתוך ${c.rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
    ${unitChips(k)}${clockCard(k)}
    ${isHumanMine(k) ? needsCard(k) : '<div class="demo-note">צפייה בלבד – רק שלישות היחידה בוחרת. היחידות האחרות בוחרות אוטומטית כשאין משתמש מחובר.</div>'}
-   <div class="card"><h2>מאגר מועמדים – ${esc(c.corps)} (${cs(k).cands.length})</h2><div class="mut small" style="margin-bottom:10px">רק מועמדים שסווגו ל${esc(c.label)}</div>
+   <div class="card"><h2>מאגר מועמדים – ${esc(c.corps)} (${cs(k).cands.length})</h2><div class="mut small" style="margin-bottom:10px">רק מועמדים שסווגו ל${esc(c.label)} · העדפת החייל מוצגת כמידע בלבד – השיבוץ נקבע לפי צורכי היחידות</div>
    <div class="filters">${sel('f-role', 'סינון לפי תפקיד', ['הכול'].concat(c.roles), f.role)}${sel('f-trait', 'חוזקה נדרשת', ['הכול'].concat(c.traits), f.trait)}${sel('f-rec', 'המלצת מגבש', ['הכול'].concat(A.cfg.RECS), f.rec)}
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
+    <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
-   <div style="overflow:auto"><table><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
-   ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${strengthChips(k, x)}</td>
+   <div style="overflow:auto"><table><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
+   ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
      <td>${myTurn && !tk ? `<button class="btn sm" data-act="pick" data-id="${x.id}">בחירה</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
    <div class="card"><h2>יומן בחירות</h2>${log}</div>
@@ -110,7 +117,10 @@ function drawer(k, id) {
    <div class="card" style="padding:12px">${statBars(k, c)}<div class="mut small">הסימון הכתום: ממוצע המאגר. תיאור בלבד, לא דירוג.</div></div>
    <div style="text-align:center">${radar(k, c)}</div>
    <div><b>כישורים שנצפו</b><div class="row" style="margin-top:4px">${(c.skills || []).map((s) => `<span class="pill p-blue">${esc(s)}</span>`).join('') || '—'}</div></div>
-   ${c.extra ? `<div><b>פרטים נוספים מהמגבש</b><div class="row" style="margin-top:4px"><span class="pill p-blue">מוטיבציה ${c.extra.motivation}/5</span><span class="pill p-blue">משמעת: ${WORDS[c.extra.discipline]}</span><span class="pill p-blue">פוטנציאל פיקודי: ${LOWHIGH[c.extra.potential]}</span><span class="pill p-gray">ביטחון בהערכה: ${LOWHIGH[c.extra.confidence]}</span>${c.extra.second ? `<span class="pill p-violet">תפקיד חלופי: ${esc(c.extra.second)}</span>` : ''}${c.pref && c.pref !== '—' ? `<span class="pill p-violet">מעדיף/ה: ${esc(c.pref)}</span>` : ''}${c.extra.follow ? '<span class="pill p-orange">דורש מעקב</span>' : ''}</div>${c.extra.medNote ? `<div class="mut small" style="margin-top:4px">הערה רפואית: ${esc(c.extra.medNote)}</div>` : ''}</div>` : ''}
+   ${c.extra ? `<div><b>פרטים נוספים מהמגבש</b><div class="row" style="margin-top:4px"><span class="pill p-blue">מוטיבציה ${c.extra.motivation}/5</span><span class="pill p-blue">משמעת: ${WORDS[c.extra.discipline]}</span><span class="pill p-blue">פוטנציאל פיקודי: ${LOWHIGH[c.extra.potential]}</span><span class="pill p-gray">ביטחון בהערכה: ${LOWHIGH[c.extra.confidence]}</span>${c.extra.second ? `<span class="pill p-violet">תפקיד חלופי: ${esc(c.extra.second)}</span>` : ''}${c.extra.follow ? '<span class="pill p-orange">דורש מעקב</span>' : ''}</div>${c.extra.medNote ? `<div class="mut small" style="margin-top:4px">הערה רפואית: ${esc(c.extra.medNote)}</div>` : ''}</div>` : ''}
+   <div class="card" style="padding:12px"><b>העדפת החייל</b><div class="mut small">רצון החייל – אינו מחייב. השיבוץ נקבע לפי צורכי היחידות והמערכת.</div>
+    <div style="margin-top:6px">תפקיד מבוקש: ${c.wish && c.wish.role ? esc(c.wish.role) + (c.wish.role !== c.role ? ` <span class="pill p-orange">שונה מהמומלץ (${esc(c.role)})</span>` : ' <span class="pill p-green">תואם להמלצה</span>') : '<span class="mut">לא צוין</span>'}</div>
+    ${((c.wish && c.wish.units) || []).map((u, i) => { const un = unitOf(k, u), open = (un.quota[c.role] || 0) > countRole(k, u, c.role); return `<div class="row spread" style="padding:4px 0"><span>${i + 1}. ${esc(u)}${u === myUnitName(k) ? ' (שלכם)' : ''}</span><span class="pill ${open ? 'p-green' : 'p-gray'}">${open ? 'יש צורך פתוח בתפקיד' : 'אין צורך פתוח בתפקיד'}</span></div>`; }).join('') || '<div class="mut small">לא הוגשה העדפת יחידה</div>'}</div>
    <div><b>התרשמות המגבש/ת</b><p style="margin:4px 0">${esc(c.obs) || '<span class="mut">טרם הוזנה</span>'}</p>${c.summary ? `<p class="mut small" style="margin:0">סיכום: ${esc(c.summary)}</p>` : ''}</div>
    <div class="card" style="padding:12px"><b>התאמה לכל יחידה ב${esc(cf(k).label)}</b>${cf(k).units.map((u0) => { const u = unitOf(k, u0.name), bad = fitBad(k, c, u); return `<div class="row spread" style="padding:5px 0"><span>${esc(u.name)}${u.name === myUnitName(k) ? ' (שלכם)' : ''}</span>${bad.length ? `<span class="pill p-orange">חסר: ${esc(bad.map((x) => x.s).join(', '))}</span>` : '<span class="pill p-green">עומד/ת בכל התנאים</span>'}</div>`; }).join('')}</div>
    ${myTurn ? `<button class="btn" style="padding:13px" data-act="pick" data-id="${id}">בחירה ל${esc(A.me.unit)}</button>` : ''}

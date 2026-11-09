@@ -34,6 +34,17 @@ function makeExtra(cf, role, lv, rec, rnd2) {
   const sum = lv.reduce((a, b) => a + b, 0), others = cf.roles.filter((r) => r !== role);
   return { motivation: Math.max(1, Math.min(5, 2 + Math.floor(rnd2() * 3) + (sum >= 6 ? 1 : 0))), discipline: Math.min(2, Math.floor(rnd2() * 2.4) + (sum >= 7 ? 1 : 0)), potential: sum >= 7 ? 2 : (sum >= 5 ? 1 : (rnd2() < .3 ? 1 : 0)), confidence: 1 + (rnd2() > .45 ? 1 : 0), second: rnd2() < .55 ? others[Math.floor(rnd2() * others.length)] : '', follow: rec === C.RECS[2] || rnd2() < .14, medNote: '' };
 }
+// soldier's own wishes (informational): preferred role + up to 3 ranked units. The draft itself follows unit needs.
+function makeWish(cf, role, pref, rnd2) {
+  const others = cf.units.map((u) => u.name).filter((n) => n !== pref), units = [pref];
+  while (units.length < 3 && others.length) { if (rnd2() < .7 || units.length < 2) units.push(others.splice(Math.floor(rnd2() * others.length), 1)[0]); else break; }
+  return { role: rnd2() < .62 ? role : cf.roles[Math.floor(rnd2() * cf.roles.length)], units };
+}
+function cleanWish(cf, w) {
+  const names = cf.units.map((u) => u.name), units = [];
+  (Array.isArray(w.units) ? w.units : []).forEach((n) => { if (names.includes(n) && !units.includes(n) && units.length < 3) units.push(n); });
+  return { role: cf.roles.includes(w.role) ? w.role : '', units };
+}
 function cleanExtra(cf, x, old) {
   const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
   o.motivation = n(x.motivation, 1, 5, o.motivation || 3); o.discipline = n(x.discipline, 0, 2, o.discipline || 1); o.potential = n(x.potential, 0, 2, o.potential || 0); o.confidence = n(x.confidence, 0, 2, o.confidence || 1);
@@ -88,6 +99,7 @@ function seedCands() {
         extra: makeExtra(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2]), rnd2),
         summary: makeSummary(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2])), evaluated: true, evalBy: 'מגבש/ת צוות ' + (1 + (i % 4)), source: 'מאגר קיים',
       });
+      { const cd = out[key][out[key].length - 1]; cd.wish = makeWish(cf, role, cd.pref, rnd2); }
       n++;
     }
   });
@@ -96,7 +108,7 @@ function seedCands() {
 
 function freshState() {
   const cands = seedCands();
-  const st = { corps: {}, log: [], version: 1, schema: 3 };
+  const st = { corps: {}, log: [], version: 1, schema: 4 };
   Object.keys(C.corps).forEach((k) => {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
@@ -107,7 +119,7 @@ function freshState() {
 }
 
 let state;
-try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 3) state = null; } catch (e) { state = null; }
+try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 4) state = null; } catch (e) { state = null; }
 let saveTimer = null;
 function save() {
   state.version++;
@@ -117,6 +129,8 @@ function save() {
 }
 
 // ---------- draft logic ----------
+const wishRank = (c, u) => ((c.wish && c.wish.units) || []).indexOf(u) + 1; // 0 = not wished, 1..3 = rank
+const WISH_BONUS = [0, 1.5, 1, 0.5];
 const cfg = (k) => C.corps[k];
 const unitCfg = (k, name) => {
   const base = cfg(k).units.find((u) => u.name === name);
@@ -154,7 +168,7 @@ function chooseFor(k, unitName) {
     if (taken[c.id]) return;
     const need = (u.quota[c.role] || 0) - (have[c.role] || 0);
     const bad = fitOf(k, c, u).filter((x) => !x.ok).length;
-    const s = (need > 0 ? 20 : 0) - bad * 6 + c.lv.reduce((a, b) => a + b, 0) + (c.pref === unitName ? 1.5 : 0) + Math.random() * 2;
+    const s = (need > 0 ? 20 : 0) - bad * 6 + c.lv.reduce((a, b) => a + b, 0) + WISH_BONUS[wishRank(c, unitName)] + Math.random() * 2;
     if (s > bs) { bs = s; best = c; }
   });
   return best;
@@ -272,7 +286,7 @@ http.createServer(async (req, res) => {
         if (typeof b.obs === 'string') c.obs = b.obs.slice(0, 1500);
         if (typeof b.summary === 'string') c.summary = b.summary.slice(0, 600);
         if (b.extra) c.extra = cleanExtra(cf, b.extra, c.extra);
-        if (typeof b.pref === 'string' && (b.pref === '—' || cf.units.some((u) => u.name === b.pref))) c.pref = b.pref;
+        if (b.wish) { c.wish = cleanWish(cf, b.wish); c.pref = c.wish.units[0] || '—'; }
         c.evaluated = true; c.evalBy = user.title; c.evalAt = Date.now();
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} הזינ/ה התרשמות על ${c.name}` });
         save(); return json(res, 200, { ok: true, cand: c });
@@ -309,7 +323,7 @@ http.createServer(async (req, res) => {
           cs.cands.push({
             id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats,
             rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72),
-            area: '—', pref: '—', group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
+            area: '—', pref: '—', wish: { role: '', units: [] }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
           });
           added++;
         });
