@@ -1,13 +1,24 @@
 // Evaluator sheet, command overview, import
 // ---------------- evaluator ----------------
-function evalGroup(k) { return A.me.role === 'מגבש/ת' ? A.me.group : (A.ui.group || 3); }
+function evalGroup(k) { return A.me.role === 'מגבש/ת' ? A.me.group : (A.ui.group || 1); }
 function evalDraftKey(k, id) { return 'mil-eval-' + k + '-' + id; }
 function evalForm(k, c) { // working copy kept in A.ui.form until sent
   if (!A.ui.form || A.ui.form.id !== c.id || A.ui.form.k !== k) {
     let draft = null; try { draft = JSON.parse(localStorage.getItem(evalDraftKey(k, c.id))); } catch (e) { /* none */ }
     A.ui.form = draft && draft.id === c.id ? draft : { id: c.id, k, lv: c.lv.slice(), role: c.role, skills: (c.skills || []).slice(), stats: Object.assign({}, c.stats), rec: c.rec || '', med: c.med, obs: c.obs || '', summary: c.summary || '' };
+    A.ui.form.extra = Object.assign({ motivation: 3, discipline: 1, potential: 0, confidence: 1, second: '', follow: false, medNote: '' }, c.extra, A.ui.form.extra);
+    if (!A.ui.form.pref) A.ui.form.pref = c.pref || '—';
   }
   return A.ui.form;
+}
+const segW = (f, key, words) => `<div class="seg">${words.map((w, j) => `<button type="button" class="${f.extra[key] === j ? 'on' : ''}" data-act="ex" data-f="${key}" data-v="${j}">${w}</button>`).join('')}</div>`;
+function teamStrip(k, g) {
+  const me = A.me, only = me.role === 'מגבש/ת';
+  return `<div class="teams">${[1, 2, 3, 4].filter((n) => !only || n === me.group).map((n) => {
+    const cands = cs(k).cands.filter((x) => x.group === n), dn = cands.filter((x) => evalStatus(k, x) === 'הוזן').length;
+    const ev = A.cfg.users.find((u) => u.role === 'מגבש/ת' && u.corps === k && u.group === n);
+    return `<button class="team ${n === g ? 'on' : ''}" ${only ? 'disabled' : `data-act="team" data-g="${n}"`}><b>צוות ${n}</b><span>${dn}/${cands.length} הוזנו</span><small>${esc(ev ? ev.title.replace(/ · .*/, '') : '')}</small></button>`;
+  }).join('')}</div>`;
 }
 const evalStatus = (k, c) => (missingOf(k, c).length || !c.obs ? 'חסר מידע' : 'הוזן');
 SCREENS.eval = (k) => {
@@ -24,16 +35,18 @@ SCREENS.eval = (k) => {
     return `<div class="card" style="background:var(--bg2)"><div class="mut small">תצוגה מקדימה – כך זה ייכנס לתיק המועמד</div><h3>${esc(cur.name)} <span class="mut small">· תיק מועמד · ${esc(c.corps)}</span></h3>
      <div class="small"><b>תפקיד מומלץ:</b> ${esc(f.role)} · <b>חוזקות בולטות:</b> ${esc(str.join(', ') || '—')} · <b>המלצה:</b> ${esc(f.rec || '—')} · <b>מגבלות:</b> ${esc(f.med)}</div>
      <div class="small">${c.stats.map((s) => `<b>${esc(s.l)}:</b> ${fmtStat(s, f.stats[s.k] === '' ? null : f.stats[s.k])}`).join(' · ')}</div>
-     <div class="small"><b>כישורים:</b> ${esc(f.skills.join(' · ') || '—')}</div><p class="small" style="margin:4px 0">${esc(f.obs) || '—'}</p>
+     <div class="small"><b>כישורים:</b> ${esc(f.skills.join(' · ') || '—')}</div>
+     <div class="small"><b>ערכים נוספים:</b> מוטיבציה ${f.extra.motivation}/5 · משמעת ${WORDS[f.extra.discipline]} · פוטנציאל פיקודי ${LOWHIGH[f.extra.potential]} · ביטחון בהערכה ${LOWHIGH[f.extra.confidence]}${f.extra.second ? ' · תפקיד חלופי ' + esc(f.extra.second) : ''}${f.pref && f.pref !== '—' ? ' · מעדיף/ה ' + esc(f.pref) : ''}${f.extra.follow ? ' · <b>דורש מעקב</b>' : ''}</div><p class="small" style="margin:4px 0">${esc(f.obs) || '—'}</p>
      <div class="small mut">סיכום המגבש: ${esc(f.summary) || `מתאים/ה לתפקיד ${esc(f.role)}. חוזקות בולטות: ${esc(str.join(', ') || '—')}. המלצה: ${esc(f.rec || '—')}.`}</div></div>`;
   })();
-  return `<div class="row spread"><div><span class="chip navy">${esc(c.eventName)} · ${esc(c.corps)}</span><h1 style="font-size:28px;font-weight:800;margin-top:6px">דף מגבש – קבוצה ${g}</h1></div>
-    ${ro ? `<div class="row">${corpsSwitcher()}<label class="small mut">קבוצה <select data-chg="grp">${[1, 2, 3, 4].map((n) => `<option ${n === g ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>` : ''}</div>
-   ${ro ? '<div class="demo-note">צפייה בלבד – רק מגבש/ת מזינ/ה התרשמות.</div>' : ''}
-   <div class="grid g3"><div class="kpi"><span>מועמדים בקבוצה</span><b>${group.length}</b></div><div class="kpi"><span>הוזנו לתיק</span><b>${done}</b></div><div class="kpi"><span>התקדמות הקבוצה</span><div class="bar" style="margin-top:12px"><i style="width:${group.length ? done / group.length * 100 : 0}%"></i></div></div></div>
+  return `<div class="row spread"><div><span class="chip navy">${esc(c.eventName)} · ${esc(c.corps)}</span><h1 style="font-size:28px;font-weight:800;margin-top:6px">דף מגבש – צוות ${g}</h1>${!ro ? `<div class="mut small">אתם אחראים על צוות ${g} בלבד</div>` : ''}</div>
+    ${ro ? `<div class="row">${corpsSwitcher()}</div>` : ''}</div>
+   ${ro ? '<div class="demo-note">צפייה בלבד – רק מגבש/ת מזינ/ה התרשמות. אפשר להעביר מועמד בין צוותים.</div>' : ''}
+   ${teamStrip(k, g)}
+   <div class="grid g3"><div class="kpi"><span>מועמדים בצוות</span><b>${group.length}</b></div><div class="kpi"><span>הוזנו לתיק</span><b>${done}</b></div><div class="kpi"><span>התקדמות הצוות</span><div class="bar" style="margin-top:12px"><i style="width:${group.length ? done / group.length * 100 : 0}%"></i></div></div></div>
    <div style="display:grid;grid-template-columns:minmax(240px,300px) 1fr;gap:16px;align-items:start" class="evgrid">
-   <div class="card"><h2>מועמדי הקבוצה</h2><div style="display:flex;flex-direction:column;gap:6px">${group.map((x) => `<button class="list-item ${x.id === (cur && cur.id) ? 'on' : ''}" data-act="evalPick" data-id="${x.id}"><span><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></span><span class="pill ${evalStatus(k, x) === 'הוזן' ? 'p-green' : 'p-orange'}">${evalStatus(k, x)}</span></button>`).join('') || '<span class="mut">אין מועמדים בקבוצה</span>'}</div></div>
-   ${cur ? `<div style="display:flex;flex-direction:column;gap:14px"><div class="card"><div class="row spread"><div><div class="mut small">הזנת התרשמות עבור</div><h2 style="margin:0;font-size:22px">${esc(cur.name)} <span class="mut small">${cur.id}</span></h2></div>${cur.evalBy ? `<span class="pill p-green">הוזן לתיק · ${esc(cur.evalBy)}</span>` : ''}</div>
+   <div class="card"><h2>מועמדי הצוות</h2><div style="display:flex;flex-direction:column;gap:6px">${group.map((x) => `<button class="list-item ${x.id === (cur && cur.id) ? 'on' : ''}" data-act="evalPick" data-id="${x.id}"><span><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></span><span class="row" style="gap:4px">${x.extra && x.extra.follow ? '<span class="pill p-orange">מעקב</span>' : ''}<span class="pill ${evalStatus(k, x) === 'הוזן' ? 'p-green' : 'p-orange'}">${evalStatus(k, x)}</span></span></button>`).join('') || '<span class="mut">אין מועמדים בצוות</span>'}</div></div>
+   ${cur ? `<div style="display:flex;flex-direction:column;gap:14px"><div class="card"><div class="row spread"><div><div class="mut small">הזנת התרשמות עבור</div><h2 style="margin:0;font-size:22px">${esc(cur.name)} <span class="mut small">${cur.id}</span></h2></div><div class="row">${cur.evalBy ? `<span class="pill p-green">הוזן לתיק · ${esc(cur.evalBy)}</span>` : ''}${can('regroup', k) ? `<label class="small mut row" style="gap:6px">העברה לצוות <select data-chg="regroup" data-id="${cur.id}">${[1, 2, 3, 4].map((n) => `<option ${n === cur.group ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}</div></div>
     <fieldset ${ro ? 'disabled' : ''} style="border:0;padding:0;margin:12px 0 0;display:flex;flex-direction:column;gap:14px">
     <div><h3 style="font-size:16px">התרשמות מקצועית</h3><div class="mut small">סמנו לכל תכונה את הרמה שנצפתה במהלך ${esc(c.eventName)}</div>
      ${c.traits.map((t, i) => `<div class="row spread" style="padding:5px 0"><span>${esc(t)}</span><div class="seg">${WORDS.map((w, j) => `<button type="button" class="${f.lv[i] === j ? 'on l' + j : ''}" data-act="lv" data-i="${i}" data-v="${j}">${w}</button>`).join('')}</div></div>`).join('')}</div>
@@ -42,6 +55,17 @@ SCREENS.eval = (k) => {
     <div><h3 style="font-size:16px">מדדים שנמדדו</h3><div class="mut small">ערכים אמיתיים מהמבחנים. מדד ריק יסומן בתיק כחסר.</div><div class="row" style="margin-top:6px">${c.stats.map((s) => `<label class="small mut">${esc(s.l)} (${esc(s.u)})<br><input type="number" step="any" style="width:130px" id="st-${s.k}" data-inp="stat" data-f="${s.k}" value="${f.stats[s.k] == null ? '' : f.stats[s.k]}"></label>`).join('')}</div></div>
     <div class="row"><div><b>המלצת מגבש</b><br><div class="seg">${A.cfg.RECS.map((r) => `<button type="button" class="${f.rec === r ? 'on' : ''}" data-act="rec" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div></div>
      <div><b>מגבלות רפואיות (מצו ראשון)</b><br><div class="seg">${A.cfg.MEDS.map((r) => `<button type="button" class="${f.med === r ? 'on' : ''}" data-act="med" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div></div></div>
+    <div><h3 style="font-size:16px">ערכים נוספים</h3><div class="mut small">נתונים משלימים שנכנסים לתיק המועמד</div>
+     <div class="row" style="gap:18px;margin-top:6px;align-items:flex-start">
+      <div><b class="small">מוטיבציה (1–5)</b><br><div class="seg">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="${f.extra.motivation === n ? 'on' : ''}" data-act="ex" data-f="motivation" data-v="${n}">${n}</button>`).join('')}</div></div>
+      <div><b class="small">משמעת ואמינות</b><br>${segW(f, 'discipline', WORDS)}</div>
+      <div><b class="small">פוטנציאל פיקודי</b><br>${segW(f, 'potential', LOWHIGH)}</div>
+      <div><b class="small">ביטחון בהערכה</b><br>${segW(f, 'confidence', LOWHIGH)}</div></div>
+     <div class="row" style="margin-top:10px;align-items:flex-end">
+      <label class="small mut">תפקיד חלופי<br><select data-chg="exfld" data-f="second"><option value="">— אין —</option>${c.roles.filter((r) => r !== f.role).map((r) => `<option ${r === f.extra.second ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
+      <label class="small mut">יחידה מועדפת<br><select data-chg="fld" data-f="pref"><option value="—">— אין העדפה —</option>${c.units.map((u) => `<option ${u.name === f.pref ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>
+      <label class="row small" style="gap:6px;min-height:38px"><input type="checkbox" data-chg="exfld" data-f="follow" ${f.extra.follow ? 'checked' : ''}> דורש מעקב</label>
+      <label class="small mut" style="flex:1;min-width:200px">הערה רפואית (אופציונלי)<br><input type="text" style="width:100%" id="x-med" data-inp="exfld" data-f="medNote" value="${esc(f.extra.medNote)}"></label></div></div>
     <label><b>תצפיות והתרשמות כללית</b><textarea id="f-obs" data-inp="fld" data-f="obs">${esc(f.obs)}</textarea></label>
     <label><b>סיכום המגבש</b> <span class="mut small">– יוצג בתיק המועמד בחדר הבחירה</span><textarea id="f-sum" data-inp="fld" data-f="summary" style="min-height:60px">${esc(f.summary)}</textarea></label>
     ${ro ? '' : `<div class="row"><button class="btn sec" type="button" data-act="evalDraft">שמירה כטיוטה ומעבר לבא</button><button class="btn" type="button" data-act="evalSend">שליחה לתיק המועמד</button></div>`}
@@ -49,6 +73,14 @@ SCREENS.eval = (k) => {
    <style>@media(max-width:900px){.evgrid{grid-template-columns:1fr!important}}</style>`;
 };
 Object.assign(ACTIONS, {
+  team: (d) => { A.ui.group = +d.g; A.ui.evalCand = null; A.ui.form = null; rerender(); },
+  ex: (d) => { A.ui.form.extra[d.f] = +d.v; rerender(); },
+  exfld: (d, t) => { A.ui.form.extra[d.f] = t.type === 'checkbox' ? t.checked : t.value; if (t.tagName === 'SELECT' || t.type === 'checkbox') rerender(); },
+  regroup: async (d, t) => {
+    const k = corpsKey(), c = candOf(k, d.id), g = +t.value; if (!c || g === c.group) return;
+    if (!confirm(`להעביר את ${c.name} לצוות ${g}?`)) { rerender(); return; }
+    try { await api('regroup', { corps: k, id: d.id, group: g }); A.ui.evalCand = null; A.ui.form = null; toast(`${c.name} הועבר/ה לצוות ${g}`); rerender(); } catch (e) { rerender(); }
+  },
   grp: (d, t) => { A.ui.group = Number(t.value); A.ui.evalCand = null; A.ui.form = null; rerender(); },
   evalPick: (d) => { A.ui.evalCand = d.id; A.ui.form = null; rerender(); },
   lv: (d) => { A.ui.form.lv[+d.i] = +d.v; rerender(); },
@@ -65,7 +97,7 @@ Object.assign(ACTIONS, {
   evalSend: async () => {
     const k = corpsKey(), f = A.ui.form;
     if (!f.rec) { toast('בחרו המלצת מגבש לפני השליחה', true); return; }
-    await api('eval', { corps: k, id: f.id, lv: f.lv, role: f.role, skills: f.skills, stats: f.stats, rec: f.rec, med: f.med, obs: f.obs, summary: f.summary });
+    await api('eval', { corps: k, id: f.id, lv: f.lv, role: f.role, skills: f.skills, stats: f.stats, rec: f.rec, med: f.med, obs: f.obs, summary: f.summary, extra: f.extra, pref: f.pref });
     localStorage.removeItem(evalDraftKey(k, f.id)); A.ui.form = null; toast('ההתרשמות נשמרה בתיק המועמד. אפשר לעדכן ולשלוח שוב.'); rerender();
   },
 });

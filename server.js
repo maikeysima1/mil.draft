@@ -19,14 +19,27 @@ const USERS = [
   { id: 'u2', title: 'שלישות מודיעין א׳', unit: 'יחידת מודיעין א׳', corps: 'intel', role: 'שלישות', initial: 'ש' },
   { id: 'u6', title: 'שלישות גדוד תקשוב א׳', unit: 'גדוד תקשוב א׳', corps: 'signals', role: 'שלישות', initial: 'ש' },
   { id: 'u3', title: 'מפקד/ת הכשרה', unit: 'בסיס הדרכה לדוגמה', corps: null, role: 'מפקד/ת הכשרה', initial: 'מה' },
-  { id: 'u4', title: 'מגבש/ת רגלים', unit: 'גיבוש לוחמה', corps: 'combat', group: 3, role: 'מגבש/ת', initial: 'מג' },
-  { id: 'u5', title: 'מגבש/ת מודיעין', unit: 'סדנת מיון מודיעין', corps: 'intel', group: 2, role: 'מגבש/ת', initial: 'מג' },
-  { id: 'u7', title: 'מגבש/ת קשר', unit: 'סדנת מיון קשר ותקשוב', corps: 'signals', group: 1, role: 'מגבש/ת', initial: 'מג' },
   { id: 'h1', title: 'ראש מטה', unit: 'מטה ההכשרות', corps: null, role: 'ראש מטה', initial: 'רמ' },
   { id: 'o1', title: 'צופה/ת', unit: 'צפייה בלבד', corps: null, role: 'צופה/ת', initial: 'צו' },
   { id: 'a1', title: 'מנהל/ת מערכת', unit: 'צוות המערכת', corps: null, role: 'מנהל/ת מערכת', initial: 'מנ' },
 ];
 const canDo = C.canDo;
+// one evaluator per team (צוות 1..4) in every corps: "מגבש צוות 1 אחראי על צוות 1" and so on
+const TEAMS = [1, 2, 3, 4];
+const LEGACY_EVAL = { 'combat|3': 'u4', 'intel|2': 'u5', 'signals|1': 'u7' };
+const CORPS_SHORT_S = { combat: 'לוחמים', intel: 'מודיעין', signals: 'קשר' };
+Object.keys(C.corps).forEach((k) => TEAMS.forEach((g) => USERS.push({ id: LEGACY_EVAL[k + '|' + g] || 'e-' + k + '-' + g, title: 'מגבש/ת צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: 'מגבש/ת', initial: 'מג' })));
+// extra evaluator-sheet values (kept separate from the 5 traits that drive the radar)
+function makeExtra(cf, role, lv, rec, rnd2) {
+  const sum = lv.reduce((a, b) => a + b, 0), others = cf.roles.filter((r) => r !== role);
+  return { motivation: Math.max(1, Math.min(5, 2 + Math.floor(rnd2() * 3) + (sum >= 6 ? 1 : 0))), discipline: Math.min(2, Math.floor(rnd2() * 2.4) + (sum >= 7 ? 1 : 0)), potential: sum >= 7 ? 2 : (sum >= 5 ? 1 : (rnd2() < .3 ? 1 : 0)), confidence: 1 + (rnd2() > .45 ? 1 : 0), second: rnd2() < .55 ? others[Math.floor(rnd2() * others.length)] : '', follow: rec === C.RECS[2] || rnd2() < .14, medNote: '' };
+}
+function cleanExtra(cf, x, old) {
+  const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  o.motivation = n(x.motivation, 1, 5, o.motivation || 3); o.discipline = n(x.discipline, 0, 2, o.discipline || 1); o.potential = n(x.potential, 0, 2, o.potential || 0); o.confidence = n(x.confidence, 0, 2, o.confidence || 1);
+  o.second = cf.roles.includes(x.second) ? x.second : ''; o.follow = !!x.follow; o.medNote = String(x.medNote || '').slice(0, 200);
+  return o;
+}
 // one שלישות user per unit, so every unit can have its own person in a shared draft
 Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
   if (USERS.some((x) => x.role === 'שלישות' && x.unit === u.name)) return;
@@ -41,7 +54,8 @@ function makeSummary(cf, role, lv, rec) {
   return 'מתאים/ה לתפקיד ' + role + '. ' + (str.length ? 'חוזקות בולטות: ' + str.join(', ') + '.' : 'ביצוע טוב ברוב המשימות, ללא חוזקה בולטת במיוחד.') + (low.length ? ' לחיזוק: ' + low.join(', ') + '.' : '') + ' ' + CLOSERS[rec];
 }
 function seedCands() {
-  let seed = 11;
+  let seed = 11, seed2 = 77;
+  const rnd2 = () => { seed2 = (seed2 * 9301 + 49297) % 233280; return seed2 / 233280; };
   const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
   let n = 0;
   const out = {};
@@ -71,7 +85,8 @@ function seedCands() {
         area: C.AREAS[Math.floor(rnd() * C.AREAS.length)], pref: cf.units[Math.floor(rnd() * cf.units.length)].name,
         group: 1 + (i % 4), skills: cf.skills[role] || [],
         obs: cf.obs[role] + ' ' + cf.good[top] + (lv[weak] < 2 ? ' ' + cf.weak[weak] : ''),
-        summary: makeSummary(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2])), evaluated: true, evalBy: 'מגבש/ת קבוצה ' + (1 + (i % 4)), source: 'מאגר קיים',
+        extra: makeExtra(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2]), rnd2),
+        summary: makeSummary(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2])), evaluated: true, evalBy: 'מגבש/ת צוות ' + (1 + (i % 4)), source: 'מאגר קיים',
       });
       n++;
     }
@@ -81,7 +96,7 @@ function seedCands() {
 
 function freshState() {
   const cands = seedCands();
-  const st = { corps: {}, log: [], version: 1, schema: 2 };
+  const st = { corps: {}, log: [], version: 1, schema: 3 };
   Object.keys(C.corps).forEach((k) => {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
@@ -92,7 +107,7 @@ function freshState() {
 }
 
 let state;
-try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 2) state = null; } catch (e) { state = null; }
+try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 3) state = null; } catch (e) { state = null; }
 let saveTimer = null;
 function save() {
   state.version++;
@@ -246,7 +261,7 @@ http.createServer(async (req, res) => {
         if (!canDo(user, 'eval', k)) throw new Error('רק מגבש/ת מזינ/ה התרשמות');
         const c = state.corps[k].cands.find((x) => x.id === b.id);
         if (!c) throw new Error('מועמד לא נמצא');
-        if (c.group !== user.group) throw new Error('המועמד אינו בקבוצה שלך');
+        if (c.group !== user.group) throw new Error('המועמד אינו בצוות שלך');
         const cf = cfg(k);
         if (Array.isArray(b.lv) && b.lv.length === cf.traits.length) c.lv = b.lv.map((x) => Math.max(0, Math.min(2, x | 0)));
         if (b.role && cf.roles.includes(b.role)) { c.role = b.role; c.skills = Array.isArray(b.skills) ? b.skills : (cf.skills[b.role] || []); }
@@ -256,9 +271,20 @@ http.createServer(async (req, res) => {
         if (C.MEDS.includes(b.med)) { c.med = b.med; c.profile = b.med === C.MEDS[0] ? 97 : (b.med === C.MEDS[1] ? 72 : 64); }
         if (typeof b.obs === 'string') c.obs = b.obs.slice(0, 1500);
         if (typeof b.summary === 'string') c.summary = b.summary.slice(0, 600);
+        if (b.extra) c.extra = cleanExtra(cf, b.extra, c.extra);
+        if (typeof b.pref === 'string' && (b.pref === '—' || cf.units.some((u) => u.name === b.pref))) c.pref = b.pref;
         c.evaluated = true; c.evalBy = user.title; c.evalAt = Date.now();
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} הזינ/ה התרשמות על ${c.name}` });
         save(); return json(res, 200, { ok: true, cand: c });
+      }
+      if (p === '/api/regroup') {
+        needCorps(); if (!canDo(user, 'regroup', k)) throw new Error('אין הרשאה להעביר מועמדים בין צוותים');
+        const c = state.corps[k].cands.find((x) => x.id === b.id); if (!c) throw new Error('מועמד לא נמצא');
+        const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('צוות לא תקין');
+        if (user.role === 'מגבש/ת' && c.group !== user.group) throw new Error('המועמד אינו בצוות שלך');
+        const from = c.group; c.group = g;
+        state.log.push({ ts: Date.now(), corps: k, text: `${user.title} העביר/ה את ${c.name} מצוות ${from} לצוות ${g}` });
+        save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/thresholds') {
         needCorps(); if (!canDo(user, 'thresholds', k)) throw new Error('אין הרשאה');

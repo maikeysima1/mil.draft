@@ -3,6 +3,7 @@ const A = { cfg: null, S: null, me: null, ui: {}, skew: 0 };
 const $ = (s, r) => (r || document).querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const WORDS = ['בסיסי', 'טוב', 'בולט'];
+const LOWHIGH = ['נמוך', 'בינוני', 'גבוה'];
 const LVCLS = ['p-gray', 'p-blue', 'p-green'];
 const REC_CLS = { 'מומלץ': 'p-green', 'מומלץ בהסתייגות': 'p-orange', 'לא מומלץ': 'p-red' };
 
@@ -87,7 +88,7 @@ const homeFor = () => R().home;
 // can the current user run `action` on corps k (mirrors the server's canDo)
 const can = (action, k) => !!A.me && R().can.includes(action) && (R().scope === 'all' || A.me.corps === k);
 const canFile = () => !!A.me && R().pages.includes('room'); // may open candidate files
-const SCOPE_TXT = { all: 'כל החילות', corps: 'החיל שלו/ה', group: 'הקבוצה שלו/ה' };
+const SCOPE_TXT = { all: 'כל החילות', corps: 'החיל שלו/ה', group: 'הצוות שלו/ה' };
 function route() { return (location.hash.replace('#/', '') || '').split('?')[0]; }
 function go(r) { location.hash = '#/' + r; }
 
@@ -129,7 +130,7 @@ const CORPS_ORDER = ['combat', 'intel', 'signals'];
 const CORPS_SHORT = { combat: 'לוחמים', intel: 'מודיעין', signals: 'קשר' };
 function loginGroups() {
   const us = A.cfg.users, unitIdx = (u) => cfRaw(u.corps).units.findIndex((x) => x.name === u.unit);
-  const byCorps = (role, k) => us.filter((u) => u.role === role && u.corps === k).sort((a, b) => unitIdx(a) - unitIdx(b));
+  const byCorps = (role, k) => us.filter((u) => u.role === role && u.corps === k).sort((a, b) => (role === 'מגבש/ת' ? a.group - b.group : unitIdx(a) - unitIdx(b)));
   const byRole = (r) => us.filter((u) => u.role === r);
   return [{ title: 'מפקד/ת הכשרה', users: byRole('מפקד/ת הכשרה') }]
     .concat(CORPS_ORDER.map((k) => ({ title: 'שלישות ' + CORPS_SHORT[k], users: byCorps('שלישות', k) })))
@@ -140,9 +141,9 @@ function loginGroups() {
 const loginOrder = () => [].concat(...loginGroups().map((g) => g.users));
 function loginList(sel) {
   let n = 0;
-  return loginGroups().map((g) => `<div class="grp"><div class="grp-t">${esc(g.title)}</div>` + g.users.map((x) => { n++; return `<button class="user ${x.id === sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="num">${n}</span><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.title)}</b><small>${esc(x.unit)}${x.corps ? ' · ' + esc(cf(x.corps).corps) : ' · ' + SCOPE_TXT[roleOf(x.role).scope]}${x.group ? ' · קבוצה ' + x.group : ''}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`; }).join('') + '</div>').join('');
+  return loginGroups().map((g) => `<div class="grp"><div class="grp-t">${esc(g.title)}</div>` + g.users.map((x) => { n++; return `<button class="user ${x.id === sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="num">${n}</span><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.title)}</b><small>${esc(x.unit)}${x.corps ? ' · ' + esc(cf(x.corps).corps) : ' · ' + SCOPE_TXT[roleOf(x.role).scope]}${x.group ? ' · צוות ' + x.group : ''}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`; }).join('') + '</div>').join('');
 }
-const ACTION_TXT = { pick: 'בחירה', thresholds: 'עריכת מכסות', import: 'ייבוא', reset: 'איפוס', undo: 'ביטול בחירה', advance: 'הדמיה', eval: 'הזנת התרשמות', factory: 'איפוס מערכת' };
+const ACTION_TXT = { pick: 'בחירה', thresholds: 'עריכת מכסות', import: 'ייבוא', reset: 'איפוס', undo: 'ביטול בחירה', advance: 'הדמיה', eval: 'הזנת התרשמות', regroup: 'העברת מועמד בין צוותים', factory: 'איפוס מערכת' };
 function layerMatrix(selRole) {
   const rows = Object.keys(A.cfg.roles).sort((a, b) => roleOf(a).layer - roleOf(b).layer);
   return `<div class="card matrix"><h2>שכבות סיווג והרשאות</h2><div class="mut small" style="margin-bottom:10px">כל שכבה רואה ומפעילה רק את מה שנקבע לה (העמודות: חדר בחירה, לוח, דף מגבש, תמונת מצב, ייבוא). השרת בודק כל פעולה מחדש.</div>
