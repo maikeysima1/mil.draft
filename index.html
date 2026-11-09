@@ -364,11 +364,11 @@ Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
 const ALL_PAGES = ['room', 'board', 'eval', 'command', 'import'];
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES, can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav'], desc: 'שליטה מלאה בכל החילות: ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance', 'regroup', 'fav'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש, העברת מועמדים בין צוותים וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES, can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav', 'evalbulk'], desc: 'שליטה מלאה בכל החילות: ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance', 'fav'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש (צפייה בלבד, ללא עריכה), וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'command', pages: ['board', 'command'], can: [], desc: 'צפייה בלבד בלוח הדראפט ובתמונת המצב של כל החילות. אין גישה לתיקי מועמדים או לדפי מגבש.' },
-  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance', 'fav'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה רק את מועמדי החיל שלה.' },
-  'מגבש/ת': { layer: 5, scope: 'group', home: 'eval', pages: ['eval'], can: ['eval', 'regroup'], desc: 'אחראי/ת על צוות אחד: הזנת התרשמות על מועמדי הצוות שלו/ה והעברת מועמד לצוות אחר. אין גישה לחדר הבחירה ולתוצאות הדראפט.' },
+  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance', 'fav'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה את דפי המגבש בצפייה בלבד (ללא עריכה), ורק את מועמדי החיל שלה.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'eval', pages: ['eval'], can: ['eval', 'regroup', 'evalbulk'], desc: 'אחראי/ת על צוות אחד: הזנת התרשמות על מועמדי הצוות שלו/ה והעברת מועמד לצוות אחר. אין גישה לחדר הבחירה ולתוצאות הדראפט.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'board', pages: ['board'], can: [], desc: 'צפייה בלוח הדראפט החי בלבד (שמות ובחירות), ללא תיקים, מדדים או הרשאות פעולה.' },
 };
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
@@ -442,10 +442,40 @@ function applyUpdate(cf, c, r) {
   const cb = toNum(r.combat); if (cb === 0 || cb === 1 || cb === 2) { c.wish = Object.assign({ role: '', units: [] }, c.wish, { combat: cb }); n++; }
   return n;
 }
+// ---- evaluator intake: one function used by the sheet form and by Excel uploads ----
+// only the fields present in `b` are applied (empty cells in an upload never erase data)
+function applyEval(cf, c, b, who) {
+  let n = 0;
+  if (Array.isArray(b.lv)) b.lv.forEach((v, i) => { if (i < cf.traits.length && v != null && v !== '' && isFinite(parseInt(v, 10))) { c.lv[i] = Math.max(0, Math.min(2, parseInt(v, 10))); n++; } });
+  if (b.role && cf.roles.includes(b.role)) { c.role = b.role; c.skills = Array.isArray(b.skills) ? b.skills : (cf.skills[b.role] || []); n++; }
+  if (Array.isArray(b.skills)) { c.skills = b.skills.slice(0, 6).map(String); n++; }
+  if (b.stats) cf.stats.forEach((s) => { if (s.k in b.stats) { c.stats[s.k] = toNum(b.stats[s.k]); n++; } });
+  if (C.RECS.includes(b.rec)) { c.rec = b.rec; n++; }
+  if (C.MEDS.includes(b.med)) { c.med = b.med; c.profile = b.med === C.MEDS[0] ? 97 : (b.med === C.MEDS[1] ? 72 : 64); n++; }
+  if (typeof b.obs === 'string') { c.obs = b.obs.slice(0, 1500); n++; }
+  if (typeof b.summary === 'string') { c.summary = b.summary.slice(0, 600); n++; }
+  if (b.extra && Object.keys(b.extra).length) { c.extra = cleanExtra(cf, b.extra, c.extra); n++; }
+  if (b.wish && Object.keys(b.wish).length) {
+    const o = Object.assign({ role: '', units: [], combat: 1 }, c.wish), w = b.wish;
+    if ('role' in w) o.role = cf.roles.includes(w.role) ? w.role : '';
+    if ('units' in w) o.units = cleanWish(cf, { units: w.units }).units;
+    if (w.combat === 0 || w.combat === 1 || w.combat === 2) o.combat = w.combat;
+    c.wish = o; c.pref = o.units[0] || '—'; n++;
+  }
+  if (n) { c.evaluated = true; c.evalBy = who; c.evalAt = Date.now(); }
+  return n;
+}
+function newCand(cf, cst, name, role, group, source) {
+  const max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0) + 1, stats = {}; cf.stats.forEach((s) => { stats[s.k] = null; });
+  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => 1), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
+  cst.cands.push(c); return c;
+}
 function cleanExtra(cf, x, old) {
   const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
   o.motivation = n(x.motivation, 1, 5, o.motivation || 3); o.discipline = n(x.discipline, 0, 2, o.discipline || 1); o.potential = n(x.potential, 0, 2, o.potential || 0); o.confidence = n(x.confidence, 0, 2, o.confidence || 1);
-  o.second = cf.roles.includes(x.second) ? x.second : ''; o.follow = !!x.follow; o.medNote = String(x.medNote || '').slice(0, 200);
+  if ('second' in x) o.second = cf.roles.includes(x.second) ? x.second : '';
+  if ('follow' in x) o.follow = !!x.follow;
+  if ('medNote' in x) o.medNote = String(x.medNote || '').slice(0, 200);
   return o;
 }
 // one שלישות user per unit, so every unit can have its own person in a shared draft
@@ -624,20 +654,21 @@ L.handle = function (p, userId, b) {
     if (!canDo(user, 'eval', k)) throw new Error('רק מגבש/ת מזינ/ה התרשמות');
     const c = state.corps[k].cands.find((x) => x.id === b.id); if (!c) throw new Error('מועמד לא נמצא');
     if (c.group !== user.group) throw new Error('המועמד אינו בצוות שלך');
-    const cf = cfg(k);
-    if (Array.isArray(b.lv) && b.lv.length === cf.traits.length) c.lv = b.lv.map((x) => Math.max(0, Math.min(2, x | 0)));
-    if (b.role && cf.roles.includes(b.role)) { c.role = b.role; c.skills = Array.isArray(b.skills) ? b.skills : (cf.skills[b.role] || []); }
-    if (Array.isArray(b.skills)) c.skills = b.skills.slice(0, 6).map(String);
-    if (b.stats) cf.stats.forEach((s) => { if (s.k in b.stats) c.stats[s.k] = num(b.stats[s.k]); });
-    if (C.RECS.includes(b.rec)) c.rec = b.rec;
-    if (C.MEDS.includes(b.med)) { c.med = b.med; c.profile = b.med === C.MEDS[0] ? 97 : (b.med === C.MEDS[1] ? 72 : 64); }
-    if (typeof b.obs === 'string') c.obs = b.obs.slice(0, 1500);
-    if (typeof b.summary === 'string') c.summary = b.summary.slice(0, 600);
-    if (b.extra) c.extra = cleanExtra(cf, b.extra, c.extra);
-    if (b.wish) { c.wish = cleanWish(cf, b.wish); c.pref = c.wish.units[0] || '—'; }
-    c.evaluated = true; c.evalBy = user.title; c.evalAt = Date.now();
+    applyEval(cfg(k), c, b, user.title);
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' הזינ/ה התרשמות על ' + c.name });
     save(); return { ok: true };
+  }
+  if (p === 'eval-bulk') {
+    needCorps(); if (!canDo(user, 'evalbulk', k)) throw new Error('אין הרשאה להעלות נתוני מגבש');
+    const cf = cfg(k), cst = state.corps[k], isEv = user.role === 'מגבש/ת', grp = isEv ? user.group : parseInt(b.group, 10);
+    let updated = 0, added = 0, skipped = 0, foreign = 0, notFound = 0;
+    (b.rows || []).slice(0, 500).forEach((r) => {
+      const c = cst.cands.find((x) => (r.id && x.id === String(r.id).trim()) || (r.name && x.name === String(r.name).trim()));
+      if (c) { if (isEv && c.group !== user.group) { foreign++; return; } if (applyEval(cf, c, r, user.title)) updated++; else skipped++; return; }
+      if (b.addNew && r.name && cf.roles.includes(r.role) && TEAMS.includes(grp)) { const nc = newCand(cf, cst, String(r.name).trim(), r.role, grp, 'מגבש'); applyEval(cf, nc, r, user.title); added++; } else notFound++;
+    });
+    state.log.push({ ts: Date.now(), corps: k, text: user.title + ' קלט/ה קובץ: ' + updated + ' עודכנו, ' + added + ' נוספו' });
+    save(); return { ok: true, updated, added, skipped, foreign, notFound };
   }
   if (p === 'regroup') {
     needCorps(); if (!canDo(user, 'regroup', k)) throw new Error('אין הרשאה להעביר מועמדים בין צוותים');
@@ -1225,6 +1256,89 @@ function teamStrip(k, g) {
   }).join('')}</div>`;
 }
 const evalStatus = (k, c) => (missingOf(k, c).length || !c.obs ? 'חסר מידע' : 'הוזן');
+// ---------------- evaluator Excel intake ----------------
+function evalFields(k) {
+  const c = cf(k), f = [{ key: 'id', label: 'מס׳', wants: ['מס׳', 'מס', 'מספר', 'id='] }, { key: 'name', label: 'שם', wants: ['שם'] }, { key: 'role', label: 'תפקיד מומלץ', wants: ['תפקיד מומלץ', 'תפקיד='] }];
+  c.traits.forEach((t, i) => f.push({ key: 't' + i, label: t, wants: [t] }));
+  c.stats.forEach((s) => f.push({ key: 's:' + s.k, label: s.l + ' (' + s.u + ')', wants: [s.l] }));
+  return f.concat([
+    { key: 'rec', label: 'המלצת מגבש', wants: ['המלצת מגבש', 'המלצה'] }, { key: 'med', label: 'מגבלות רפואיות', wants: ['מגבלות רפואיות', 'מגבלות'] },
+    { key: 'motivation', label: 'מוטיבציה (1–5)', wants: ['מוטיבציה'] }, { key: 'discipline', label: 'משמעת ואמינות', wants: ['משמעת'] }, { key: 'potential', label: 'פוטנציאל פיקודי', wants: ['פוטנציאל'] }, { key: 'confidence', label: 'ביטחון בהערכה', wants: ['ביטחון'] },
+    { key: 'second', label: 'תפקיד חלופי', wants: ['תפקיד חלופי'] }, { key: 'follow', label: 'דורש מעקב', wants: ['דורש מעקב', 'מעקב'] }, { key: 'medNote', label: 'הערה רפואית', wants: ['הערה רפואית'] },
+    { key: 'wrole', label: 'תפקיד מבוקש', wants: ['תפקיד מבוקש'] }, { key: 'wu0', label: 'יחידה – בחירה 1', wants: ['יחידה – בחירה 1', 'יחידה - בחירה 1', 'יחידה 1'] }, { key: 'wu1', label: 'יחידה – בחירה 2', wants: ['יחידה – בחירה 2', 'יחידה - בחירה 2', 'יחידה 2'] }, { key: 'wu2', label: 'יחידה – בחירה 3', wants: ['יחידה – בחירה 3', 'יחידה - בחירה 3', 'יחידה 3'] },
+    { key: 'combat', label: 'נכונות לתפקיד קרבי', wants: ['נכונות', 'קרבי'] }, { key: 'obs', label: 'תצפיות והתרשמות', wants: ['תצפיות'] }, { key: 'summary', label: 'סיכום המגבש', wants: ['סיכום'] },
+  ]);
+}
+function autoMapEval(fields, headers) {
+  const used = new Set(), m = {};
+  fields.forEach((fl) => { m[fl.key] = -1; for (const w of fl.wants) { const ex = w.endsWith('='), ww = ex ? w.slice(0, -1) : w, i = headers.findIndex((h, j) => !used.has(j) && (ex ? String(h).trim() === ww : String(h).trim().startsWith(ww))); if (i >= 0) { m[fl.key] = i; used.add(i); break; } } });
+  return m;
+}
+function wordIdx(v, words) { const t = String(v == null ? '' : v).trim(); if (t === '') return null; if (/^[0-2]$/.test(t)) return +t; const i = words.findIndex((w) => w.replace(/\/.*$/, '') === t.replace(/\/.*$/, '')); return i >= 0 ? i : NaN; }
+function evalRows(k) {
+  const eb = A.ui.ebulk; if (!eb) return [];
+  const c = cf(k), me = A.me, g = evalGroup(k), cells = (r, key) => (eb.map[key] >= 0 ? r[eb.map[key]] : ''), txt = (r, key) => String(cells(r, key) == null ? '' : cells(r, key)).trim();
+  return eb.data.map((r, n) => {
+    const errs = [], row = { n: n + 2, id: txt(r, 'id'), name: txt(r, 'name'), role: txt(r, 'role'), lv: [], stats: {}, extra: {}, wish: {}, fields: 0 };
+    const put = (key, v) => { row[key] = v; row.fields++; };
+    if (row.role) { if (c.roles.includes(row.role)) row.fields++; else errs.push('תפקיד לא מוכר'); }
+    c.traits.forEach((t, i) => { const v = wordIdx(cells(r, 't' + i), WORDS); if (v === null) row.lv.push(null); else if (Number.isNaN(v)) { row.lv.push(null); errs.push('רמה לא מוכרת: ' + t); } else { row.lv.push(v); row.fields++; } });
+    c.stats.forEach((s) => { const raw = cells(r, 's:' + s.k); if (String(raw).trim() === '') return; const v = Number(String(raw).replace(',', '.')); if (Number.isFinite(v)) { row.stats[s.k] = v; row.fields++; } else errs.push('מדד לא מספרי: ' + s.l); });
+    const rec = txt(r, 'rec'); if (rec) { if (A.cfg.RECS.includes(rec)) put('rec', rec); else errs.push('המלצה לא מוכרת'); }
+    const med = txt(r, 'med'); if (med) { if (A.cfg.MEDS.includes(med)) put('med', med); else errs.push('מגבלה לא מוכרת'); }
+    const mot = txt(r, 'motivation'); if (mot) { const v = Number(mot.replace(',', '.')); if (v >= 1 && v <= 5) { row.extra.motivation = Math.round(v); row.fields++; } else errs.push('מוטיבציה חייבת להיות 1–5'); }
+    [['discipline', WORDS, 'משמעת'], ['potential', LOWHIGH, 'פוטנציאל'], ['confidence', LOWHIGH, 'ביטחון']].forEach(([key, words, lbl]) => { const v = wordIdx(cells(r, key), words); if (v === null) return; if (Number.isNaN(v)) errs.push('ערך לא מוכר: ' + lbl); else { row.extra[key] = v; row.fields++; } });
+    const sec = txt(r, 'second'); if (sec) { if (c.roles.includes(sec)) { row.extra.second = sec; row.fields++; } else errs.push('תפקיד חלופי לא מוכר'); }
+    const fo = txt(r, 'follow'); if (fo) { if (/^(כן|1|v|true|x|✓)$/i.test(fo)) { row.extra.follow = true; row.fields++; } else if (/^(לא|0|false)$/i.test(fo)) { row.extra.follow = false; row.fields++; } else errs.push('״דורש מעקב״: כן / לא'); }
+    const mn = txt(r, 'medNote'); if (mn) { row.extra.medNote = mn; row.fields++; }
+    const wr = txt(r, 'wrole'); if (wr) { if (c.roles.includes(wr)) { row.wish.role = wr; row.fields++; } else errs.push('תפקיד מבוקש לא מוכר'); }
+    const wu = [0, 1, 2].map((i) => txt(r, 'wu' + i)).filter(Boolean); if (wu.length) { if (wu.every((u) => c.units.some((x) => x.name === u))) { row.wish.units = wu; row.fields++; } else errs.push('יחידה מועדפת לא מוכרת'); }
+    const cb = txt(r, 'combat'); if (cb) { const v = parseCombat(cb); if (v == null) errs.push('נכונות לקרבי לא מוכרת'); else { row.wish.combat = v; row.fields++; } }
+    const ob = txt(r, 'obs'); if (ob) put('obs', ob); const su = txt(r, 'summary'); if (su) put('summary', su);
+    const found = cs(k).cands.find((x) => (row.id && x.id === row.id) || (row.name && x.name === row.name));
+    if (found) { if (me.role === 'מגבש/ת' && found.group !== me.group) { row.status = ['p-red', 'צוות אחר']; errs.push('המועמד אינו בצוות שלך'); } else row.status = ['p-green', 'יעודכן']; row.cand = found; }
+    else if (eb.addNew && row.name && c.roles.includes(row.role)) row.status = ['p-blue', 'מועמד חדש לצוות ' + g];
+    else { row.status = ['p-orange', 'לא נמצא']; if (!row.id && !row.name) errs.push('חסר מס׳ או שם'); }
+    row.errs = errs; row.ok = !errs.length && (row.status[1] === 'יעודכן' || row.status[1].startsWith('מועמד חדש')) && row.fields > 0;
+    return row;
+  });
+}
+function evalTemplateAoa(k, g, sample) {
+  const c = cf(k), fl = evalFields(k), head = fl.map((x) => x.label), cands = cs(k).cands.filter((x) => x.group === g);
+  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => WORDS[v]), c.stats.map((s) => (x.stats[s.k] == null ? '' : x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', COMBAT[w.combat == null ? 1 : w.combat], x.obs || '', x.summary || '']); };
+  const rows = cands.map(rowOf);
+  if (sample) {
+    rows.slice(0, 3).forEach((r, i) => { const mi = head.indexOf('מוטיבציה (1–5)'), oi = head.indexOf('תצפיות והתרשמות'), ri = head.indexOf('המלצת מגבש'); r[mi] = [5, 4, 2][i]; r[oi] = ['הוביל את הצוות בתרגיל הלילי ושמר על קצב.', 'עבודה מסודרת, צריך לחזק ביטחון עצמי.', 'מתקשה כשהלחץ עולה.'][i]; r[ri] = A.cfg.RECS[i]; });
+    const nr = head.map(() => ''); nr[1] = 'מועמד חדש לדוגמה'; nr[2] = c.roles[0]; nr[head.indexOf('מוטיבציה (1–5)')] = 4; nr[head.indexOf('המלצת מגבש')] = 'מומלץ'; nr[head.indexOf('נכונות לתפקיד קרבי')] = 'מעוניין'; rows.push(nr);
+  }
+  return [head].concat(rows);
+}
+function setEbulk(k, aoa) { const headers = (aoa[0] || []).map((h) => String(h)), data = aoa.slice(1).filter((r) => r.some((v) => String(v).trim() !== '')); A.ui.ebulk = { headers, data, map: autoMapEval(evalFields(k), headers), addNew: !!(A.ui.ebulk && A.ui.ebulk.addNew) }; rerender(); }
+function evalBulkCard(k, g) {
+  const eb = A.ui.ebulk, rows = eb ? evalRows(k) : [], ok = rows.filter((r) => r.ok), bad = rows.filter((r) => r.errs.length), newN = ok.filter((r) => !r.cand).length;
+  return `<div class="card"><div class="row spread"><h2 style="margin:0">קליטת נתונים מקובץ אקסל</h2><span class="mut small">צוות ${g}</span></div>
+   <p class="mut small" style="margin:6px 0 10px">הורידו תבנית עם מועמדי הצוות והערכים הקיימים שלהם, מלאו או עדכנו באקסל והעלו בחזרה. המערכת קולטת רק מועמדי ${A.me.role === 'מגבש/ת' ? 'הצוות שלכם' : 'הצוות הנבחר'}, ותא ריק <b>לא מוחק</b> נתון קיים. עמודות שלא נחוצות אפשר למחוק מהקובץ.</p>
+   <div class="drop"><div class="row" style="justify-content:center"><button class="btn sec sm" data-act="etemplate">הורדת תבנית לצוות ${g}</button><button class="btn sec sm" data-act="esample">טעינת קובץ לדוגמה</button></div>
+    <input type="file" id="efile" accept=".xlsx,.xls,.csv" data-chg="efile" style="margin-top:10px"><label class="row" style="justify-content:center;gap:6px;margin-top:8px"><input type="checkbox" data-chg="eadd" ${eb && eb.addNew ? 'checked' : ''}> מועמד שלא נמצא – הוסף כמועמד חדש לצוות ${g} (נדרשים שם ותפקיד)</label></div>
+   ${eb ? `<div style="margin-top:12px"><p style="margin:0 0 6px"><b>${rows.length}</b> שורות · <b style="color:var(--green)">${ok.length} ייקלטו</b>${newN ? ` (מתוכם ${newN} חדשים)` : ''} · <b style="color:var(--red)">${bad.length} עם בעיות</b> · ${rows.length - ok.length - bad.length} ללא שינוי או לא נמצאו</p>
+    <details><summary class="mut small" style="cursor:pointer">התאמת עמודות (אוטומטית, אפשר לשנות)</summary><div class="row" style="margin-top:6px">${evalFields(k).map((fl) => `<label class="small mut">${esc(fl.label)}<br><select data-chg="emap" data-f="${esc(fl.key)}" style="min-width:130px"><option value="-1">— לא ממופה —</option>${eb.headers.map((h, i) => `<option value="${i}" ${eb.map[fl.key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div></details>
+    <div style="overflow:auto;max-height:340px;margin-top:8px"><table><thead><tr><th>שורה</th><th>מועמד/ת</th><th>סטטוס</th><th>שדות</th><th>בדיקה</th></tr></thead><tbody>${rows.slice(0, 200).map((r) => `<tr><td>${r.n}</td><td>${esc(r.cand ? r.cand.name : (r.name || r.id || '—'))} <span class="mut small">${esc(r.cand ? r.cand.id : '')}</span></td><td><span class="pill ${r.status[0]}">${esc(r.status[1])}</span></td><td>${r.fields}</td><td>${r.errs.length ? `<span class="pill p-red">${esc(r.errs.join(', '))}</span>` : (r.fields ? '<span class="pill p-green">תקין</span>' : '<span class="mut small">אין ערכים לקליטה</span>')}</td></tr>`).join('')}</tbody></table></div>
+    <div class="row" style="margin-top:10px"><button class="btn" data-act="esave" ${ok.length ? '' : 'disabled'}>קליטת הנתונים (${ok.length} מועמדים)</button><button class="btn sec" data-act="ecancel">ביטול</button></div></div>` : ''}</div>`;
+}
+Object.assign(ACTIONS, {
+  efile: async (d, t) => { const f = t.files[0]; if (!f) return; const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); setEbulk(corpsKey(), XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })); },
+  emap: (d, t) => { A.ui.ebulk.map[d.f] = +t.value; rerender(); },
+  eadd: (d, t) => { if (!A.ui.ebulk) A.ui.ebulk = { headers: [], data: [], map: {}, addNew: false }; A.ui.ebulk.addNew = t.checked; if (A.ui.ebulk.data.length) rerender(); },
+  esample: () => { const k = corpsKey(); A.ui.ebulk = Object.assign(A.ui.ebulk || {}, { addNew: true }); setEbulk(k, evalTemplateAoa(k, evalGroup(k), true)); A.ui.ebulk.addNew = true; rerender(); },
+  etemplate: () => { const k = corpsKey(), g = evalGroup(k); downloadX('mil-draft-evaluator-team' + g + '.xlsx', evalTemplateAoa(k, g, false)); },
+  ecancel: () => { A.ui.ebulk = null; rerender(); },
+  esave: async () => {
+    const k = corpsKey(), g = evalGroup(k), eb = A.ui.ebulk, rows = evalRows(k).filter((r) => r.ok).map((r) => ({ id: r.cand ? r.cand.id : r.id, name: r.name || (r.cand && r.cand.name) || '', role: r.role, lv: r.lv, stats: r.stats, rec: r.rec, med: r.med, obs: r.obs, summary: r.summary, extra: r.extra, wish: r.wish }));
+    const r = await api('eval-bulk', { corps: k, rows, addNew: !!eb.addNew, group: g }); A.ui.ebulk = null; A.ui.form = null; rerender();
+    toast(`נקלטו נתוני ${r.updated + r.added} מועמדים${r.added ? ' (' + r.added + ' חדשים)' : ''}${r.foreign ? ' · ' + r.foreign + ' מצוות אחר נדחו' : ''}${r.notFound ? ' · ' + r.notFound + ' לא נמצאו' : ''}`);
+  },
+});
+
 SCREENS.eval = (k) => {
   const c = cf(k), g = evalGroup(k), me = A.me;
   const group = cs(k).cands.filter((x) => x.group === g);
@@ -1246,8 +1360,9 @@ SCREENS.eval = (k) => {
   })();
   return `<div class="row spread"><div><span class="chip navy">${esc(c.eventName)} · ${esc(c.corps)}</span><h1 style="font-size:28px;font-weight:800;margin-top:6px">דף מגבש – צוות ${g}</h1>${!ro ? `<div class="mut small">אתם אחראים על צוות ${g} בלבד</div>` : ''}</div>
     ${ro ? `<div class="row">${corpsSwitcher()}</div>` : ''}</div>
-   ${ro ? '<div class="demo-note">צפייה בלבד – רק מגבש/ת מזינ/ה התרשמות. אפשר להעביר מועמד בין צוותים.</div>' : ''}
+   ${ro ? `<div class="demo-note">צפייה בלבד – ${can('evalbulk', k) ? 'ניהול מערכת: אפשר להעביר מועמד בין צוותים ולקלוט קובץ, אך לא לערוך התרשמות.' : 'אין הרשאת עריכה בדף המגבש. רק מגבש/ת מזינ/ה התרשמות.'}</div>` : ''}
    ${teamStrip(k, g)}
+   ${can('evalbulk', k) && (me.role !== 'מגבש/ת' || me.group === g) ? evalBulkCard(k, g) : ''}
    <div class="grid g3"><div class="kpi"><span>מועמדים בצוות</span><b>${group.length}</b></div><div class="kpi"><span>הוזנו לתיק</span><b>${done}</b></div><div class="kpi"><span>התקדמות הצוות</span><div class="bar" style="margin-top:12px"><i style="width:${group.length ? done / group.length * 100 : 0}%"></i></div></div></div>
    <div style="display:grid;grid-template-columns:minmax(240px,300px) 1fr;gap:16px;align-items:start" class="evgrid">
    <div class="card"><h2>מועמדי הצוות</h2><div style="display:flex;flex-direction:column;gap:6px">${group.map((x) => `<button class="list-item ${x.id === (cur && cur.id) ? 'on' : ''}" data-act="evalPick" data-id="${x.id}"><span><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></span><span class="row" style="gap:4px">${x.extra && x.extra.follow ? '<span class="pill p-orange">מעקב</span>' : ''}<span class="pill ${evalStatus(k, x) === 'הוזן' ? 'p-green' : 'p-orange'}">${evalStatus(k, x)}</span></span></button>`).join('') || '<span class="mut">אין מועמדים בצוות</span>'}</div></div>

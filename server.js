@@ -74,10 +74,40 @@ function applyUpdate(cf, c, r) {
   const cb = toNum(r.combat); if (cb === 0 || cb === 1 || cb === 2) { c.wish = Object.assign({ role: '', units: [] }, c.wish, { combat: cb }); n++; }
   return n;
 }
+// ---- evaluator intake: one function used by the sheet form and by Excel uploads ----
+// only the fields present in `b` are applied (empty cells in an upload never erase data)
+function applyEval(cf, c, b, who) {
+  let n = 0;
+  if (Array.isArray(b.lv)) b.lv.forEach((v, i) => { if (i < cf.traits.length && v != null && v !== '' && isFinite(parseInt(v, 10))) { c.lv[i] = Math.max(0, Math.min(2, parseInt(v, 10))); n++; } });
+  if (b.role && cf.roles.includes(b.role)) { c.role = b.role; c.skills = Array.isArray(b.skills) ? b.skills : (cf.skills[b.role] || []); n++; }
+  if (Array.isArray(b.skills)) { c.skills = b.skills.slice(0, 6).map(String); n++; }
+  if (b.stats) cf.stats.forEach((s) => { if (s.k in b.stats) { c.stats[s.k] = toNum(b.stats[s.k]); n++; } });
+  if (C.RECS.includes(b.rec)) { c.rec = b.rec; n++; }
+  if (C.MEDS.includes(b.med)) { c.med = b.med; c.profile = b.med === C.MEDS[0] ? 97 : (b.med === C.MEDS[1] ? 72 : 64); n++; }
+  if (typeof b.obs === 'string') { c.obs = b.obs.slice(0, 1500); n++; }
+  if (typeof b.summary === 'string') { c.summary = b.summary.slice(0, 600); n++; }
+  if (b.extra && Object.keys(b.extra).length) { c.extra = cleanExtra(cf, b.extra, c.extra); n++; }
+  if (b.wish && Object.keys(b.wish).length) {
+    const o = Object.assign({ role: '', units: [], combat: 1 }, c.wish), w = b.wish;
+    if ('role' in w) o.role = cf.roles.includes(w.role) ? w.role : '';
+    if ('units' in w) o.units = cleanWish(cf, { units: w.units }).units;
+    if (w.combat === 0 || w.combat === 1 || w.combat === 2) o.combat = w.combat;
+    c.wish = o; c.pref = o.units[0] || '—'; n++;
+  }
+  if (n) { c.evaluated = true; c.evalBy = who; c.evalAt = Date.now(); }
+  return n;
+}
+function newCand(cf, cst, name, role, group, source) {
+  const max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0) + 1, stats = {}; cf.stats.forEach((s) => { stats[s.k] = null; });
+  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => 1), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
+  cst.cands.push(c); return c;
+}
 function cleanExtra(cf, x, old) {
   const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
   o.motivation = n(x.motivation, 1, 5, o.motivation || 3); o.discipline = n(x.discipline, 0, 2, o.discipline || 1); o.potential = n(x.potential, 0, 2, o.potential || 0); o.confidence = n(x.confidence, 0, 2, o.confidence || 1);
-  o.second = cf.roles.includes(x.second) ? x.second : ''; o.follow = !!x.follow; o.medNote = String(x.medNote || '').slice(0, 200);
+  if ('second' in x) o.second = cf.roles.includes(x.second) ? x.second : '';
+  if ('follow' in x) o.follow = !!x.follow;
+  if ('medNote' in x) o.medNote = String(x.medNote || '').slice(0, 200);
   return o;
 }
 // one שלישות user per unit, so every unit can have its own person in a shared draft
@@ -306,20 +336,21 @@ http.createServer(async (req, res) => {
         const c = state.corps[k].cands.find((x) => x.id === b.id);
         if (!c) throw new Error('מועמד לא נמצא');
         if (c.group !== user.group) throw new Error('המועמד אינו בצוות שלך');
-        const cf = cfg(k);
-        if (Array.isArray(b.lv) && b.lv.length === cf.traits.length) c.lv = b.lv.map((x) => Math.max(0, Math.min(2, x | 0)));
-        if (b.role && cf.roles.includes(b.role)) { c.role = b.role; c.skills = Array.isArray(b.skills) ? b.skills : (cf.skills[b.role] || []); }
-        if (Array.isArray(b.skills)) c.skills = b.skills.slice(0, 6).map(String);
-        if (b.stats) cf.stats.forEach((s) => { if (s.k in b.stats) c.stats[s.k] = num(b.stats[s.k]); });
-        if (C.RECS.includes(b.rec)) c.rec = b.rec;
-        if (C.MEDS.includes(b.med)) { c.med = b.med; c.profile = b.med === C.MEDS[0] ? 97 : (b.med === C.MEDS[1] ? 72 : 64); }
-        if (typeof b.obs === 'string') c.obs = b.obs.slice(0, 1500);
-        if (typeof b.summary === 'string') c.summary = b.summary.slice(0, 600);
-        if (b.extra) c.extra = cleanExtra(cf, b.extra, c.extra);
-        if (b.wish) { c.wish = cleanWish(cf, b.wish); c.pref = c.wish.units[0] || '—'; }
-        c.evaluated = true; c.evalBy = user.title; c.evalAt = Date.now();
+        applyEval(cfg(k), c, b, user.title);
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} הזינ/ה התרשמות על ${c.name}` });
         save(); return json(res, 200, { ok: true, cand: c });
+      }
+      if (p === '/api/eval-bulk') {
+        needCorps(); if (!canDo(user, 'evalbulk', k)) throw new Error('אין הרשאה להעלות נתוני מגבש');
+        const cf = cfg(k), cst = state.corps[k], isEv = user.role === 'מגבש/ת', grp = isEv ? user.group : parseInt(b.group, 10);
+        let updated = 0, added = 0, skipped = 0, foreign = 0, notFound = 0;
+        (b.rows || []).slice(0, 500).forEach((r) => {
+          const c = cst.cands.find((x) => (r.id && x.id === String(r.id).trim()) || (r.name && x.name === String(r.name).trim()));
+          if (c) { if (isEv && c.group !== user.group) { foreign++; return; } if (applyEval(cf, c, r, user.title)) updated++; else skipped++; return; }
+          if (b.addNew && r.name && cf.roles.includes(r.role) && TEAMS.includes(grp)) { const nc = newCand(cf, cst, String(r.name).trim(), r.role, grp, 'מגבש'); applyEval(cf, nc, r, user.title); added++; } else notFound++;
+        });
+        state.log.push({ ts: Date.now(), corps: k, text: `${user.title} קלט/ה קובץ: ${updated} עודכנו, ${added} נוספו` });
+        save(); return json(res, 200, { ok: true, updated, added, skipped, foreign, notFound });
       }
       if (p === '/api/regroup') {
         needCorps(); if (!canDo(user, 'regroup', k)) throw new Error('אין הרשאה להעביר מועמדים בין צוותים');

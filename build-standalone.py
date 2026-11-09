@@ -57,20 +57,21 @@ L.handle = function (p, userId, b) {
     if (!canDo(user, 'eval', k)) throw new Error('רק מגבש/ת מזינ/ה התרשמות');
     const c = state.corps[k].cands.find((x) => x.id === b.id); if (!c) throw new Error('מועמד לא נמצא');
     if (c.group !== user.group) throw new Error('המועמד אינו בצוות שלך');
-    const cf = cfg(k);
-    if (Array.isArray(b.lv) && b.lv.length === cf.traits.length) c.lv = b.lv.map((x) => Math.max(0, Math.min(2, x | 0)));
-    if (b.role && cf.roles.includes(b.role)) { c.role = b.role; c.skills = Array.isArray(b.skills) ? b.skills : (cf.skills[b.role] || []); }
-    if (Array.isArray(b.skills)) c.skills = b.skills.slice(0, 6).map(String);
-    if (b.stats) cf.stats.forEach((s) => { if (s.k in b.stats) c.stats[s.k] = num(b.stats[s.k]); });
-    if (C.RECS.includes(b.rec)) c.rec = b.rec;
-    if (C.MEDS.includes(b.med)) { c.med = b.med; c.profile = b.med === C.MEDS[0] ? 97 : (b.med === C.MEDS[1] ? 72 : 64); }
-    if (typeof b.obs === 'string') c.obs = b.obs.slice(0, 1500);
-    if (typeof b.summary === 'string') c.summary = b.summary.slice(0, 600);
-    if (b.extra) c.extra = cleanExtra(cf, b.extra, c.extra);
-    if (b.wish) { c.wish = cleanWish(cf, b.wish); c.pref = c.wish.units[0] || '—'; }
-    c.evaluated = true; c.evalBy = user.title; c.evalAt = Date.now();
+    applyEval(cfg(k), c, b, user.title);
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' הזינ/ה התרשמות על ' + c.name });
     save(); return { ok: true };
+  }
+  if (p === 'eval-bulk') {
+    needCorps(); if (!canDo(user, 'evalbulk', k)) throw new Error('אין הרשאה להעלות נתוני מגבש');
+    const cf = cfg(k), cst = state.corps[k], isEv = user.role === 'מגבש/ת', grp = isEv ? user.group : parseInt(b.group, 10);
+    let updated = 0, added = 0, skipped = 0, foreign = 0, notFound = 0;
+    (b.rows || []).slice(0, 500).forEach((r) => {
+      const c = cst.cands.find((x) => (r.id && x.id === String(r.id).trim()) || (r.name && x.name === String(r.name).trim()));
+      if (c) { if (isEv && c.group !== user.group) { foreign++; return; } if (applyEval(cf, c, r, user.title)) updated++; else skipped++; return; }
+      if (b.addNew && r.name && cf.roles.includes(r.role) && TEAMS.includes(grp)) { const nc = newCand(cf, cst, String(r.name).trim(), r.role, grp, 'מגבש'); applyEval(cf, nc, r, user.title); added++; } else notFound++;
+    });
+    state.log.push({ ts: Date.now(), corps: k, text: user.title + ' קלט/ה קובץ: ' + updated + ' עודכנו, ' + added + ' נוספו' });
+    save(); return { ok: true, updated, added, skipped, foreign, notFound };
   }
   if (p === 'regroup') {
     needCorps(); if (!canDo(user, 'regroup', k)) throw new Error('אין הרשאה להעביר מועמדים בין צוותים');
