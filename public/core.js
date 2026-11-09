@@ -98,7 +98,7 @@ const R = () => A.cfg.roles[A.me.role];
 const favList = (k) => (cs(k).favs && A.me && cs(k).favs[A.me.id]) || [];
 const isFav = (k, id) => favList(k).includes(id);
 const heartIcon = (on, s) => `<svg class="ic" width="${s || 18}" height="${s || 18}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.heart}</svg>`;
-const favBtn = (k, id, cls) => `<button class="favbtn ${isFav(k, id) ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" aria-pressed="${isFav(k, id)}" title="${isFav(k, id) ? 'הסרה מהמועדפים' : 'סימון כמועדף'}" aria-label="${isFav(k, id) ? 'הסרה מהמועדפים' : 'סימון כמועדף'}">${heartIcon(isFav(k, id))}</button>`;
+const favBtn = (k, id, cls) => { const on = isFav(k, id), t = on ? 'הסר מהמועדפים' : 'הוסף למועדפים'; return `<button class="favbtn ${on ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" data-tip="${t}" aria-pressed="${on}" aria-label="${t}">${heartIcon(on)}</button>`; };
 const roleOf = (name) => A.cfg.roles[name];
 const allowed = (p) => !!A.me && R().pages.includes(p.id);
 const homeFor = () => R().home;

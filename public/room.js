@@ -35,6 +35,10 @@ function needsCard(k) {
    ${isHumanMine(k) ? '<button class="btn sec sm" data-act="editTh">עריכת מכסות ותנאי סף</button>' : ''}</div></div>`;
 }
 
+// prominent favorites toggle (own control, not part of the filter row); on = filter active
+function favToggle(k, on, act) {
+  return `<button class="favtoggle ${on ? 'on' : ''}" data-act="${act}" data-v="${on ? 0 : 1}" aria-pressed="${on}" title="${on ? 'הצגת כל המועמדים' : 'הצגת המועדפים שלי בלבד'}">${heartIcon(true, 18)}<span>המועדפים שלי</span><b>${favList(k).length}</b>${on ? '<em>מסונן</em>' : ''}</button>`;
+}
 function wishCell(k, x) {
   const w = x.wish || { role: '', units: [] }, r = wishRank(x, myUnitName(k)), short = (n) => n.replace(/^(חטיבת|יחידת|גדוד) /, '');
   const a = r ? `<span class="pill p-violet">ביקש/ה אתכם · בחירה ${r}</span>` : (w.units.length ? `<span class="mut small">${esc(short(w.units[0]))}${w.units.length > 1 ? ' +' + (w.units.length - 1) : ''}</span>` : '<span class="mut">—</span>');
@@ -67,10 +71,9 @@ SCREENS.room = (k) => {
    <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? c.rounds : d.slot.r} מתוך ${c.rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
    ${unitChips(k)}${clockCard(k)}
    ${isHumanMine(k) ? needsCard(k) : '<div class="demo-note">צפייה בלבד – רק שלישות היחידה בוחרת. היחידות האחרות בוחרות אוטומטית כשאין משתמש מחובר.</div>'}
-   <div class="card"><h2>מאגר מועמדים – ${esc(c.corps)} (${cs(k).cands.length})</h2><div class="mut small" style="margin-bottom:10px">רק מועמדים שסווגו ל${esc(c.label)} · העדפת החייל מוצגת כמידע בלבד – השיבוץ נקבע לפי צורכי היחידות</div>
+   <div class="card"><div class="row spread" style="margin-bottom:4px"><h2 style="margin:0">מאגר מועמדים – ${esc(c.corps)} (${cs(k).cands.length})</h2>${can('fav', k) ? favToggle(k, !!f.fav, 'roomFav') : ''}</div><div class="mut small" style="margin-bottom:10px">רק מועמדים שסווגו ל${esc(c.label)} · העדפת החייל מוצגת כמידע בלבד – השיבוץ נקבע לפי צורכי היחידות</div>
    <div class="filters">${sel('f-role', 'סינון לפי תפקיד', ['הכול'].concat(c.roles), f.role)}${sel('f-trait', 'חוזקה נדרשת', ['הכול'].concat(c.traits), f.trait)}${sel('f-rec', 'המלצת מגבש', ['הכול'].concat(A.cfg.RECS), f.rec)}
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
-    ${can('fav', k) ? `<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fav" data-chg="flt" data-f="fav" ${f.fav ? 'checked' : ''}> ♥ מועדפים שלי (${favList(k).length})</label>` : ''}
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
    <div style="overflow:auto"><table><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
@@ -205,7 +208,7 @@ SCREENS.board = (k) => {
   const standout = standoutOf(k), canFav = can('fav', k), favOnly = canFav && !!A.ui.favOnly, favs = favList(k);
   const wanted = {}, got = {};
   unit.forEach((u) => Object.keys(u.quota).forEach((r) => { wanted[r] = (wanted[r] || 0) + u.quota[r]; got[r] = (got[r] || 0) + Math.min(u.quota[r], countRole(k, u.name, r)); }));
-  return `<div class="row spread">${corpsSwitcher()}${canFav ? `<div class="tabs" role="group" aria-label="סינון מועדפים"><button class="${favOnly ? '' : 'on'}" data-act="favOnly" data-v="0">כל המועמדים</button><button class="${favOnly ? 'on' : ''}" data-act="favOnly" data-v="1">♥ המועדפים שלי (${favs.length})</button></div>` : ''}</div>
+  return `<div class="row spread">${corpsSwitcher()}${canFav ? favToggle(k, favOnly, 'favOnly') : ''}</div>
    ${canFav ? favCard(k, d, favOnly) : ''}
    <div class="grid g2"><div class="card"><h2>${d.finished ? 'הדראפט הסתיים' : 'על השעון · ' + esc(c.corps)}</h2>${d.finished ? '<p>כל הבחירות בוצעו.</p>' : `<div class="row spread"><div><h2 style="font-size:26px;margin:0">${esc(d.slot.u)}</h2><div class="mut small">סבב ${d.slot.r} · בחירה ${P.length + 1} מתוך ${d.order.length}</div><div class="mut small">מחפשת: ${Object.keys(unitOf(k, d.slot.u).quota).map((r) => r + ' ×' + (unitOf(k, d.slot.u).quota[r] - countRole(k, d.slot.u, r))).filter((s) => !/×0$|×-/.test(s)).join(', ') || '—'}</div></div><div style="text-align:center"><div style="font-size:38px;font-weight:900" id="clk">${clockText()}</div><div class="mut small">זמן לבחירה</div></div></div>`}
    ${canFav ? '' : ''}${can('advance', k) ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
@@ -218,6 +221,7 @@ SCREENS.board = (k) => {
 };
 Object.assign(ACTIONS, {
   fav: async (d) => { const k = corpsKey(), on = !isFav(k, d.id); try { await api('fav', { corps: k, id: d.id, on }); toast(on ? 'נוסף למועדפים ♥' : 'הוסר מהמועדפים'); } catch (e) { /* toast shown */ } },
+  roomFav: (d) => { A.ui.f = Object.assign({}, A.ui.f, { fav: d.v === '1' }); rerender(); },
   favOnly: (d) => { A.ui.favOnly = d.v === '1'; rerender(); },
   favCand: (d) => { const k = corpsKey(), tk = draftInfo(k).takenBy, ids = favList(k).filter((id) => candOf(k, id)); A.ui.nav = ids.filter((id) => !tk[id]).concat(ids.filter((id) => tk[id])); A.ui.cand = d.id; rerender(); },
   simNext: () => api('advance', { corps: corpsKey(), steps: 1 }),
