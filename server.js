@@ -48,6 +48,32 @@ function cleanWish(cf, w) {
   (Array.isArray(w.units) ? w.units : []).forEach((n) => { if (names.includes(n) && !units.includes(n) && units.length < 3) units.push(n); });
   return { role: cf.roles.includes(w.role) ? w.role : '', units, combat: [0, 1, 2].includes(parseInt(w.combat, 10)) ? parseInt(w.combat, 10) : 1 };
 }
+// ---- Excel uploads: reference data ("previous cycle") and updates to existing candidates ----
+const toNum = (v) => { if (v === '' || v == null) return null; const x = Number(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+// reference rows are anonymous: names are never stored, only the fields needed for analysis
+function cleanBaseline(cf, rows) {
+  const out = [];
+  (Array.isArray(rows) ? rows : []).slice(0, 3000).forEach((r) => {
+    if (!cf.roles.includes(r.role)) return;
+    const stats = {}; cf.stats.forEach((s) => { stats[s.k] = toNum((r.stats || {})[s.k]); });
+    const mot = toNum(r.motivation), cb = toNum(r.combat);
+    out.push({ role: r.role, rec: C.RECS.includes(r.rec) ? r.rec : null, med: C.MEDS.includes(r.med) ? r.med : C.MEDS[0], profile: toNum(r.profile), stats,
+      motivation: mot >= 1 && mot <= 5 ? Math.round(mot) : null, combat: cb === 0 || cb === 1 || cb === 2 ? cb : null, unit: cf.units.some((u) => u.name === r.unit) ? r.unit : '' });
+  });
+  return out;
+}
+// apply uploaded values onto a candidate (only fields that were provided)
+function applyUpdate(cf, c, r) {
+  let n = 0;
+  if (cf.roles.includes(r.role) && r.role !== c.role) { c.role = r.role; c.skills = cf.skills[r.role] || c.skills; n++; }
+  if (C.RECS.includes(r.rec)) { c.rec = r.rec; n++; }
+  if (C.MEDS.includes(r.med)) { c.med = r.med; n++; }
+  if (toNum(r.profile) != null) { c.profile = toNum(r.profile); n++; }
+  cf.stats.forEach((s) => { const v = toNum((r.stats || {})[s.k]); if (v != null) { c.stats[s.k] = v; n++; } });
+  const mot = toNum(r.motivation); if (mot >= 1 && mot <= 5) { c.extra = Object.assign({ motivation: 3, discipline: 1, potential: 0, confidence: 1, second: '', follow: false, medNote: '' }, c.extra, { motivation: Math.round(mot) }); n++; }
+  const cb = toNum(r.combat); if (cb === 0 || cb === 1 || cb === 2) { c.wish = Object.assign({ role: '', units: [] }, c.wish, { combat: cb }); n++; }
+  return n;
+}
 function cleanExtra(cf, x, old) {
   const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
   o.motivation = n(x.motivation, 1, 5, o.motivation || 3); o.discipline = n(x.discipline, 0, 2, o.discipline || 1); o.potential = n(x.potential, 0, 2, o.potential || 0); o.confidence = n(x.confidence, 0, 2, o.confidence || 1);
@@ -316,7 +342,12 @@ http.createServer(async (req, res) => {
         const cf = cfg(k), cs = state.corps[k];
         let max = cs.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0);
         const used = new Set(cs.cands.map((c) => c.name));
-        let added = 0, skipped = 0;
+        let added = 0, skipped = 0, updated = 0, notFound = 0;
+        if (b.mode === 'update') {
+          (b.rows || []).forEach((r) => { const c = cs.cands.find((x) => (r.id && x.id === String(r.id).trim()) || (r.name && x.name === String(r.name).trim())); if (!c) { notFound++; return; } if (applyUpdate(cf, c, r)) updated++; else skipped++; });
+          state.log.push({ ts: Date.now(), corps: k, text: `${user.title} עדכנה ${updated} מועמדים מקובץ` });
+          save(); return json(res, 200, { ok: true, updated, skipped, notFound });
+        }
         (b.rows || []).forEach((r) => {
           const name = String(r.name || '').trim();
           if (!name || used.has(name) || !cf.roles.includes(r.role)) { skipped++; return; }
@@ -328,10 +359,22 @@ http.createServer(async (req, res) => {
             rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72),
             area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
           });
+          applyUpdate(cf, cs.cands[cs.cands.length - 1], { motivation: r.motivation, combat: r.combat });
           added++;
         });
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} ייבאה ${added} מועמדים` });
         save(); return json(res, 200, { ok: true, added, skipped });
+      }
+      if (p === '/api/baseline') {
+        needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה להעלות נתוני ייחוס');
+        const rows = cleanBaseline(cfg(k), b.rows); if (!rows.length) throw new Error('לא נמצאו שורות תקינות בקובץ (בדקו את עמודת התפקיד)');
+        state.corps[k].baseline = { label: String(b.label || 'מחזור קודם').slice(0, 60), uploadedAt: Date.now(), by: user.title, rows };
+        state.log.push({ ts: Date.now(), corps: k, text: `${user.title} העלתה נתוני ייחוס (${rows.length} שורות)` });
+        save(); return json(res, 200, { ok: true, count: rows.length, skipped: (b.rows || []).length - rows.length });
+      }
+      if (p === '/api/baseline-clear') {
+        needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה'); delete state.corps[k].baseline;
+        state.log.push({ ts: Date.now(), corps: k, text: `${user.title} מחקה את נתוני הייחוס` }); save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/undo') {
         needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה');

@@ -93,7 +93,12 @@ L.handle = function (p, userId, b) {
     needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה לייבא מועמדים');
     const cf = cfg(k), cst = state.corps[k];
     let max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0);
-    const used = new Set(cst.cands.map((c) => c.name)); let added = 0, skipped = 0;
+    const used = new Set(cst.cands.map((c) => c.name)); let added = 0, skipped = 0, updated = 0, notFound = 0;
+    if (b.mode === 'update') {
+      (b.rows || []).forEach((r) => { const c = cst.cands.find((x) => (r.id && x.id === String(r.id).trim()) || (r.name && x.name === String(r.name).trim())); if (!c) { notFound++; return; } if (applyUpdate(cf, c, r)) updated++; else skipped++; });
+      state.log.push({ ts: Date.now(), corps: k, text: user.title + ' עדכנה ' + updated + ' מועמדים מקובץ' });
+      save(); return { ok: true, updated, skipped, notFound };
+    }
     (b.rows || []).forEach((r) => {
       const name = String(r.name || '').trim();
       if (!name || used.has(name) || !cf.roles.includes(r.role)) { skipped++; return; }
@@ -101,11 +106,20 @@ L.handle = function (p, userId, b) {
       const stats = {}; cf.stats.forEach((s) => { stats[s.k] = num((r.stats || {})[s.k]); });
       const med = C.MEDS.includes(r.med) ? r.med : C.MEDS[0];
       cst.cands.push({ id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats, rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72), area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא' });
+      applyUpdate(cf, cst.cands[cst.cands.length - 1], { motivation: r.motivation, combat: r.combat });
       added++;
     });
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ייבאה ' + added + ' מועמדים' });
     save(); return { ok: true, added, skipped };
   }
+  if (p === 'baseline') {
+    needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה להעלות נתוני ייחוס');
+    const rows = cleanBaseline(cfg(k), b.rows); if (!rows.length) throw new Error('לא נמצאו שורות תקינות בקובץ (בדקו את עמודת התפקיד)');
+    state.corps[k].baseline = { label: String(b.label || 'מחזור קודם').slice(0, 60), uploadedAt: Date.now(), by: user.title, rows };
+    state.log.push({ ts: Date.now(), corps: k, text: user.title + ' העלתה נתוני ייחוס (' + rows.length + ' שורות)' });
+    save(); return { ok: true, count: rows.length, skipped: (b.rows || []).length - rows.length };
+  }
+  if (p === 'baseline-clear') { needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה'); delete state.corps[k].baseline; save(); return { ok: true }; }
   if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
   if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {

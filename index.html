@@ -11,7 +11,7 @@
   --btn-a:#3B8A62; --btn-b:#2A6B4A; --note-bg:#FFF6E0; --note-fg:#6E4A10; --note-bd:#F0D9A8;
   --l1:#1E293B; --l2:#2F5FB3; --l3:#6D4BCB; --l4:#2F7A52; --l5:#CE700C; --l6:#64748B;
   --sh:0 1px 2px rgba(15,23,42,.04),0 10px 28px -12px rgba(15,23,42,.10);
-  --r:18px; --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --r:18px; --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --ref:#98a2b3;
 }
 :root[data-theme=dark]{
   --navy:#E6EBF5; --solid:#2B3A57; --card:#111A2C; --bg:#0A111E; --bg2:#172238; --line:#233049; --line2:#1B2740; --mut:#93A1B8;
@@ -20,7 +20,7 @@
   --btn-a:#3FA371; --btn-b:#2C7E57; --note-bg:#2A2110; --note-fg:#E9C98A; --note-bd:#4A3A18;
   --l1:#475569; --l2:#3E74D6; --l3:#7B5BDB; --l4:#2F8F63; --l5:#D9811A; --l6:#64748B;
   --sh:0 1px 2px rgba(0,0,0,.4),0 10px 28px -12px rgba(0,0,0,.6);
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --ref:#6b7a93;
 }
 html,body{margin:0;background:var(--bg);color:var(--navy);font:15px/1.55 Heebo,"Segoe UI",system-ui,-apple-system,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -249,6 +249,16 @@ details.tbl summary{cursor:pointer;color:var(--mut);font-size:13px}
 #charttip{position:fixed;display:none;z-index:100;pointer-events:none;background:var(--solid);color:#fff;padding:7px 12px;border-radius:11px;font-size:12.5px;box-shadow:0 10px 26px -8px rgba(0,0,0,.5);max-width:260px}
 #charttip b{display:block;font-size:15px}
 #charttip span{opacity:.8}
+
+/* grouped bars: current vs reference */
+.grow{display:grid;grid-template-columns:104px minmax(0,1fr);gap:10px;align-items:center;margin:10px 0}
+.gbars{display:flex;flex-direction:column;gap:3px;border-inline-start:1px solid var(--line);padding-inline-start:1px}
+.gb{display:flex;align-items:center;gap:6px;height:16px}
+.gb i{display:block;height:14px;min-width:2px;border-start-end-radius:4px;border-end-end-radius:4px;transition:filter .12s}
+.gb i.now{background:var(--s1)}
+.gb i.pre{background:var(--ref)}
+.gb em{font-style:normal;font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums}
+.gb:hover i,.gb:focus-visible i{filter:brightness(1.15)}
 </style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 <script>try{localStorage.getItem('x')}catch(e){var _m={};Object.defineProperty(window,'localStorage',{value:{getItem:function(k){return k in _m?_m[k]:null},setItem:function(k,v){_m[k]=String(v)},removeItem:function(k){delete _m[k]}}})}</script>
@@ -388,6 +398,32 @@ function cleanWish(cf, w) {
   const names = cf.units.map((u) => u.name), units = [];
   (Array.isArray(w.units) ? w.units : []).forEach((n) => { if (names.includes(n) && !units.includes(n) && units.length < 3) units.push(n); });
   return { role: cf.roles.includes(w.role) ? w.role : '', units, combat: [0, 1, 2].includes(parseInt(w.combat, 10)) ? parseInt(w.combat, 10) : 1 };
+}
+// ---- Excel uploads: reference data ("previous cycle") and updates to existing candidates ----
+const toNum = (v) => { if (v === '' || v == null) return null; const x = Number(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+// reference rows are anonymous: names are never stored, only the fields needed for analysis
+function cleanBaseline(cf, rows) {
+  const out = [];
+  (Array.isArray(rows) ? rows : []).slice(0, 3000).forEach((r) => {
+    if (!cf.roles.includes(r.role)) return;
+    const stats = {}; cf.stats.forEach((s) => { stats[s.k] = toNum((r.stats || {})[s.k]); });
+    const mot = toNum(r.motivation), cb = toNum(r.combat);
+    out.push({ role: r.role, rec: C.RECS.includes(r.rec) ? r.rec : null, med: C.MEDS.includes(r.med) ? r.med : C.MEDS[0], profile: toNum(r.profile), stats,
+      motivation: mot >= 1 && mot <= 5 ? Math.round(mot) : null, combat: cb === 0 || cb === 1 || cb === 2 ? cb : null, unit: cf.units.some((u) => u.name === r.unit) ? r.unit : '' });
+  });
+  return out;
+}
+// apply uploaded values onto a candidate (only fields that were provided)
+function applyUpdate(cf, c, r) {
+  let n = 0;
+  if (cf.roles.includes(r.role) && r.role !== c.role) { c.role = r.role; c.skills = cf.skills[r.role] || c.skills; n++; }
+  if (C.RECS.includes(r.rec)) { c.rec = r.rec; n++; }
+  if (C.MEDS.includes(r.med)) { c.med = r.med; n++; }
+  if (toNum(r.profile) != null) { c.profile = toNum(r.profile); n++; }
+  cf.stats.forEach((s) => { const v = toNum((r.stats || {})[s.k]); if (v != null) { c.stats[s.k] = v; n++; } });
+  const mot = toNum(r.motivation); if (mot >= 1 && mot <= 5) { c.extra = Object.assign({ motivation: 3, discipline: 1, potential: 0, confidence: 1, second: '', follow: false, medNote: '' }, c.extra, { motivation: Math.round(mot) }); n++; }
+  const cb = toNum(r.combat); if (cb === 0 || cb === 1 || cb === 2) { c.wish = Object.assign({ role: '', units: [] }, c.wish, { combat: cb }); n++; }
+  return n;
 }
 function cleanExtra(cf, x, old) {
   const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
@@ -607,7 +643,12 @@ L.handle = function (p, userId, b) {
     needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה לייבא מועמדים');
     const cf = cfg(k), cst = state.corps[k];
     let max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0);
-    const used = new Set(cst.cands.map((c) => c.name)); let added = 0, skipped = 0;
+    const used = new Set(cst.cands.map((c) => c.name)); let added = 0, skipped = 0, updated = 0, notFound = 0;
+    if (b.mode === 'update') {
+      (b.rows || []).forEach((r) => { const c = cst.cands.find((x) => (r.id && x.id === String(r.id).trim()) || (r.name && x.name === String(r.name).trim())); if (!c) { notFound++; return; } if (applyUpdate(cf, c, r)) updated++; else skipped++; });
+      state.log.push({ ts: Date.now(), corps: k, text: user.title + ' עדכנה ' + updated + ' מועמדים מקובץ' });
+      save(); return { ok: true, updated, skipped, notFound };
+    }
     (b.rows || []).forEach((r) => {
       const name = String(r.name || '').trim();
       if (!name || used.has(name) || !cf.roles.includes(r.role)) { skipped++; return; }
@@ -615,11 +656,20 @@ L.handle = function (p, userId, b) {
       const stats = {}; cf.stats.forEach((s) => { stats[s.k] = num((r.stats || {})[s.k]); });
       const med = C.MEDS.includes(r.med) ? r.med : C.MEDS[0];
       cst.cands.push({ id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats, rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72), area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא' });
+      applyUpdate(cf, cst.cands[cst.cands.length - 1], { motivation: r.motivation, combat: r.combat });
       added++;
     });
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ייבאה ' + added + ' מועמדים' });
     save(); return { ok: true, added, skipped };
   }
+  if (p === 'baseline') {
+    needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה להעלות נתוני ייחוס');
+    const rows = cleanBaseline(cfg(k), b.rows); if (!rows.length) throw new Error('לא נמצאו שורות תקינות בקובץ (בדקו את עמודת התפקיד)');
+    state.corps[k].baseline = { label: String(b.label || 'מחזור קודם').slice(0, 60), uploadedAt: Date.now(), by: user.title, rows };
+    state.log.push({ ts: Date.now(), corps: k, text: user.title + ' העלתה נתוני ייחוס (' + rows.length + ' שורות)' });
+    save(); return { ok: true, count: rows.length, skipped: (b.rows || []).length - rows.length };
+  }
+  if (p === 'baseline-clear') { needCorps(); if (!canDo(user, 'import', k)) throw new Error('אין הרשאה'); delete state.corps[k].baseline; save(); return { ok: true }; }
   if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
   if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {
@@ -1263,6 +1313,56 @@ function distView(k) {
    <div class="card"><h2>נקודות בולטות</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.9">${notes.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>אין נתונים לתצוגה.</li>'}</ul><div class="mut small" style="margin-top:8px">נוצר מכללים שקופים על הנתונים. אין כאן המלצה על אדם או יחידה, וההעדפות אינן מחייבות את השיבוץ.</div>${table}</div>`;
 }
 
+// ---------------- comparison with a reference dataset (previous cycle) ----------------
+// "now" = current candidates (blue series), "before" = uploaded reference rows (neutral gray). Gaps are descriptive, not a ranking of people.
+function cmpView(k) {
+  const c = cf(k), base = cs(k).baseline, cur = cs(k).cands;
+  if (!base) return `<div class="card"><h2>השוואה למחזור קודם</h2><p class="mut">עדיין לא הועלו נתוני ייחוס. העלו אקסל של מחזור קודם (או נתונים קיימים) במסך ״הזנה וייבוא״, והמערכת תציג כאן את הפערים מול המחזור הנוכחי.</p>${R().pages.includes('import') ? '<a class="btn" href="#/import" style="text-decoration:none;display:inline-block">למסך ההעלאה ←</a>' : '<div class="mut small">ההעלאה זמינה לשלישות החיל.</div>'}</div>`;
+  const prev = base.rows, L = base.label, units = c.units;
+  const avgOf = (arr, f) => { const v = arr.map(f).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const pc = (a, b) => (b ? a / b * 100 : null), f1 = (v) => (v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1)), pf = (v) => (v == null ? '—' : Math.round(v) + '%');
+  const verdict = (delta, dir, tol) => { if (delta == null) return ['p-gray', '—']; if (Math.abs(delta) < tol) return ['p-gray', '＝ ללא שינוי']; if (dir === 0) return ['p-gray', delta > 0 ? '▲ עלייה' : '▼ ירידה']; return delta * dir > 0 ? ['p-green', (delta > 0 ? '▲' : '▼') + ' השתפר'] : ['p-orange', (delta > 0 ? '▲' : '▼') + ' הורע']; };
+  const sgn = (v, fmt) => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v));
+  const kp = [
+    { t: 'מועמדים', now: cur.length, pre: prev.length, fmt: (v) => String(Math.round(v)), dir: 0, tol: 1, unit: '' },
+    { t: 'שיעור ״מומלץ״', now: pc(cur.filter((x) => x.rec === 'מומלץ').length, cur.length), pre: pc(prev.filter((x) => x.rec === 'מומלץ').length, prev.length), fmt: pf, dfmt: (v) => String(Math.round(v)), dir: 1, tol: 1, unit: ' נק׳' },
+    { t: 'מוטיבציה ממוצעת', now: avgOf(cur, (x) => (x.extra ? x.extra.motivation : null)), pre: avgOf(prev, (x) => x.motivation), fmt: f1, dir: 1, tol: 0.05, unit: '' },
+    { t: 'לא מעוניינים בתפקיד קרבי', now: pc(cur.filter((x) => x.wish && x.wish.combat === 0).length, cur.length), pre: pc(prev.filter((x) => x.combat === 0).length, prev.filter((x) => x.combat != null).length), fmt: pf, dfmt: (v) => String(Math.round(v)), dir: -1, tol: 1, unit: ' נק׳' },
+    { t: 'תיקים עם נתונים חסרים', now: pc(cur.filter((x) => missingOf(k, x).length).length, cur.length), pre: pc(prev.filter((r) => !r.rec || c.stats.some((s) => r.stats[s.k] == null)).length, prev.length), fmt: pf, dfmt: (v) => String(Math.round(v)), dir: -1, tol: 1, unit: ' נק׳' },
+  ];
+  const kpis = kp.map((m) => { const d = m.now != null && m.pre != null ? m.now - m.pre : null, v = verdict(d, m.dir, m.tol); return `<div class="kpi"><b><bdi dir="ltr">${m.now == null ? '—' : m.fmt(m.now)}</bdi></b><span>${m.t}</span><div class="row" style="gap:6px;margin-top:6px"><span class="pill ${v[0]}">${v[1]}${d != null && Math.abs(d) >= m.tol ? ' <bdi dir="ltr">' + sgn(d, m.dfmt || m.fmt) + m.unit + '</bdi>' : ''}</span></div><div class="mut small" style="margin-top:2px">${esc(L)}: <bdi dir="ltr">${m.pre == null ? '—' : m.fmt(m.pre)}</bdi></div></div>`; }).join('');
+
+  // metrics: average now vs before, direction-aware (lower is better for times)
+  const statRows = c.stats.map((s) => { const a = avgOf(cur, (x) => x.stats[s.k]), b = avgOf(prev, (r) => r.stats[s.k]), d = a != null && b != null ? a - b : null, v = verdict(d, s.low ? -1 : 1, (s.max - s.min) * 0.01), dd = Math.pow(10, s.d + 1);
+    return { s, a, b, d, v, rel: d == null ? 0 : Math.abs(d) / (s.max - s.min), html: `<tr><td>${esc(s.l)}</td><td><bdi dir="ltr">${a == null ? '—' : Math.round(a * dd) / dd} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${b == null ? '—' : Math.round(b * dd) / dd} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${d == null ? '—' : sgn(d, (x) => Math.round(x * dd) / dd)}</bdi></td><td><span class="pill ${v[0]}">${v[1]}</span></td></tr>` }; });
+  const statTable = `<div style="overflow:auto"><table><thead><tr><th>מדד</th><th>עכשיו</th><th>${esc(L)}</th><th>הפרש</th><th>הערכה</th></tr></thead><tbody>${statRows.map((r) => r.html).join('')}</tbody></table></div><div class="mut small" style="margin-top:6px">ממוצע לפי הנתונים הקיימים בלבד (מדד חסר לא נספר). בריצה ובזמנים – נמוך יותר הוא טוב יותר.</div>`;
+
+  // grouped bars (HTML): two thin bars per row, value at the tip, tooltip on hover/focus
+  const grouped = (rows, maxV, fmt) => rows.map((r) => `<div class="grow"><span class="srow-l">${esc(r.label)}</span><div class="gbars">${[['now', r.now, 'עכשיו'], ['pre', r.pre, L]].map((x) => `<div class="gb" data-tip="${fmt(x[1])}|${esc(r.label)} · ${esc(x[2])}" tabindex="0"><i class="${x[0]}" style="width:${maxV ? Math.max(0, x[1] / maxV * 100).toFixed(1) : 0}%"></i><em>${fmt(x[1])}</em></div>`).join('')}</div></div>`).join('');
+  const key2 = `<div class="legend row" style="margin-bottom:8px"><span class="lg"><i class="sq" style="background:var(--s1)"></i>עכשיו</span><span class="lg"><i class="sq" style="background:var(--ref)"></i>${esc(L)}</span></div>`;
+  const roleRows = c.roles.map((r) => ({ label: r, now: cur.filter((x) => x.role === r).length, pre: prev.filter((x) => x.role === r).length }));
+  // gaps vs unit needs
+  const gapRows = c.roles.map((r) => { const demand = units.reduce((a, u) => a + (u.quota[r] || 0), 0), supply = cur.filter((x) => x.role === r && x.rec !== 'לא מומלץ').length, before = prev.filter((x) => x.role === r && x.rec !== 'לא מומלץ').length, gap = demand - supply; return { r, demand, supply, before, gap }; }).filter((g) => g.demand || g.supply || g.before);
+  const gapTable = `<div style="overflow:auto"><table><thead><tr><th>תפקיד</th><th>נדרש</th><th>זמינים</th><th>${esc(L)}</th><th>פער</th></tr></thead><tbody>${gapRows.map((g) => `<tr><td>${esc(g.r)}</td><td>${g.demand}</td><td>${g.supply} <span class="mut small"><bdi dir="ltr">(${sgn(g.supply - g.before, String) || '0'})</bdi></span></td><td>${g.before}</td><td>${g.gap > 0 ? `<span class="pill p-orange">חוסר ${g.gap}</span>` : (g.demand ? `<span class="pill p-green">מכוסה${g.gap < 0 ? ' · עודף ' + -g.gap : ''}</span>` : '<span class="pill p-gray">אין דרישה</span>')}</td></tr>`).join('')}</tbody></table></div><div class="mut small" style="margin-top:6px">נדרש = סך מכסות היחידות בחיל. זמינים = מועמדים עם המלצה שאינה שלילית (בסוגריים: שינוי מול הנתונים שהועלו). עמודת הכותרת עם שם הנתונים = כמה היו אז.</div>`;
+  // threshold coverage per unit (recommendation ignored – thresholds only)
+  const okThr = (x, u) => fitOf(k, x, u).filter((e) => e.s !== 'המלצה').every((e) => e.ok);
+  const unitRows = units.map((u) => ({ label: u.name, now: pc(cur.filter((x) => okThr(x, u)).length, cur.length) || 0, pre: pc(prev.filter((x) => okThr(x, u)).length, prev.length) || 0 }));
+  // insights
+  const notes = [];
+  gapRows.filter((g) => g.gap > 0).sort((a, b) => b.gap - a.gap).slice(0, 2).forEach((g) => notes.push(`חוסר בתפקיד ${g.r}: נדרשים ${g.demand}, זמינים ${g.supply} (ב${L} היו ${g.before}).`));
+  const best = statRows.filter((r) => r.d != null).sort((a, b) => b.rel - a.rel)[0];
+  if (best && best.rel > 0.02) notes.push(`השינוי הגדול ביותר במדדים: ${best.s.l} (${best.v[1].replace(/^[▲▼＝] /, '')}, ${best.a != null ? f1(best.a) : '—'} מול ${best.b != null ? f1(best.b) : '—'} ${best.s.u}).`);
+  const drop = unitRows.map((u) => ({ u, d: u.now - u.pre })).sort((a, b) => a.d - b.d)[0];
+  if (drop && drop.d < -5) notes.push(`הירידה הגדולה ביותר בכיסוי תנאי הסף: ${drop.u.label} (${pf(drop.u.now)} מול ${pf(drop.u.pre)}).`);
+  const nc = kp[3]; if (nc.now != null && nc.pre != null && Math.abs(nc.now - nc.pre) >= 5) notes.push(`שיעור הלא מעוניינים בתפקיד קרבי ${nc.now > nc.pre ? 'עלה' : 'ירד'} מ־${pf(nc.pre)} ל־${pf(nc.now)}.`);
+  return `<div class="row spread"><div><b>השוואה מול: ${esc(L)}</b> <span class="mut small">· ${base.rows.length} שורות · הועלה ע״י ${esc(base.by)} · ${new Date(base.uploadedAt).toLocaleDateString('he-IL')}</span></div>${R().pages.includes('import') ? '<a class="btn sec sm" href="#/import" style="text-decoration:none">החלפת נתוני ייחוס</a>' : ''}</div>
+   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">${kpis}</div>
+   <div class="card"><h2>נקודות בולטות</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.9">${notes.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>אין פערים בולטים בין הנתונים.</li>'}</ul><div class="mut small" style="margin-top:8px">ההשוואה היא בין שתי אוכלוסיות שונות, נוצרה מכללים שקופים ואינה הערכה של אדם או יחידה.</div></div>
+   <div class="grid g2"><div class="card"><h2>מדדים – עכשיו מול ${esc(L)}</h2>${statTable}</div><div class="card"><h2>פערים מול צורכי היחידות</h2>${gapTable}</div></div>
+   <div class="grid g2"><div class="card"><h2>מועמדים לפי תפקיד</h2>${key2}${grouped(roleRows, Math.max(1, ...roleRows.map((r) => Math.max(r.now, r.pre))), (v) => String(Math.round(v)))}</div>
+    <div class="card"><h2>עמידה בתנאי הסף – לפי יחידה</h2><div class="mut small" style="margin-bottom:6px">אחוז המועמדים שעומדים בכל תנאי הסף של היחידה (ללא המלצת המגבש)</div>${key2}${grouped(unitRows, 100, (v) => Math.round(v) + '%')}</div></div>`;
+}
+
 // ---------------- command overview ----------------
 function unitProgress(k, u) { const q = Object.keys(u.quota).reduce((a, r) => a + u.quota[r], 0), g = Object.keys(u.quota).reduce((a, r) => a + Math.min(u.quota[r], countRole(k, u.name, r)), 0); return { q, g }; }
 function dilemmas(k) {
@@ -1287,7 +1387,7 @@ SCREENS.command = (k) => {
   const tot = c.units.reduce((a, u) => { const p = unitProgress(k, u); return { q: a.q + p.q, g: a.g + p.g }; }, { q: 0, g: 0 });
   const done = c.units.filter((u) => { const p = unitProgress(k, u); return p.g >= p.q; }).length;
   const gapR = tot.q - tot.g;
-  const tabs = [['units', 'יחידות'], ['dist', 'פילוג אנשים'], ['pres', 'מצגת לפיקוד'], ['forum', 'דילמות'], ['report', 'דוח']];
+  const tabs = [['units', 'יחידות'], ['dist', 'פילוג אנשים'], ['cmp', 'השוואה למחזור קודם'], ['pres', 'מצגת לפיקוד'], ['forum', 'דילמות'], ['report', 'דוח']];
   const matrix = `<div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>קדימות</th>${c.roles.map((r) => `<th>${esc(r)}</th>`).join('')}<th>התקדמות</th></tr></thead><tbody>${c.units.map((u) => { const p = unitProgress(k, u); return `<tr><td><b>${esc(u.name)}</b><div class="mut small">${esc(u.desc)}</div></td><td>${['גבוהה', 'רגילה', 'נמוכה'][u.prio]}</td>${c.roles.map((r) => { const q = u.quota[r]; if (!q) return '<td class="mut">·</td>'; const h = countRole(k, u.name, r); return `<td><span class="pill ${h >= q ? 'p-green' : h > 0 ? 'p-orange' : 'p-gray'}">${h}/${q}</span></td>`; }).join('')}<td style="min-width:140px"><div class="row"><div class="bar"><i style="width:${p.q ? p.g / p.q * 100 : 0}%"></i></div><b>${p.g}/${p.q}</b></div></td></tr>`; }).join('')}</tbody></table></div>`;
   const corpsProg = Object.keys(A.cfg.corps).filter((x) => !A.me.corps || x === A.me.corps).map((x) => { const t = draftInfo(x); return `<div class="row" style="margin:8px 0"><span style="min-width:130px">${esc(cf(x).corps)}</span><div class="bar"><i style="width:${t.picks.length / t.order.length * 100}%;background:var(--blue)"></i></div><b>${t.picks.length}/${t.order.length}</b></div>`; }).join('');
   let body = '';
@@ -1295,6 +1395,7 @@ SCREENS.command = (k) => {
     <div class="grid g2"><div class="card"><h2>התקדמות לפי חיל</h2>${corpsProg}<div class="mut small">לכל חיל דראפט נפרד: יחידות לוחמה לא מתחרות על אותם מועמדים עם מודיעין או קשר.</div></div>
     <div class="card"><h2>בחירות אחרונות</h2>${d.picks.slice(-7).reverse().map((p) => `<div class="row" style="padding:4px 0"><b>#${p.n}</b><span>${esc(p.unit)} · ${esc(candOf(k, p.id).name)} ${esc(candOf(k, p.id).role)}</span></div>`).join('') || '<span class="mut">אין בחירות</span>'}</div></div>`;
   if (tab === 'dist') body = distView(k);
+  if (tab === 'cmp') body = cmpView(k);
   if (tab === 'pres') {
     const colors = ['#3F5530', '#2F5A8A', '#C2741F', '#8A5A9A', '#5A6472'];
     const counts = c.units.map((u) => d.picks.filter((p) => p.unit === u.name).length), sum = counts.reduce((a, b) => a + b, 0) || 1;
@@ -1330,49 +1431,102 @@ Object.assign(ACTIONS, {
 });
 
 // ---------------- import ----------------
-const SYN = { name: ['שם', 'שם מלא', 'name'], role: ['תפקיד', 'role'], rec: ['המלצת מגבש', 'המלצה'], med: ['מגבלות רפואיות', 'מגבלות', 'רפואי'], profile: ['פרופיל'] };
-function importFields(k) { return [['name', 'שם'], ['role', 'תפקיד'], ['rec', 'המלצת מגבש'], ['med', 'מגבלות רפואיות'], ['profile', 'פרופיל']].concat(cf(k).stats.map((s) => ['s:' + s.k, s.l + ' (' + s.u + ')'])); }
-function autoMap(k, headers) {
+const SYN = { id: ['מס׳', 'מס', 'מספר', 'id'], name: ['שם', 'שם מלא', 'name'], role: ['תפקיד', 'role'], rec: ['המלצת מגבש', 'המלצה'], med: ['מגבלות רפואיות', 'מגבלות', 'רפואי'], profile: ['פרופיל'], motivation: ['מוטיבציה'], combat: ['נכונות', 'קרבי'], unit: ['יחידה', 'שובץ'] };
+function importFields(k) { return [['id', 'מס׳ (לזיהוי בעדכון)'], ['name', 'שם'], ['role', 'תפקיד'], ['rec', 'המלצת מגבש'], ['med', 'מגבלות רפואיות'], ['profile', 'פרופיל'], ['motivation', 'מוטיבציה (1–5)'], ['combat', 'נכונות לתפקיד קרבי']].concat(cf(k).stats.map((s) => ['s:' + s.k, s.l + ' (' + s.u + ')'])); }
+function baseFields(k) { return importFields(k).filter(([key]) => key !== 'id' && key !== 'name').concat([['unit', 'יחידה משובצת']]); }
+function autoMapFields(k, fields, headers) {
   const m = {};
-  importFields(k).forEach(([key, label]) => {
+  fields.forEach(([key, label]) => {
     const want = key.startsWith('s:') ? [cf(k).stats.find((s) => 's:' + s.k === key).l, label] : SYN[key];
-    const i = headers.findIndex((h) => want.some((w) => String(h).trim().startsWith(w)));
-    m[key] = i;
+    m[key] = headers.findIndex((h) => want.some((w) => String(h).trim().startsWith(w)));
   });
   return m;
 }
+const autoMap = (k, headers) => autoMapFields(k, importFields(k), headers);
+function parseCombat(v) { const t = String(v == null ? '' : v).trim(); if (t === '') return null; if (['0', '1', '2'].includes(t)) return +t; if (t.includes('לא')) return 0; if (t.includes('פתוח')) return 1; if (/מעוניין|כן|רוצה/.test(t)) return 2; return null; }
+function parseRow(k, r, map) {
+  const g = (key) => (map[key] >= 0 ? r[map[key]] : '');
+  const stats = {}; cf(k).stats.forEach((s) => { stats['' + s.k] = g('s:' + s.k); });
+  return { id: String(g('id') || '').trim(), name: String(g('name') || '').trim(), role: String(g('role') || '').trim(), rec: String(g('rec') || '').trim(), med: String(g('med') || '').trim(), profile: g('profile'), stats, motivation: g('motivation'), combat: parseCombat(g('combat')), unit: String(g('unit') || '').trim() };
+}
 function buildRows(k) {
   const im = A.ui.imp; if (!im) return [];
+  const mode = A.ui.impMode || 'add';
   return im.data.map((r, n) => {
-    const g = (key) => (im.map[key] >= 0 ? r[im.map[key]] : '');
-    const stats = {}; cf(k).stats.forEach((s) => { stats['' + s.k] = g('s:' + s.k); });
-    const row = { name: String(g('name') || '').trim(), role: String(g('role') || '').trim(), rec: String(g('rec') || '').trim(), med: String(g('med') || '').trim() || 'ללא מגבלות', profile: g('profile'), stats };
-    const errs = [];
-    if (!row.name) errs.push('חסר שם');
+    const row = parseRow(k, r, im.map), errs = [];
+    if (mode === 'add') {
+      if (!row.med) row.med = 'ללא מגבלות';
+      if (!row.name) errs.push('חסר שם');
+      if (!cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
+      if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
+      if (!A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
+      if (cs(k).cands.some((c) => c.name === row.name)) errs.push('כבר קיים במאגר');
+    } else {
+      if (!row.id && !row.name) errs.push('חסר מס׳ או שם');
+      else if (!cs(k).cands.some((c) => (row.id && c.id === row.id) || (row.name && c.name === row.name))) errs.push('לא נמצא במאגר');
+      if (row.role && !cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
+      if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
+      if (row.med && !A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
+    }
+    return Object.assign(row, { n: n + 2, errs });
+  });
+}
+function buildBaseRows(k) {
+  const b = A.ui.base; if (!b) return [];
+  return b.data.map((r, n) => {
+    const row = parseRow(k, r, b.map), errs = [];
+    if (!row.med) row.med = 'ללא מגבלות';
     if (!cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
     if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
     if (!A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
-    if (cs(k).cands.some((c) => c.name === row.name)) errs.push('כבר קיים במאגר');
     return Object.assign(row, { n: n + 2, errs });
   });
+}
+const baseHeaders = (k) => ['תפקיד', 'המלצת מגבש', 'מגבלות רפואיות', 'פרופיל'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')'), ['מוטיבציה (1–5)', 'נכונות לתפקיד קרבי', 'יחידה משובצת']);
+function sampleBaseAoa(k) { // demo previous cycle: slightly weaker results, more "not interested in combat"
+  const c = cf(k); let seed = 5; const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const aoa = [baseHeaders(k)];
+  for (let i = 0; i < 26; i++) {
+    const role = c.roles[(i * 2 + (i % 3)) % c.roles.length], t = Math.min(1, Math.max(0, 0.28 + rnd() * 0.5));
+    aoa.push([role, A.cfg.RECS[t > 0.62 ? 0 : (t > 0.4 ? 1 : 2)], i % 7 === 3 ? A.cfg.MEDS[1] : A.cfg.MEDS[0], 90].concat(c.stats.map((s) => { if (rnd() < 0.06) return ''; const raw = s.low ? s.max - (s.max - s.min) * t : s.min + (s.max - s.min) * t; return +raw.toFixed(s.d); }), [Math.max(1, Math.min(5, Math.round(1.8 + t * 3 + (rnd() - 0.5)))), rnd() < 0.34 ? 'לא מעוניין' : (rnd() < 0.5 ? 'פתוח' : 'מעוניין'), '']));
+  }
+  return aoa;
+}
+function baselineCard(k, canImp) {
+  const c = cf(k), base = cs(k).baseline, b = A.ui.base, rows = b ? buildBaseRows(k) : [], ok = rows.filter((r) => !r.errs.length);
+  const when = base ? new Date(base.uploadedAt).toLocaleDateString('he-IL') : '';
+  return `<div class="card"><h2>נתוני ייחוס – מחזור קודם או נתונים קיימים</h2>
+   <p class="mut small">העלו אקסל של נתונים קיימים (למשל מחזור קודם): שורה לכל חייל, עם תפקיד, המלצה, מדדים, מוטיבציה ונכונות לתפקיד קרבי. המערכת קוראת ומנתחת אותם ומשווה למחזור הנוכחי בלשונית ״השוואה למחזור קודם״ בתמונת המצב. <b>שמות לא נשמרים</b> – רק נתוני הניתוח.</p>
+   ${base ? `<div class="row spread" style="background:var(--bg2);border-radius:12px;padding:10px 14px;margin-bottom:10px"><div><b>${esc(base.label)}</b> · ${base.rows.length} שורות<div class="mut small">הועלה ע״י ${esc(base.by)} · ${when}</div></div><div class="row"><a class="btn sm" href="#/command" data-act="goCmp" style="text-decoration:none">צפייה בהשוואה ←</a>${canImp ? '<button class="btn sec sm" data-act="bdelete">מחיקה</button>' : ''}</div></div>` : ''}
+   <div class="drop"><div class="row" style="justify-content:center"><label class="small mut">שם הנתונים<br><input type="text" id="blabel" data-inp="blabel" value="${esc((b && b.label) || 'מחזור קודם')}" style="width:170px"></label></div>
+    <input type="file" id="bfile" accept=".xlsx,.xls,.csv" data-chg="bfile" ${canImp ? '' : 'disabled'} style="margin-top:8px"><div class="row" style="justify-content:center;margin-top:10px"><button class="btn sec sm" data-act="bsample" ${canImp ? '' : 'disabled'}>טעינת נתוני ייחוס לדוגמה</button><button class="btn sec sm" data-act="btemplate">הורדת תבנית</button></div></div>
+   ${b ? `<div style="margin-top:12px"><b>התאמת עמודות</b><div class="row" style="margin-top:6px">${baseFields(k).map(([key, label]) => `<label class="small mut">${esc(label)}<br><select data-chg="bmap" data-f="${esc(key)}" style="min-width:140px"><option value="-1">— לא ממופה —</option>${b.headers.map((h, i) => `<option value="${i}" ${b.map[key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div>
+    <p style="margin:10px 0 4px">${rows.length} שורות · <b style="color:var(--green)">${ok.length} תקינות</b> · <b style="color:var(--red)">${rows.length - ok.length} עם בעיות (ידולגו)</b>${rows.length - ok.length ? ' – ' + esc(Array.from(new Set(rows.flatMap((r) => r.errs))).join(', ')) : ''}</p>
+    <div class="row"><button class="btn" data-act="bsave" ${canImp && ok.length ? '' : 'disabled'}>שמירה כנתוני ייחוס (${ok.length} שורות)</button><button class="btn sec" data-act="bcancel">ביטול</button></div></div>` : ''}</div>`;
 }
 SCREENS.import = (k) => {
   const c = cf(k), im = A.ui.imp, canImp = can('import', k), started = cs(k).picks.length > 0;
   const rows = im ? buildRows(k) : [], ok = rows.filter((r) => !r.errs.length);
   const miss = cs(k).cands.filter((x) => missingOf(k, x).length).length;
-  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הזנה וייבוא</h1><div class="mut small">קליטת מועמדים מקובץ אקסל או CSV, לפי חיל</div></div></div>
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הזנה וייבוא</h1><div class="mut small">קליטת מועמדים, עדכון נתונים קיימים ונתוני ייחוס – מקובץ אקסל או CSV, לפי חיל</div></div></div>
    <div class="grid g3"><div class="kpi"><b>${cs(k).cands.length}</b><span>מועמדים במאגר</span></div><div class="kpi"><b>${A.ui.imported || 0}</b><span>יובאו בטעינה זו</span></div><div class="kpi"><b>${miss}</b><span>תיקים עם נתונים חסרים</span></div></div>
-   <div class="card"><h2>1. בחירת קובץ</h2><p class="mut small">עמודות נדרשות: שם, תפקיד, המלצת מגבש, מגבלות רפואיות, פרופיל, ${c.stats.map((s) => esc(s.l + ' (' + s.u + ')')).join(', ')}. שורה אחת לכל מועמד/ת.</p>
+   <div class="card"><h2>1. בחירת קובץ</h2><div class="seg" style="margin-bottom:10px">${[['add', 'הוספת מועמדים חדשים'], ['update', 'עדכון מועמדים קיימים']].map((m) => `<button type="button" class="${(A.ui.impMode || 'add') === m[0] ? 'on' : ''}" data-act="impmode" data-m="${m[0]}">${m[1]}</button>`).join('')}</div>
+    ${(A.ui.impMode || 'add') === 'update' ? '<p class="mut small">העמודות: מס׳ <b>או</b> שם (לזיהוי המועמד במאגר) ועוד כל שדה שרוצים לעדכן. שדות ריקים לא ידרסו נתונים קיימים.</p>' : ''}<p class="mut small" ${(A.ui.impMode || 'add') === 'update' ? 'hidden' : ''}>עמודות נדרשות: שם, תפקיד, המלצת מגבש, מגבלות רפואיות, פרופיל, ${c.stats.map((s) => esc(s.l + ' (' + s.u + ')')).join(', ')}. שורה אחת לכל מועמד/ת.</p>
     ${!canImp ? '<div class="demo-note">ייבוא זמין לשלישות החיל בלבד.</div>' : ''}${started ? '<div class="demo-note">הדראפט כבר התחיל – מועמדים חדשים יצטרפו למאגר הפנויים.</div>' : ''}
     <div class="drop"><input type="file" id="file" accept=".xlsx,.xls,.csv" data-chg="file" ${canImp ? '' : 'disabled'}><div class="row" style="justify-content:center;margin-top:10px"><button class="btn sec sm" data-act="sample" ${canImp ? '' : 'disabled'}>טעינת קובץ לדוגמה</button><button class="btn sec sm" data-act="template">הורדת תבנית אקסל</button></div><div class="mut small" style="margin-top:6px">הקובץ נקרא בדפדפן ונשלח לשרת רק בלחיצה על ״ייבוא״. אין להעלות נתוני אמת באב־טיפוס.</div></div></div>
    ${im ? `<div class="card"><h2>2. התאמת עמודות</h2><div class="row">${importFields(k).map(([key, label]) => `<label class="small mut">${esc(label)}<br><select data-chg="map" data-f="${esc(key)}" style="min-width:150px"><option value="-1">— לא ממופה —</option>${im.headers.map((h, i) => `<option value="${i}" ${im.map[key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div></div>
    <div class="card"><h2>3. בדיקה וייבוא</h2><p>${rows.length} שורות · <b style="color:var(--green)">${ok.length} תקינות</b> · <b style="color:var(--red)">${rows.length - ok.length} עם בעיות (ידולגו)</b></p>
-    <div style="overflow:auto;max-height:320px"><table><thead><tr><th>שורה</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>מדדים חסרים</th><th>בדיקה</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.n}</td><td>${esc(r.name)}</td><td>${esc(r.role)}</td><td>${esc(r.rec || '—')}</td><td>${c.stats.filter((s) => r.stats[s.k] === '' || r.stats[s.k] == null).map((s) => esc(s.l)).join(', ') || '—'}</td><td>${r.errs.length ? `<span class="pill p-red">${esc(r.errs.join(', '))}</span>` : '<span class="pill p-green">תקין</span>'}</td></tr>`).join('')}</tbody></table></div>
-    <div class="row" style="margin-top:10px"><button class="btn" data-act="doImport" ${canImp && ok.length ? '' : 'disabled'}>ייבוא ${ok.length} מועמדים</button><button class="btn sec" data-act="impClear">ביטול</button></div></div>` : ''}
+    <div style="overflow:auto;max-height:320px"><table><thead><tr><th>שורה</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>מדדים חסרים</th><th>בדיקה</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.n}</td><td>${esc(r.name || r.id)}</td><td>${esc(r.role)}</td><td>${esc(r.rec || '—')}</td><td>${c.stats.filter((s) => r.stats[s.k] === '' || r.stats[s.k] == null).map((s) => esc(s.l)).join(', ') || '—'}</td><td>${r.errs.length ? `<span class="pill p-red">${esc(r.errs.join(', '))}</span>` : '<span class="pill p-green">תקין</span>'}</td></tr>`).join('')}</tbody></table></div>
+    <div class="row" style="margin-top:10px"><button class="btn" data-act="doImport" ${canImp && ok.length ? '' : 'disabled'}>${(A.ui.impMode || 'add') === 'update' ? 'עדכון' : 'ייבוא'} ${ok.length} מועמדים</button><button class="btn sec" data-act="impClear">ביטול</button></div></div>` : ''}
+   ${baselineCard(k, canImp)}
    <div class="card"><div class="row spread"><h2 style="margin:0">המאגר הנוכחי – ${esc(c.corps)}</h2><div class="row"><button class="btn sec sm" data-act="exportX">ייצוא לאקסל</button><button class="btn sec sm" data-act="exportC">ייצוא CSV</button></div></div>
     <div style="overflow:auto;max-height:420px;margin-top:8px"><table><thead><tr><th>מס׳</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>חסר בתיק</th><th>מקור</th></tr></thead><tbody>${cs(k).cands.map((x) => `<tr><td>${x.id}</td><td>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${esc(missingOf(k, x).join(', ') || 'מלא')}</td><td>${esc(x.source || 'מאגר קיים')}</td></tr>`).join('')}</tbody></table></div>
     <div class="mut small" style="margin-top:8px">הנתונים נשמרים בשרת (data/state.json).</div></div>`;
 };
+function setBase(k, aoa) {
+  const headers = (aoa[0] || []).map((h) => String(h)), data = aoa.slice(1).filter((r) => r.some((v) => String(v).trim() !== ''));
+  A.ui.base = { headers, data, map: autoMapFields(k, baseFields(k), headers), label: A.ui.baseLabel || 'מחזור קודם' }; rerender();
+}
 function setImport(k, aoa) {
   const headers = (aoa[0] || []).map((h) => String(h)), data = aoa.slice(1).filter((r) => r.some((v) => String(v).trim() !== ''));
   A.ui.imp = { headers, data, map: autoMap(k, headers) }; rerender();
@@ -1389,10 +1543,25 @@ Object.assign(ACTIONS, {
     setImport(k, aoa);
   },
   template: () => downloadX('mil-draft-template.xlsx', sheetRows(corpsKey()).concat([['דוגמה ד.', cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => s.min))])),
+  impmode: (d) => { A.ui.impMode = d.m; rerender(); },
+  bfile: async (d, t) => { const f = t.files[0]; if (!f) return; const k = corpsKey(), wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); setBase(k, XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })); },
+  bmap: (d, t) => { A.ui.base.map[d.f] = +t.value; rerender(); },
+  blabel: (d, t) => { if (A.ui.base) A.ui.base.label = t.value; else A.ui.baseLabel = t.value; },
+  bsample: () => setBase(corpsKey(), sampleBaseAoa(corpsKey())),
+  btemplate: () => downloadX('mil-draft-baseline-template.xlsx', [baseHeaders(corpsKey()), [cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => s.min), [4, 'פתוח', ''])]),
+  bcancel: () => { A.ui.base = null; rerender(); },
+  bsave: async () => {
+    const k = corpsKey(), rows = buildBaseRows(k).filter((r) => !r.errs.length), label = (A.ui.base && A.ui.base.label) || 'מחזור קודם';
+    const r = await api('baseline', { corps: k, label, rows: rows.map((x) => ({ role: x.role, rec: x.rec, med: x.med, profile: x.profile, stats: x.stats, motivation: x.motivation, combat: x.combat, unit: x.unit })) });
+    A.ui.base = null; A.ui.tab = 'cmp'; rerender(); toast(`נטענו ${r.count} שורות כנתוני ייחוס`);
+  },
+  bdelete: async () => { if (confirm('למחוק את נתוני הייחוס?')) { await api('baseline-clear', { corps: corpsKey() }); toast('נתוני הייחוס נמחקו'); } },
+  goCmp: () => { A.ui.tab = 'cmp'; },
   impClear: () => { A.ui.imp = null; rerender(); },
   doImport: async () => {
     const k = corpsKey(), rows = buildRows(k).filter((r) => !r.errs.length);
-    const r = await api('import', { corps: k, rows }); A.ui.imported = r.added; A.ui.imp = null; rerender(); toast(`יובאו ${r.added} מועמדים${r.skipped ? ' · דולגו ' + r.skipped : ''}`);
+    const mode = A.ui.impMode || 'add', r = await api('import', { corps: k, rows, mode }); A.ui.imp = null; rerender();
+    if (mode === 'update') toast(`עודכנו ${r.updated} מועמדים${r.notFound ? ' · לא נמצאו ' + r.notFound : ''}${r.skipped ? ' · ללא שינוי ' + r.skipped : ''}`); else { A.ui.imported = r.added; toast(`יובאו ${r.added} מועמדים${r.skipped ? ' · דולגו ' + r.skipped : ''}`); }
   },
   exportX: () => downloadX('pool-' + corpsKey() + '.xlsx', poolRows(corpsKey())),
   exportC: () => csvDownload('pool-' + corpsKey() + '.csv', poolRows(corpsKey())),
