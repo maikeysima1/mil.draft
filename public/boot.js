@@ -13,5 +13,5 @@
     await refresh();
     if (A.me) { connectSSE(); if (!route()) go(homeFor()); }
     render();
-  } catch (e) { $('#app').innerHTML = '<p style="padding:40px">שגיאה בטעינה: ' + esc(e.message) + '</p>'; }
+  } catch (e) { $('#app').innerHTML = '<div style="padding:40px;max-width:420px;margin:0 auto"><h2>' + (navigator.onLine === false ? 'אין חיבור לאינטרנט' : 'שגיאה בטעינה') + '</h2><p class="mut">' + (navigator.onLine === false ? 'האפליקציה צריכה חיבור לשרת. בדקו את החיבור ורעננו את הדף.' : esc(e.message)) + '</p><button class="btn" onclick="location.reload()">נסו שוב</button></div>'; }
 })();

@@ -272,3 +272,46 @@ details.tbl summary{cursor:pointer;color:var(--mut);font-size:13px}
 .favtoggle em{font-style:normal;font-size:12px;font-weight:700;opacity:.9}
 .favtoggle.on{background:var(--red);color:#fff;box-shadow:0 8px 20px -8px color-mix(in srgb,var(--red) 90%,transparent)}
 .favtoggle.on b{background:#fff;color:var(--red)}
+
+/* ---------- phone / installed app ---------- */
+*{-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+.install-hint{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--blue-l);color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 30%,transparent);border-radius:14px;padding:10px 14px;font-size:14px}
+.tbar{padding-top:calc(13px + env(safe-area-inset-top))}
+@media(max-width:900px){
+  body{overscroll-behavior-y:none}
+  .side{padding-bottom:calc(6px + env(safe-area-inset-bottom));padding-inline:max(8px,env(safe-area-inset-left))}
+  main{padding:16px 14px calc(92px + env(safe-area-inset-bottom))}
+  input,select,textarea{font-size:16px}
+  .btn{min-height:44px}.btn.sm{min-height:40px}
+  .tabs button,.seg button,.sw{min-height:40px}
+  .nav a{min-height:50px;justify-content:center}
+  .card{padding:15px;border-radius:16px}
+  .kpi b{font-size:26px}
+  .tbar{padding-inline:14px}.bar-page{font-size:16px}.bar-sub{display:none}
+  .drawer{width:100%;padding:18px}
+  .modal{padding:20px}
+  .srow,.grow{grid-template-columns:84px minmax(0,1fr)}
+  .srow{grid-template-columns:84px minmax(0,1fr) 26px}
+  .filters{gap:8px}.filters label{flex:1 1 140px}
+  .filters select{width:100%}
+  .clock{padding:18px}.clock h2{font-size:24px}
+  .favtoggle{min-height:44px}
+  #toast{inset-inline:14px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:none}
+}
+@media(max-width:980px){.picker{order:-1}.hero .matrix{display:none}}
+@media(display-mode:standalone){.install-hint{display:none}}
+
+/* candidate table -> cards on phones */
+@media(max-width:700px){
+  .ctbl,.ctbl tbody{display:block}
+  .ctbl thead{display:none}
+  .ctbl tr.clk{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:12px;margin-bottom:10px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+  .ctbl tr.clk:hover td{background:transparent}
+  .ctbl td{display:block;padding:0;border:0}
+  .ctbl td:nth-child(1){flex:1 1 55%;font-size:16px}
+  .ctbl td:nth-child(2){color:var(--mut)}
+  .ctbl td:last-child{margin-inline-start:auto}
+  .ctbl tr.sel,.ctbl tr.taken{opacity:.6}
+  .ctbl tr.taken td{opacity:1}
+}

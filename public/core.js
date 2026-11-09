@@ -137,7 +137,7 @@ function shell(inner) {
     <div class="usercard"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span class="uc-t"><b>${esc(A.me.title)}</b><small>${esc(A.me.unit)}</small></span></div>
     <div class="row" style="gap:6px"><span class="lbadge">שכבה ${R().layer} · ${esc(A.me.role)}</span></div></div></aside>
    <div class="content"><header class="tbar"><div class="bar-t"><span class="bar-page">${page ? page.name : ''}</span><span class="bar-sub">${esc(scope)}</span></div>
-    <div class="bar-r"><span class="live"><i></i>חי</span><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="החלפת ערכת נושא">${icon(dark ? 'sun' : 'moon', 18)}</button><button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header>
+    <div class="bar-r">${installBox(true)}<span class="live"><i></i>חי</span><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="החלפת ערכת נושא">${icon(dark ? 'sun' : 'moon', 18)}</button><button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header>
     <main>${inner}</main></div></div>`;
 }
 
@@ -179,6 +179,7 @@ function loginView() {
    ${layerMatrix(u.role)}
    <div class="demo-note">אב־טיפוס לדמו – המשתמשים פיקטיביים. במערכת אמיתית הכניסה תהיה בהזדהות מאובטחת.</div></section>
    <section class="picker"><div class="row spread"><h2>כניסה למערכת</h2><button class="iconbtn" data-act="theme" aria-label="החלפת ערכת נושא">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 18)}</button></div><p class="mut" style="margin:0">בחרו משתמש. ההרשאות נקבעות לפי שכבת הסיווג שלו.</p>
+   ${installBox()}
    ${loginList(sel)}
    <div class="card sel-info"><div class="row spread"><b>שכבה ${o.layer} · ${esc(u.role)}</b><span class="pill ${LPILL[o.layer]}">${SCOPE_TXT[o.scope]}</span></div><p class="mut small" style="margin:6px 0 0">${esc(o.desc)}</p></div>
    <div class="enter"><button class="btn lg" data-act="login">כניסה כ${esc(u.title)} ←</button><span class="mut small">ייפתח: ${target}</span></div></section></div>`;
@@ -257,3 +258,19 @@ function csvDownload(name, rows) {
   const csv = '﻿' + rows.map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = name; a.click();
 }
+
+// ---- installable app (PWA) ----
+let deferredInstall = null;
+const isStandaloneApp = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; rerender(); });
+window.addEventListener('appinstalled', () => { deferredInstall = null; toast('האפליקציה הותקנה'); rerender(); });
+ACTIONS.install = async () => { if (!deferredInstall) return; deferredInstall.prompt(); try { await deferredInstall.userChoice; } catch (e) { /* dismissed */ } deferredInstall = null; rerender(); };
+ACTIONS.hideIos = () => { localStorage.setItem('mil-ios-hint', '1'); rerender(); };
+function installBox(bar) { // install button (Android/desktop) anywhere; the longer iPhone how-to only on the login screen
+  if (isStandaloneApp()) return '';
+  if (deferredInstall) return '<button class="btn sm" data-act="install">התקנה</button>';
+  if (!bar && isIOS() && !localStorage.getItem('mil-ios-hint')) return `<div class="install-hint"><b>להתקנה באייפון:</b> לחצו על כפתור השיתוף <span aria-hidden="true">⬆︎</span> בדפדפן Safari ובחרו <b>״הוסף למסך הבית״</b>.<button class="btn sec sm" data-act="hideIos">הבנתי</button></div>`;
+  return '';
+}
+if ('serviceWorker' in navigator && /^https?:/.test(location.protocol)) window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* offline mode unavailable */ }); });
