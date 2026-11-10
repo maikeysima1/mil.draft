@@ -443,10 +443,10 @@ const corps = {
         good: ['ביצע את התרגילים בדייקנות ולמד מהר מתיקונים.', 'שמר על קור רוח במסע האלונקה ובתרגיל הלחץ.', 'עזר לחברים בקבוצה ונתן כתף בלי שביקשו.', 'לקח פיקוד על הצוות כשהמשימה הסתבכה.', 'הציע פתרון מקורי בתרגיל הבנייה הקבוצתי.'],
         weak: ['צריך לחדד דיוק בביצוע.', 'מתקשה כשהלחץ עולה.', 'נוטה לעבוד לבד.', 'פחות לוקח יוזמה בקבוצה.', 'פחות גמיש כשהתוכנית משתנה.'],
         units: [
-          { name: 'חטיבת גולני', badge: 'גו', desc: 'חטיבת חי״ר · צפון', prio: 0, quota: { 'קלע': 2, 'נגביסט': 1, 'חובש קרבי': 1 }, th: { shoot: 70 }, noMed: true, why: 'פתיחת פלוגה חדשה בגזרה הצפונית וחוסר בחובשים' },
-          { name: 'חטיבת הצנחנים', badge: 'צנ', desc: 'חטיבת חי״ר · מרכז', prio: 1, quota: { 'קלע': 1, 'צלף': 1, 'קשר מבצעי': 1, 'מאגיסט': 1 }, th: { push: 40, pull: 8 }, noMed: true, why: 'השלמת צוותי צלפים ומאגיסטים לפני תעסוקה' },
-          { name: 'חטיבת גבעתי', badge: 'גב', desc: 'חטיבת חי״ר · דרום', prio: 1, quota: { 'קלע': 2, 'חובש קרבי': 1, 'צלף': 1 }, th: { shoot: 70, push: 35 }, noMed: false, why: 'מחסור בקלעים ובחובש פלוגתי' },
-          { name: 'חטיבת כפיר', badge: 'כפ', desc: 'חטיבת חי״ר · מרכז', prio: 2, quota: { 'קלע': 1, 'נגביסט': 1, 'מאגיסט': 1, 'קשר מבצעי': 1 }, th: { run: 13.5 }, noMed: false, why: 'ריענון שורות אחרי שחרור מחזור' }
+          { name: 'חטיבת גולני', gibushBefore: false, badge: 'גו', desc: 'חטיבת חי״ר · צפון', prio: 0, quota: { 'קלע': 2, 'נגביסט': 1, 'חובש קרבי': 1 }, th: { shoot: 70 }, noMed: true, why: 'פתיחת פלוגה חדשה בגזרה הצפונית וחוסר בחובשים' },
+          { name: 'חטיבת הצנחנים', gibushBefore: true, badge: 'צנ', desc: 'חטיבת חי״ר · מרכז', prio: 1, quota: { 'קלע': 1, 'צלף': 1, 'קשר מבצעי': 1, 'מאגיסט': 1 }, th: { push: 40, pull: 8 }, noMed: true, why: 'השלמת צוותי צלפים ומאגיסטים לפני תעסוקה' },
+          { name: 'חטיבת גבעתי', gibushBefore: false, badge: 'גב', desc: 'חטיבת חי״ר · דרום', prio: 1, quota: { 'קלע': 2, 'חובש קרבי': 1, 'צלף': 1 }, th: { shoot: 70, push: 35 }, noMed: false, why: 'מחסור בקלעים ובחובש פלוגתי' },
+          { name: 'חטיבת כפיר', gibushBefore: false, badge: 'כפ', desc: 'חטיבת חי״ר · מרכז', prio: 2, quota: { 'קלע': 1, 'נגביסט': 1, 'מאגיסט': 1, 'קשר מבצעי': 1 }, th: { run: 13.5 }, noMed: false, why: 'ריענון שורות אחרי שחרור מחזור' }
         ]
       },
       intel: {
@@ -485,12 +485,17 @@ const corps = {
 Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
-const ALL_PAGES = ['room', 'board', 'eval', 'command', 'results', 'import'];
+// Selection model. Units with gibushBefore:false (Golani, Givati, Kfir) get soldiers by draft-office assignment (profile, physical data, preferences) and
+// hold NO gibush before the assignment; after arrival the soldier may go to a unit-level gibush (יח״טיות) tracked per soldier.
+// Units with gibushBefore:true (Tzanhanim) and units that do not set the flag still rely on the camp gibush recommendation.
+const UG = { statuses: ['לא הוזמן', 'הוזמן', 'בגיבוש', 'עבר', 'לא עבר'], subUnits: ['סיירת החטיבה', 'יח״טיה אחרת'] };
+const needsGibush = (u) => !u || u.gibushBefore !== false;
+const ALL_PAGES = ['room', 'board', 'eval', 'command', 'results', 'ugibush', 'import'];
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES.concat(['settings']), can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav', 'evalbulk', 'settings'], desc: 'שליטה מלאה בכל החילות: הגדרות דראפט (סבבים, סדר וכללים), עריכת מכסות של כל יחידה, ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES.concat(['settings']), can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav', 'evalbulk', 'settings', 'ugibush'], desc: 'שליטה מלאה בכל החילות: הגדרות דראפט (סבבים, סדר וכללים), עריכת מכסות של כל יחידה, ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
   'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance', 'fav'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש (צפייה בלבד, ללא עריכה), וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'command', pages: ['board', 'command', 'results'], can: [], desc: 'צפייה בלבד בלוח הדראפט ובתמונת המצב של כל החילות. אין גישה לתיקי מועמדים או לדפי מגבש.' },
-  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance', 'fav'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה את דפי המגבש בצפייה בלבד (ללא עריכה), ורק את מועמדי החיל שלה.' },
+  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance', 'fav', 'ugibush'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה את דפי המגבש בצפייה בלבד (ללא עריכה), ורק את מועמדי החיל שלה.' },
   'מגבש/ת': { layer: 5, scope: 'group', home: 'eval', pages: ['eval'], can: ['eval', 'regroup', 'evalbulk'], desc: 'אחראי/ת על צוות אחד: הזנת התרשמות על מועמדי הצוות שלו/ה והעברת מועמד לצוות אחר. אין גישה לחדר הבחירה ולתוצאות הדראפט.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'board', pages: ['board'], can: [], desc: 'צפייה בלוח הדראפט החי בלבד (שמות ובחירות), ללא תיקים, מדדים או הרשאות פעולה.' },
 };
@@ -500,7 +505,7 @@ const ORGS = [
   { key: 'combat', label: 'חיל רגלים' }, { key: 'intel', label: 'חיל המודיעין' }, { key: 'signals', label: 'חיל הקשר והתקשוב' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
-module.exports={ORGS,ROLES,canDo,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
+module.exports={ORGS,ROLES,canDo,UG,needsGibush,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
 
 return module.exports; })();
 </script>
@@ -668,6 +673,8 @@ function seedCands() {
   return out;
 }
 
+// unit-gibush tracking is only valid for soldiers who are still assigned (after an undo / reset / rewind)
+function pruneUg(cst) { const ids = new Set(cst.picks.map((p) => p.id)); Object.keys(cst.ug || {}).forEach((id) => { if (!ids.has(id)) delete cst.ug[id]; }); }
 function freshState() {
   const cands = seedCands();
   const st = { corps: {}, log: [], version: 1, schema: 5 };
@@ -675,7 +682,7 @@ function freshState() {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
       units: C.corps[k].units.map((u) => ({ name: u.name, th: Object.assign({}, u.th), noMed: u.noMed, quota: Object.assign({}, u.quota) })),
-      settings: Object.assign({ rounds: C.corps[k].rounds }, STG_DEFAULT),
+      settings: Object.assign({ rounds: C.corps[k].rounds }, STG_DEFAULT), ug: {},
     };
   });
   return st;
@@ -717,7 +724,7 @@ function fitOf(k, cand, u) {
     out.push({ l: s.l + (s.low ? ' עד ' : ' לפחות ') + t + (miss ? ' (חסר נתון)' : ''), s: s.l.split(' ')[0], ok: !miss && (s.low ? v <= t : v >= t) });
   });
   if (u.noMed) out.push({ l: 'ללא מגבלות רפואיות', s: 'רפואי', ok: cand.med === 'ללא מגבלות' });
-  out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: cand.rec !== 'לא מומלץ' });
+  if (C.needsGibush(u)) out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: cand.rec !== 'לא מומלץ' }); // units without a pre-assignment gibush do not require it
   return out;
 }
 function chooseFor(k, unitName) {
@@ -746,7 +753,7 @@ function doPick(k, unitName, candId, auto) {
   if (cs.picks.some((p) => p.id === candId)) throw new Error('המועמד כבר נבחר');
   if (!auto) { // hard rules (set by the admin) apply to manual picks; automatic picks stay soft so the demo never gets stuck
     const S = stg(k), u = unitCfg(k, unitName);
-    if (S.blockNotRecommended && c.rec === 'לא מומלץ') throw new Error('המועמד אינו מומלץ – הדראפט מוגדר ללא אפשרות לבחור מועמד כזה');
+    if (S.blockNotRecommended && C.needsGibush(u) && c.rec === 'לא מומלץ') throw new Error('המועמד אינו מומלץ – הדראפט מוגדר ללא אפשרות לבחור מועמד כזה');
     if (S.strictThresholds && fitOf(k, c, u).some((x) => !x.ok && x.s !== 'המלצה')) throw new Error('המועמד אינו עומד בתנאי הסף של היחידה – הדראפט מוגדר לדרוש עמידה בתנאי הסף');
     if (S.strictQuotas) { const q = u.quota[c.role] || 0, have = cs.picks.filter((p) => p.unit === unitName && (cs.cands.find((x) => x.id === p.id) || {}).role === c.role).length; if (have >= q) throw new Error('המכסה של היחידה לתפקיד ' + c.role + ' כבר מולאה (או שלא נתבקש) – הדראפט מוגדר לדרוש עמידה במכסות'); }
   }
@@ -785,7 +792,7 @@ setInterval(() => {
 window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(); if (f) { state = f; if (L.onChange) L.onChange(); } } });
 
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-L.config = () => ({ orgs: C.ORGS, roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+L.config = () => ({ orgs: C.ORGS, roles: C.ROLES, UG: C.UG, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
 L.snapshot = () => { const uid = L.me && L.me.id, o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-400).reverse() }; Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: uid && f[uid] ? { [uid]: f[uid] } : {} }); }); return JSON.parse(JSON.stringify(o)); };
 L.handle = function (p, userId, b) {
   const user = userById(userId); L.me = user;
@@ -881,15 +888,31 @@ L.handle = function (p, userId, b) {
     cst.favs = cst.favs || {}; const set = new Set(cst.favs[user.id] || []); if (b.on) set.add(b.id); else set.delete(b.id); cst.favs[user.id] = Array.from(set);
     save(); return { ok: true };
   }
-  if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
-  if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
+  if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); pruneUg(cst); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
+  if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; state.corps[k].ug = {}; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {
     needCorps(); if (!canDo(user, 'advance', k)) throw new Error('אין הרשאה');
     const cst = state.corps[k], order = orderOf(k);
     const target = b.steps ? Math.min(order.length, cst.picks.length + (b.steps | 0)) : Math.max(0, Math.min(4, b.rounds | 0)) * cfg(k).units.length;
     if (target < cst.picks.length) cst.picks = cst.picks.slice(0, target);
     while (cst.picks.length < target) { const slot = order[cst.picks.length]; const c = chooseFor(k, slot.u); if (!c) break; doPick(k, slot.u, c.id, true); }
-    cst.turnStartedAt = Date.now(); save(); return { ok: true };
+    pruneUg(cst); cst.turnStartedAt = Date.now(); save(); return { ok: true };
+  }
+  if (p === 'ugibush') {
+    needCorps(); if (!canDo(user, 'ugibush', k)) throw new Error('אין הרשאה לעדכן גיבוש יח״טיות');
+    const cst = state.corps[k]; cst.ug = cst.ug || {};
+    if (!C.UG.statuses.includes(b.status)) throw new Error('סטטוס לא מוכר');
+    const sub = C.UG.subUnits.includes(b.sub) ? b.sub : '', ids = Array.isArray(b.ids) ? b.ids.slice(0, 200) : [b.id]; let n = 0;
+    ids.forEach((id) => {
+      const pk = cst.picks.find((x) => x.id === id), c = cst.cands.find((x) => x.id === id); if (!pk || !c) throw new Error('החייל עדיין לא שובץ ליחידה');
+      if (C.ROLES[user.role].scope !== 'all' && pk.unit !== user.unit) throw new Error('אפשר לעדכן רק לוחמים של היחידה שלך');
+      if (C.needsGibush(unitCfg(k, pk.unit))) throw new Error('ליחידה זו הגיבוש נערך לפני השיבוץ – אין גיבוש יח״טיות');
+      const old = cst.ug[id] || { status: 'לא הוזמן', sub: '' }, keepSub = b.sub === undefined ? old.sub : sub;
+      if (old.status === b.status && old.sub === keepSub) return;
+      cst.ug[id] = { status: b.status, sub: b.status === 'לא הוזמן' ? '' : keepSub, ts: Date.now(), by: user.title };
+      state.log.push({ ts: Date.now(), corps: k, text: user.title + ' עדכנ/ה גיבוש יח״טיות: ' + c.name + ' (' + pk.unit + ') – ' + b.status + (cst.ug[id].sub ? ' · ' + cst.ug[id].sub : '') }); n++;
+    });
+    save(); return { ok: true, updated: n };
   }
   if (p === 'audit-event') { return { ok: true }; }
   if (p === 'factory-reset') { if (!canDo(user, 'factory', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לאפס את המערכת'); L.factoryReset(); return { ok: true }; }
@@ -964,6 +987,7 @@ function orderOf(k) {
   for (let r = 0; r < S.rounds; r++) { (S.order === 'snake' && r % 2 === 1 ? c.units.slice().reverse() : c.units).forEach((u) => o.push({ r: r + 1, u: u.name })); }
   return o;
 }
+const needsGibush = (u) => !u || u.gibushBefore !== false; // false = soldiers come by draft-office assignment; gibush (if any) happens after arrival
 function fitOf(k, c, u) {
   const out = [];
   cf(k).stats.forEach((s) => {
@@ -972,12 +996,12 @@ function fitOf(k, c, u) {
     out.push({ l: s.l + (s.low ? ' עד ' : ' לפחות ') + fmtVal(s, t) + (miss ? ' (חסר נתון)' : ''), s: s.l.split(' ')[0], ok: !miss && (s.low ? v <= t : v >= t) });
   });
   if (u.noMed) out.push({ l: 'ללא מגבלות רפואיות', s: 'רפואי', ok: c.med === 'ללא מגבלות' });
-  out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: !!c.rec && c.rec !== 'לא מומלץ' });
+  if (needsGibush(u)) out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: !!c.rec && c.rec !== 'לא מומלץ' });
   return out;
 }
 const fitBad = (k, c, u) => fitOf(k, c, u).filter((x) => !x.ok);
 const strengths = (k, c) => cf(k).traits.filter((t, i) => c.lv[i] === 2);
-const missingOf = (k, c) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec) m.push('המלצה'); if (c.lv.some((v) => v == null)) m.push('חוזקות'); return m; };
+const missingOf = (k, c, unit) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec && needsGibush(unit)) m.push('המלצה'); if (c.lv.some((v) => v == null)) m.push('חוזקות'); return m; };
 function draftInfo(k) {
   const order = orderOf(k), picks = cs(k).picks, finished = picks.length >= order.length;
   const takenBy = {}; picks.forEach((p) => { takenBy[p.id] = p; });
@@ -1009,6 +1033,7 @@ const PAGES = [
   { id: 'eval', name: 'דף מגבש', icon: 'clip' },
   { id: 'command', name: 'תמונת מצב', icon: 'chart' },
   { id: 'results', name: 'תוצאות ויומן', icon: 'file' },
+  { id: 'ugibush', name: 'גיבוש יח״טיות', icon: 'flag' },
   { id: 'import', name: 'הזנה וייבוא', icon: 'upload' },
   { id: 'settings', name: 'הגדרות דראפט', icon: 'gear' },
 ];
@@ -1021,6 +1046,7 @@ const ICONS = {
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M16 7l3 3M14 9l2 2"/>',
+  flag: '<path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/>',
   scale: '<path d="M12 3v18M5 7h14"/><path d="m5 7-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
@@ -1300,6 +1326,7 @@ function needsCard(k) {
    ${roles.map((r) => { const h = countRole(k, unit.name, r), q = unit.quota[r]; return `<div class="kpi" style="padding:8px 14px"><b style="font-size:20px">${h} / ${q}</b><span>${esc(r)}</span></div>`; }).join('')}</div>
    <div><b>תנאי סף של היחידה</b><div class="mut">${th.length ? esc(th.join(' · ')) : 'אין תנאי סף'}</div></div>
    <div class="mut small" style="margin-top:6px">נימוק הביקוש: ${esc(unit.why)}</div>
+   ${needsGibush(unit) ? '' : '<div class="demo-note" style="margin-top:8px"><b>ביחידה זו אין גיבוש לפני השיבוץ.</b> השיבוץ נעשה לפי נתוני הגיוס, תנאי הסף והעדפות. המלצת מגבש מוצגת כמידע בלבד ואינה תנאי. גיבוש יח״טיות מתקיים אחרי ההגעה ליחידה – מעקב במסך "גיבוש יח״טיות".</div>'}
    <div class="row spread" style="margin-top:10px"><span class="mut small">המערכת בודקת עמידה בתנאי סף ומסמנת פערים. היא לא מדרגת אנשים ולא מחשבת ציון מסכם.</span>
    ${isHumanMine(k) ? '<button class="btn sec sm" data-act="editTh">עריכת מכסות ותנאי סף</button>' : ''}</div></div>`;
 }
@@ -1350,7 +1377,7 @@ SCREENS.room = (k) => {
     <label><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
     <label><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
-   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
+   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש${needsGibush(unit) ? '' : ' <span class="mut small">(מידע בלבד)</span>'}</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
    ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="white-space:nowrap;display:block">${x.id}</bdi></span>${avatar(x, 44)}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${metricChips(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
      <td><span class="row" style="gap:6px;flex-wrap:nowrap">${cmpBtn(x.id)}${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
@@ -1383,7 +1410,7 @@ function drawer(k, id) {
   const c = candOf(k, id); if (!c) return '';
   const d = draftInfo(k), tk = d.takenBy[id], unit = unitOf(k, myUnitName(k));
   const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit && !tk;
-  const miss = missingOf(k, c);
+  const miss = missingOf(k, c, unitOf(k, myUnitName(k)));
   return `<div class="drawer-bg" data-act="closeCand"><aside class="drawer" role="dialog" aria-label="תיק מועמד">
    <div class="row spread" style="flex-wrap:nowrap;align-items:flex-start">${can('fav', k) ? favBtn(k, id, 'lg') : ''}<div class="row" style="flex:1;flex-wrap:nowrap;gap:14px;align-items:center">${avatar(c, 72)}<div style="flex:1"><div class="small" style="color:var(--orange);font-weight:600">תיק מועמד · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small">${c.id} · ${esc(c.role)} · אזור ${esc(c.area)} · צוות ${c.group}</div></div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
    ${navBar(id)}
@@ -1866,6 +1893,7 @@ SCREENS.command = (k) => {
   if (tab === 'units') body = `<div class="card"><h2>מכסות לפי יחידה ותפקיד</h2><div class="mut small" style="margin-bottom:8px">שובצו / נדרשו · ירוק: הושלם · כתום: חלקי · אפור: טרם שובץ</div>${matrix}</div>
     <div class="grid g2"><div class="card"><h2>התקדמות לפי חיל</h2>${corpsProg}<div class="mut small">לכל חיל דראפט נפרד: יחידות לוחמה לא מתחרות על אותם מועמדים עם מודיעין או קשר.</div></div>
     <div class="card"><h2>בחירות אחרונות</h2>${d.picks.slice(-7).reverse().map((p) => `<div class="row" style="padding:4px 0"><b>#${p.n}</b><span>${esc(p.unit)} · ${candLink(k, p.id, candOf(k, p.id).name)} ${esc(candOf(k, p.id).role)}</span></div>`).join('') || '<span class="mut">אין בחירות</span>'}</div></div>`;
+  if (tab === 'units') body += ugSummaryCard(k);
   if (tab === 'dist') body = distView(k);
   if (tab === 'cmp') body = cmpView(k);
   if (tab === 'pres') {
@@ -2043,9 +2071,9 @@ Object.assign(ACTIONS, {
 const fmtTs = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 function assignRows(k) {
   const c = cf(k), d = draftInfo(k);
-  return d.picks.map((p) => { const x = candOf(k, p.id); return [p.n, orderOf(k)[p.n - 1] ? orderOf(k)[p.n - 1].r : '', p.unit, x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))).concat([p.auto ? 'אוטומטי' : 'ידני']); });
+  return d.picks.map((p) => { const x = candOf(k, p.id); return [p.n, orderOf(k)[p.n - 1] ? orderOf(k)[p.n - 1].r : '', p.unit, x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))).concat([p.auto ? 'אוטומטי' : 'ידני', ugText(k, p)]); });
 }
-const assignHead = (k) => ['#', 'סבב', 'יחידה', 'מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')')).concat(['אופן בחירה']);
+const assignHead = (k) => ['#', 'סבב', 'יחידה', 'מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')')).concat(['אופן בחירה', 'גיבוש יח״טיות']);
 function unitRows(k) {
   const c = cf(k); return [['יחידה', 'תפקיד', 'נדרשו', 'שובצו', 'פער']].concat(c.units.flatMap((u) => Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => { const h = countRole(k, u.name, r); return [u.name, r, u.quota[r], h, Math.max(0, u.quota[r] - h)]; })));
 }
@@ -2089,7 +2117,7 @@ SCREENS.settings = (k) => {
     <label>סדר בחירה<select data-chg="stgSet" data-f="order" ${lock}><option value="snake" ${ui.order === 'snake' ? 'selected' : ''}>מתחלף (נחש) – הסדר מתהפך בכל סבב</option><option value="linear" ${ui.order === 'linear' ? 'selected' : ''}>רגיל – אותו סדר בכל סבב</option></select></label></div>
     <div class="mut small">סך הכול ${ui.rounds * c.units.length} בחירות (${ui.rounds} סבבים × ${c.units.length} יחידות)</div></div>
    <div class="card"><h2>כללי שיבוץ</h2><div class="mut small" style="margin-bottom:8px">חל על בחירות ידניות של שלישות בלבד. בחירה אוטומטית של יחידות הבוט ממשיכה לפעול לפי שיקול רך.</div>
-    <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית')}</div>
+    <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית. חל רק על יחידות שדורשות גיבוש לפני השיבוץ (כיום: הצנחנים)')}</div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="stgSave">שמירת הגדרות</button></div></div>
    <div class="card"><h2>יחידות ומכסות</h2><div class="mut small" style="margin-bottom:8px">עריכת מכסות ותנאי סף של כל יחידה בשם השלישות.</div>
     <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.auth ? secCards() : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.tempPw ? tempPwModal() : ''}`;
@@ -2164,6 +2192,52 @@ Object.assign(ACTIONS, {
   },
   admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!confirm('להנפיק סיסמה זמנית חדשה ל' + u.title + '? הסיסמה הקיימת (אם יש) תבוטל והמשתמש/ת ינותק/תנותק.')) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
   tempClose: () => { A.ui.tempPw = null; rerender(); },
+});
+
+// ================= unit-level gibush (יח״טיות) after arrival =================
+// Units with gibushBefore:false have no gibush before the assignment. After the soldier arrives, the unit tracks who is invited, who is in gibush and who passed.
+const ugOf = (k, id) => (cs(k).ug && cs(k).ug[id]) || { status: 'לא הוזמן', sub: '' };
+const ugUnits = (k) => cf(k).units.filter((u) => !needsGibush(u));
+const ugText = (k, p) => (needsGibush(unitOf(k, p.unit)) ? 'נערך לפני השיבוץ' : ugOf(k, p.id).status + (ugOf(k, p.id).sub ? ' · ' + ugOf(k, p.id).sub : ''));
+const UG_CLS = { 'לא הוזמן': 'p-gray', 'הוזמן': 'p-blue', 'בגיבוש': 'p-orange', 'עבר': 'p-green', 'לא עבר': 'p-red' };
+const ugCounts = (k, unitName) => { const c = {}; A.cfg.UG.statuses.forEach((x) => { c[x] = 0; }); cs(k).picks.filter((p) => p.unit === unitName).forEach((p) => { c[ugOf(k, p.id).status]++; }); return c; };
+function ugSummaryCard(k) {
+  const us = ugUnits(k); if (!us.length) return '';
+  const st = A.cfg.UG.statuses;
+  return `<div class="card"><h2>גיבוש יח״טיות – אחרי ההגעה ליחידה</h2><div class="mut small" style="margin-bottom:8px">ביחידות האלה אין גיבוש לפני השיבוץ. הלוחמים שובצו לפי נתוני גיוס והעדפות, וגיבוש היח״טיות נערך אחרי ההגעה.</div>
+   <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>שובצו</th>${st.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${us.map((u) => { const c = ugCounts(k, u.name), n = cs(k).picks.filter((p) => p.unit === u.name).length; return `<tr><td><b>${esc(u.name)}</b></td><td>${n}</td>${st.map((x) => `<td>${c[x] ? `<span class="pill ${UG_CLS[x]}">${c[x]}</span>` : '<span class="mut">·</span>'}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
+}
+SCREENS.ugibush = (k) => {
+  const c = cf(k), us = ugUnits(k), st = A.cfg.UG.statuses, subs = A.cfg.UG.subUnits, mine = A.me.role === 'שלישות';
+  const head = `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">גיבוש יח״טיות – ${esc(c.label)}</h1><div class="mut small">מעקב אחרי לוחמים שהגיעו ליחידה: הוזמנו, בגיבוש, עברו</div></div>`;
+  if (!us.length) return head + '<div class="card"><h2>אין גיבוש יח״טיות בחיל זה</h2><p class="mut">ביחידות של החיל הזה הגיבוש נערך לפני השיבוץ, ולכן אין שלב גיבוש אחרי ההגעה.</p></div>';
+  if (mine && needsGibush(unitOf(k, A.me.unit))) return head + `<div class="card"><h2>ביחידה שלכם הגיבוש נערך לפני השיבוץ</h2><p class="mut">${esc(A.me.unit)} משבצת לפי המלצת המגבש מהגיבוש לפני השיבוץ, ולכן אין שלב גיבוש יח״טיות אחרי ההגעה. המסך הזה רלוונטי ליחידות ללא גיבוש מקדים: ${esc(us.map((u) => u.name).join(', '))}.</p></div>`;
+  const sel = mine ? A.me.unit : (us.find((u) => u.name === A.ui.ugUnit) || us[0]).name;
+  const rows = cs(k).picks.filter((p) => p.unit === sel), canEdit = can('ugibush', k) && (!mine || A.me.unit === sel), counts = ugCounts(k, sel);
+  const todo = rows.filter((p) => ugOf(k, p.id).status === 'לא הוזמן').length;
+  return head + `<div class="row spread">${mine ? `<span class="chip navy">${esc(sel)}</span>` : `<div class="tabs">${us.map((u) => `<button class="${u.name === sel ? 'on' : ''}" data-act="ugUnit" data-u="${esc(u.name)}">${esc(u.name)}</button>`).join('')}</div>`}
+    ${canEdit && todo ? `<button class="btn sec" data-act="ugBulk">סימון ${todo} שטרם הוזמנו כמוזמנים</button>` : ''}</div>
+   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="kpi"><b>${rows.length}</b><span>לוחמים ביחידה</span></div>${st.map((x) => `<div class="kpi"><b>${counts[x]}</b><span>${esc(x)}</span></div>`).join('')}</div>
+   <div class="card"><div class="mut small" style="margin-bottom:8px">ב${esc(sel)} לא נערך גיבוש לפני השיבוץ. כל סטטוס נשמר ביומן הפעילות.${canEdit ? '' : ' צפייה בלבד.'}</div>
+   <div style="overflow:auto"><table><thead><tr><th>לוחם/ת</th><th>תפקיד</th><th>סבב</th><th>סטטוס</th><th>תת-יחידה</th><th>עודכן</th></tr></thead><tbody>${rows.map((p) => { const x = candOf(k, p.id), g = ugOf(k, p.id);
+     return `<tr><td>${avatar(x, 32)} <b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small">${esc(x.id)}</bdi></td><td>${esc(x.role)}</td><td>${p.round || ''}</td>
+      <td>${canEdit ? `<select data-chg="ugSet" data-f="status" data-id="${esc(x.id)}" aria-label="סטטוס">${st.map((o) => `<option ${o === g.status ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : `<span class="pill ${UG_CLS[g.status]}">${esc(g.status)}</span>`}</td>
+      <td>${canEdit ? `<select data-chg="ugSet" data-f="sub" data-id="${esc(x.id)}" aria-label="תת-יחידה" ${g.status === 'לא הוזמן' ? 'disabled' : ''}><option value="">—</option>${subs.map((o) => `<option ${o === g.sub ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : esc(g.sub || '—')}</td>
+      <td class="mut small">${g.ts ? esc(g.by || '') + ' · ' + fmtTs(g.ts) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">עדיין לא שובצו לוחמים ליחידה הזו</td></tr>'}</tbody></table></div></div>`;
+};
+Object.assign(ACTIONS, {
+  ugUnit: (d) => { A.ui.ugUnit = d.u; rerender(); },
+  ugSet: async (d, t) => {
+    const k = corpsKey(), g = ugOf(k, d.id), body = { corps: k, id: d.id, status: g.status, sub: g.sub };
+    if (d.f === 'status') body.status = t.value; else body.sub = t.value;
+    try { await api('ugibush', body); } catch (x) { /* toast shown */ } rerender();
+  },
+  ugBulk: async () => {
+    const k = corpsKey(), sel = A.me.role === 'שלישות' ? A.me.unit : (ugUnits(k).find((u) => u.name === A.ui.ugUnit) || ugUnits(k)[0]).name;
+    const ids = cs(k).picks.filter((p) => p.unit === sel && ugOf(k, p.id).status === 'לא הוזמן').map((p) => p.id); if (!ids.length) return;
+    if (!confirm('לסמן ' + ids.length + ' לוחמים ב' + sel + ' כמוזמנים לגיבוש יח״טיות?')) return;
+    try { await api('ugibush', { corps: k, ids, status: 'הוזמן' }); toast(ids.length + ' לוחמים סומנו כמוזמנים'); } catch (x) { /* toast shown */ }
+  },
 });
 </script>
 <script>// Standalone glue: route api()/refresh()/SSE to the in-browser LocalServer

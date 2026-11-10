@@ -332,6 +332,7 @@ SCREENS.command = (k) => {
   if (tab === 'units') body = `<div class="card"><h2>מכסות לפי יחידה ותפקיד</h2><div class="mut small" style="margin-bottom:8px">שובצו / נדרשו · ירוק: הושלם · כתום: חלקי · אפור: טרם שובץ</div>${matrix}</div>
     <div class="grid g2"><div class="card"><h2>התקדמות לפי חיל</h2>${corpsProg}<div class="mut small">לכל חיל דראפט נפרד: יחידות לוחמה לא מתחרות על אותם מועמדים עם מודיעין או קשר.</div></div>
     <div class="card"><h2>בחירות אחרונות</h2>${d.picks.slice(-7).reverse().map((p) => `<div class="row" style="padding:4px 0"><b>#${p.n}</b><span>${esc(p.unit)} · ${candLink(k, p.id, candOf(k, p.id).name)} ${esc(candOf(k, p.id).role)}</span></div>`).join('') || '<span class="mut">אין בחירות</span>'}</div></div>`;
+  if (tab === 'units') body += ugSummaryCard(k);
   if (tab === 'dist') body = distView(k);
   if (tab === 'cmp') body = cmpView(k);
   if (tab === 'pres') {
@@ -509,9 +510,9 @@ Object.assign(ACTIONS, {
 const fmtTs = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 function assignRows(k) {
   const c = cf(k), d = draftInfo(k);
-  return d.picks.map((p) => { const x = candOf(k, p.id); return [p.n, orderOf(k)[p.n - 1] ? orderOf(k)[p.n - 1].r : '', p.unit, x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))).concat([p.auto ? 'אוטומטי' : 'ידני']); });
+  return d.picks.map((p) => { const x = candOf(k, p.id); return [p.n, orderOf(k)[p.n - 1] ? orderOf(k)[p.n - 1].r : '', p.unit, x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))).concat([p.auto ? 'אוטומטי' : 'ידני', ugText(k, p)]); });
 }
-const assignHead = (k) => ['#', 'סבב', 'יחידה', 'מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')')).concat(['אופן בחירה']);
+const assignHead = (k) => ['#', 'סבב', 'יחידה', 'מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')')).concat(['אופן בחירה', 'גיבוש יח״טיות']);
 function unitRows(k) {
   const c = cf(k); return [['יחידה', 'תפקיד', 'נדרשו', 'שובצו', 'פער']].concat(c.units.flatMap((u) => Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => { const h = countRole(k, u.name, r); return [u.name, r, u.quota[r], h, Math.max(0, u.quota[r] - h)]; })));
 }
@@ -555,7 +556,7 @@ SCREENS.settings = (k) => {
     <label>סדר בחירה<select data-chg="stgSet" data-f="order" ${lock}><option value="snake" ${ui.order === 'snake' ? 'selected' : ''}>מתחלף (נחש) – הסדר מתהפך בכל סבב</option><option value="linear" ${ui.order === 'linear' ? 'selected' : ''}>רגיל – אותו סדר בכל סבב</option></select></label></div>
     <div class="mut small">סך הכול ${ui.rounds * c.units.length} בחירות (${ui.rounds} סבבים × ${c.units.length} יחידות)</div></div>
    <div class="card"><h2>כללי שיבוץ</h2><div class="mut small" style="margin-bottom:8px">חל על בחירות ידניות של שלישות בלבד. בחירה אוטומטית של יחידות הבוט ממשיכה לפעול לפי שיקול רך.</div>
-    <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית')}</div>
+    <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית. חל רק על יחידות שדורשות גיבוש לפני השיבוץ (כיום: הצנחנים)')}</div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="stgSave">שמירת הגדרות</button></div></div>
    <div class="card"><h2>יחידות ומכסות</h2><div class="mut small" style="margin-bottom:8px">עריכת מכסות ותנאי סף של כל יחידה בשם השלישות.</div>
     <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.auth ? secCards() : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.tempPw ? tempPwModal() : ''}`;
@@ -630,4 +631,50 @@ Object.assign(ACTIONS, {
   },
   admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!confirm('להנפיק סיסמה זמנית חדשה ל' + u.title + '? הסיסמה הקיימת (אם יש) תבוטל והמשתמש/ת ינותק/תנותק.')) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
   tempClose: () => { A.ui.tempPw = null; rerender(); },
+});
+
+// ================= unit-level gibush (יח״טיות) after arrival =================
+// Units with gibushBefore:false have no gibush before the assignment. After the soldier arrives, the unit tracks who is invited, who is in gibush and who passed.
+const ugOf = (k, id) => (cs(k).ug && cs(k).ug[id]) || { status: 'לא הוזמן', sub: '' };
+const ugUnits = (k) => cf(k).units.filter((u) => !needsGibush(u));
+const ugText = (k, p) => (needsGibush(unitOf(k, p.unit)) ? 'נערך לפני השיבוץ' : ugOf(k, p.id).status + (ugOf(k, p.id).sub ? ' · ' + ugOf(k, p.id).sub : ''));
+const UG_CLS = { 'לא הוזמן': 'p-gray', 'הוזמן': 'p-blue', 'בגיבוש': 'p-orange', 'עבר': 'p-green', 'לא עבר': 'p-red' };
+const ugCounts = (k, unitName) => { const c = {}; A.cfg.UG.statuses.forEach((x) => { c[x] = 0; }); cs(k).picks.filter((p) => p.unit === unitName).forEach((p) => { c[ugOf(k, p.id).status]++; }); return c; };
+function ugSummaryCard(k) {
+  const us = ugUnits(k); if (!us.length) return '';
+  const st = A.cfg.UG.statuses;
+  return `<div class="card"><h2>גיבוש יח״טיות – אחרי ההגעה ליחידה</h2><div class="mut small" style="margin-bottom:8px">ביחידות האלה אין גיבוש לפני השיבוץ. הלוחמים שובצו לפי נתוני גיוס והעדפות, וגיבוש היח״טיות נערך אחרי ההגעה.</div>
+   <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>שובצו</th>${st.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${us.map((u) => { const c = ugCounts(k, u.name), n = cs(k).picks.filter((p) => p.unit === u.name).length; return `<tr><td><b>${esc(u.name)}</b></td><td>${n}</td>${st.map((x) => `<td>${c[x] ? `<span class="pill ${UG_CLS[x]}">${c[x]}</span>` : '<span class="mut">·</span>'}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
+}
+SCREENS.ugibush = (k) => {
+  const c = cf(k), us = ugUnits(k), st = A.cfg.UG.statuses, subs = A.cfg.UG.subUnits, mine = A.me.role === 'שלישות';
+  const head = `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">גיבוש יח״טיות – ${esc(c.label)}</h1><div class="mut small">מעקב אחרי לוחמים שהגיעו ליחידה: הוזמנו, בגיבוש, עברו</div></div>`;
+  if (!us.length) return head + '<div class="card"><h2>אין גיבוש יח״טיות בחיל זה</h2><p class="mut">ביחידות של החיל הזה הגיבוש נערך לפני השיבוץ, ולכן אין שלב גיבוש אחרי ההגעה.</p></div>';
+  if (mine && needsGibush(unitOf(k, A.me.unit))) return head + `<div class="card"><h2>ביחידה שלכם הגיבוש נערך לפני השיבוץ</h2><p class="mut">${esc(A.me.unit)} משבצת לפי המלצת המגבש מהגיבוש לפני השיבוץ, ולכן אין שלב גיבוש יח״טיות אחרי ההגעה. המסך הזה רלוונטי ליחידות ללא גיבוש מקדים: ${esc(us.map((u) => u.name).join(', '))}.</p></div>`;
+  const sel = mine ? A.me.unit : (us.find((u) => u.name === A.ui.ugUnit) || us[0]).name;
+  const rows = cs(k).picks.filter((p) => p.unit === sel), canEdit = can('ugibush', k) && (!mine || A.me.unit === sel), counts = ugCounts(k, sel);
+  const todo = rows.filter((p) => ugOf(k, p.id).status === 'לא הוזמן').length;
+  return head + `<div class="row spread">${mine ? `<span class="chip navy">${esc(sel)}</span>` : `<div class="tabs">${us.map((u) => `<button class="${u.name === sel ? 'on' : ''}" data-act="ugUnit" data-u="${esc(u.name)}">${esc(u.name)}</button>`).join('')}</div>`}
+    ${canEdit && todo ? `<button class="btn sec" data-act="ugBulk">סימון ${todo} שטרם הוזמנו כמוזמנים</button>` : ''}</div>
+   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="kpi"><b>${rows.length}</b><span>לוחמים ביחידה</span></div>${st.map((x) => `<div class="kpi"><b>${counts[x]}</b><span>${esc(x)}</span></div>`).join('')}</div>
+   <div class="card"><div class="mut small" style="margin-bottom:8px">ב${esc(sel)} לא נערך גיבוש לפני השיבוץ. כל סטטוס נשמר ביומן הפעילות.${canEdit ? '' : ' צפייה בלבד.'}</div>
+   <div style="overflow:auto"><table><thead><tr><th>לוחם/ת</th><th>תפקיד</th><th>סבב</th><th>סטטוס</th><th>תת-יחידה</th><th>עודכן</th></tr></thead><tbody>${rows.map((p) => { const x = candOf(k, p.id), g = ugOf(k, p.id);
+     return `<tr><td>${avatar(x, 32)} <b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small">${esc(x.id)}</bdi></td><td>${esc(x.role)}</td><td>${p.round || ''}</td>
+      <td>${canEdit ? `<select data-chg="ugSet" data-f="status" data-id="${esc(x.id)}" aria-label="סטטוס">${st.map((o) => `<option ${o === g.status ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : `<span class="pill ${UG_CLS[g.status]}">${esc(g.status)}</span>`}</td>
+      <td>${canEdit ? `<select data-chg="ugSet" data-f="sub" data-id="${esc(x.id)}" aria-label="תת-יחידה" ${g.status === 'לא הוזמן' ? 'disabled' : ''}><option value="">—</option>${subs.map((o) => `<option ${o === g.sub ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : esc(g.sub || '—')}</td>
+      <td class="mut small">${g.ts ? esc(g.by || '') + ' · ' + fmtTs(g.ts) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">עדיין לא שובצו לוחמים ליחידה הזו</td></tr>'}</tbody></table></div></div>`;
+};
+Object.assign(ACTIONS, {
+  ugUnit: (d) => { A.ui.ugUnit = d.u; rerender(); },
+  ugSet: async (d, t) => {
+    const k = corpsKey(), g = ugOf(k, d.id), body = { corps: k, id: d.id, status: g.status, sub: g.sub };
+    if (d.f === 'status') body.status = t.value; else body.sub = t.value;
+    try { await api('ugibush', body); } catch (x) { /* toast shown */ } rerender();
+  },
+  ugBulk: async () => {
+    const k = corpsKey(), sel = A.me.role === 'שלישות' ? A.me.unit : (ugUnits(k).find((u) => u.name === A.ui.ugUnit) || ugUnits(k)[0]).name;
+    const ids = cs(k).picks.filter((p) => p.unit === sel && ugOf(k, p.id).status === 'לא הוזמן').map((p) => p.id); if (!ids.length) return;
+    if (!confirm('לסמן ' + ids.length + ' לוחמים ב' + sel + ' כמוזמנים לגיבוש יח״טיות?')) return;
+    try { await api('ugibush', { corps: k, ids, status: 'הוזמן' }); toast(ids.length + ' לוחמים סומנו כמוזמנים'); } catch (x) { /* toast shown */ }
+  },
 });

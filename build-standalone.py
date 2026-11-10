@@ -43,7 +43,7 @@ setInterval(() => {
 window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(); if (f) { state = f; if (L.onChange) L.onChange(); } } });
 
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-L.config = () => ({ orgs: C.ORGS, roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+L.config = () => ({ orgs: C.ORGS, roles: C.ROLES, UG: C.UG, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
 L.snapshot = () => { const uid = L.me && L.me.id, o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-400).reverse() }; Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: uid && f[uid] ? { [uid]: f[uid] } : {} }); }); return JSON.parse(JSON.stringify(o)); };
 L.handle = function (p, userId, b) {
   const user = userById(userId); L.me = user;
@@ -139,15 +139,31 @@ L.handle = function (p, userId, b) {
     cst.favs = cst.favs || {}; const set = new Set(cst.favs[user.id] || []); if (b.on) set.add(b.id); else set.delete(b.id); cst.favs[user.id] = Array.from(set);
     save(); return { ok: true };
   }
-  if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
-  if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; playUntilMine(k); save(); return { ok: true }; }
+  if (p === 'undo') { needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה'); const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול'); const last = cst.picks.pop(); pruneUg(cst); cst.turnStartedAt = Date.now(); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ביטל/ה את הבחירה של ' + last.unit }); save(); return { ok: true }; }
+  if (p === 'reset') { needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה'); state.corps[k].picks = []; state.corps[k].ug = {}; playUntilMine(k); save(); return { ok: true }; }
   if (p === 'advance') {
     needCorps(); if (!canDo(user, 'advance', k)) throw new Error('אין הרשאה');
     const cst = state.corps[k], order = orderOf(k);
     const target = b.steps ? Math.min(order.length, cst.picks.length + (b.steps | 0)) : Math.max(0, Math.min(4, b.rounds | 0)) * cfg(k).units.length;
     if (target < cst.picks.length) cst.picks = cst.picks.slice(0, target);
     while (cst.picks.length < target) { const slot = order[cst.picks.length]; const c = chooseFor(k, slot.u); if (!c) break; doPick(k, slot.u, c.id, true); }
-    cst.turnStartedAt = Date.now(); save(); return { ok: true };
+    pruneUg(cst); cst.turnStartedAt = Date.now(); save(); return { ok: true };
+  }
+  if (p === 'ugibush') {
+    needCorps(); if (!canDo(user, 'ugibush', k)) throw new Error('אין הרשאה לעדכן גיבוש יח״טיות');
+    const cst = state.corps[k]; cst.ug = cst.ug || {};
+    if (!C.UG.statuses.includes(b.status)) throw new Error('סטטוס לא מוכר');
+    const sub = C.UG.subUnits.includes(b.sub) ? b.sub : '', ids = Array.isArray(b.ids) ? b.ids.slice(0, 200) : [b.id]; let n = 0;
+    ids.forEach((id) => {
+      const pk = cst.picks.find((x) => x.id === id), c = cst.cands.find((x) => x.id === id); if (!pk || !c) throw new Error('החייל עדיין לא שובץ ליחידה');
+      if (C.ROLES[user.role].scope !== 'all' && pk.unit !== user.unit) throw new Error('אפשר לעדכן רק לוחמים של היחידה שלך');
+      if (C.needsGibush(unitCfg(k, pk.unit))) throw new Error('ליחידה זו הגיבוש נערך לפני השיבוץ – אין גיבוש יח״טיות');
+      const old = cst.ug[id] || { status: 'לא הוזמן', sub: '' }, keepSub = b.sub === undefined ? old.sub : sub;
+      if (old.status === b.status && old.sub === keepSub) return;
+      cst.ug[id] = { status: b.status, sub: b.status === 'לא הוזמן' ? '' : keepSub, ts: Date.now(), by: user.title };
+      state.log.push({ ts: Date.now(), corps: k, text: user.title + ' עדכנ/ה גיבוש יח״טיות: ' + c.name + ' (' + pk.unit + ') – ' + b.status + (cst.ug[id].sub ? ' · ' + cst.ug[id].sub : '') }); n++;
+    });
+    save(); return { ok: true, updated: n };
   }
   if (p === 'audit-event') { return { ok: true }; }
   if (p === 'factory-reset') { if (!canDo(user, 'factory', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לאפס את המערכת'); L.factoryReset(); return { ok: true }; }

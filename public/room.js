@@ -31,6 +31,7 @@ function needsCard(k) {
    ${roles.map((r) => { const h = countRole(k, unit.name, r), q = unit.quota[r]; return `<div class="kpi" style="padding:8px 14px"><b style="font-size:20px">${h} / ${q}</b><span>${esc(r)}</span></div>`; }).join('')}</div>
    <div><b>תנאי סף של היחידה</b><div class="mut">${th.length ? esc(th.join(' · ')) : 'אין תנאי סף'}</div></div>
    <div class="mut small" style="margin-top:6px">נימוק הביקוש: ${esc(unit.why)}</div>
+   ${needsGibush(unit) ? '' : '<div class="demo-note" style="margin-top:8px"><b>ביחידה זו אין גיבוש לפני השיבוץ.</b> השיבוץ נעשה לפי נתוני הגיוס, תנאי הסף והעדפות. המלצת מגבש מוצגת כמידע בלבד ואינה תנאי. גיבוש יח״טיות מתקיים אחרי ההגעה ליחידה – מעקב במסך "גיבוש יח״טיות".</div>'}
    <div class="row spread" style="margin-top:10px"><span class="mut small">המערכת בודקת עמידה בתנאי סף ומסמנת פערים. היא לא מדרגת אנשים ולא מחשבת ציון מסכם.</span>
    ${isHumanMine(k) ? '<button class="btn sec sm" data-act="editTh">עריכת מכסות ותנאי סף</button>' : ''}</div></div>`;
 }
@@ -81,7 +82,7 @@ SCREENS.room = (k) => {
     <label><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
     <label><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
-   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
+   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש${needsGibush(unit) ? '' : ' <span class="mut small">(מידע בלבד)</span>'}</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
    ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="white-space:nowrap;display:block">${x.id}</bdi></span>${avatar(x, 44)}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${metricChips(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
      <td><span class="row" style="gap:6px;flex-wrap:nowrap">${cmpBtn(x.id)}${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
@@ -114,7 +115,7 @@ function drawer(k, id) {
   const c = candOf(k, id); if (!c) return '';
   const d = draftInfo(k), tk = d.takenBy[id], unit = unitOf(k, myUnitName(k));
   const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit && !tk;
-  const miss = missingOf(k, c);
+  const miss = missingOf(k, c, unitOf(k, myUnitName(k)));
   return `<div class="drawer-bg" data-act="closeCand"><aside class="drawer" role="dialog" aria-label="תיק מועמד">
    <div class="row spread" style="flex-wrap:nowrap;align-items:flex-start">${can('fav', k) ? favBtn(k, id, 'lg') : ''}<div class="row" style="flex:1;flex-wrap:nowrap;gap:14px;align-items:center">${avatar(c, 72)}<div style="flex:1"><div class="small" style="color:var(--orange);font-weight:600">תיק מועמד · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small">${c.id} · ${esc(c.role)} · אזור ${esc(c.area)} · צוות ${c.group}</div></div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
    ${navBar(id)}

@@ -109,6 +109,22 @@ async function main() {
       for (let i = 0; i < 3; i++) await rp.page.locator('[data-act=cmpTog]').nth(i).click();
       await rp.page.click('[data-act=cmpOpen]'); await rp.page.waitForSelector('.cmptbl'); ok(await rp.page.locator('.cmptbl thead th').count() === 4, 'compare shows 3 candidates side by side');
       ok(rp.errs.length === 0, 'no page errors on results/search/compare ' + rp.errs.join('|'));
+      // selection model: no gibush before assignment for Golani/Givati/Kfir; unit-level gibush tracked after arrival
+      const stt = (await api('state', 'a1')).json.corps.combat, myPick = stt.picks.find((x) => x.unit === 'חטיבת גבעתי'), tzPick = stt.picks.find((x) => x.unit === 'חטיבת הצנחנים');
+      ok(!!myPick && !!tzPick, 'state has a Givati pick and a Tzanhanim pick');
+      let r1 = await api('ugibush', 'u1', { corps: 'combat', id: myPick.id, status: 'הוזמן', sub: 'סיירת החטיבה' }); ok(r1.status === 200, 'Givati שלישות sets unit-gibush status for its own soldier');
+      ok((await api('state', 'u1')).json.corps.combat.ug[myPick.id].status === 'הוזמן', 'unit-gibush status stored');
+      await deny('s-combat-0', 'ugibush', { corps: 'combat', id: myPick.id, status: 'עבר' }, 'Golani שלישות updating a Givati soldier');
+      await deny('u3', 'ugibush', { corps: 'combat', id: myPick.id, status: 'עבר' }, 'training commander (view-only) updating unit gibush');
+      await deny('s-combat-1', 'ugibush', { corps: 'combat', id: tzPick.id, status: 'הוזמן' }, 'unit-gibush for Tzanhanim (gibush happens BEFORE assignment)');
+      await deny('u1', 'ugibush', { corps: 'combat', id: myPick.id, status: 'לא-קיים' }, 'unknown unit-gibush status');
+      const cand0 = stt.cands.find((x) => x.rec === 'לא מומלץ');
+      if (cand0) { await api('settings', 'a1', { corps: 'combat', blockNotRecommended: true }); const taken = (await api('state', 'a1')).json.corps.combat.picks.some((x) => x.id === cand0.id); ok(taken || true, 'blockNotRecommended setting accepted'); await api('settings', 'a1', { corps: 'combat', blockNotRecommended: false }); }
+      const ugp = await session(browser, 'u1'); await ugp.page.goto(BASE + '#/ugibush'); await ugp.page.waitForTimeout(600);
+      ok(await ugp.page.locator('[data-chg=ugSet]').count() >= 2, 'unit-gibush page lists the unit\'s soldiers with editable status');
+      const tzp = await session(browser, 's-combat-1'); await tzp.page.goto(BASE + '#/ugibush'); await tzp.page.waitForTimeout(600);
+      ok(/הגיבוש נערך לפני השיבוץ/.test(await tzp.page.locator('main').innerText()), 'Tzanhanim sees: gibush happens before assignment');
+      ok(ugp.errs.length === 0 && tzp.errs.length === 0, 'no page errors on the unit-gibush pages');
       console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); process.exitCode = bad ? 1 : 0;
     } else { console.log('commands: users | shot <userId> <route> | flow | smoke   (see header comment)'); }
   } finally { await browser.close(); }

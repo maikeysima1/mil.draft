@@ -186,6 +186,8 @@ function seedCands() {
   return out;
 }
 
+// unit-gibush tracking is only valid for soldiers who are still assigned (after an undo / reset / rewind)
+function pruneUg(cst) { const ids = new Set(cst.picks.map((p) => p.id)); Object.keys(cst.ug || {}).forEach((id) => { if (!ids.has(id)) delete cst.ug[id]; }); }
 function freshState() {
   const cands = seedCands();
   const st = { corps: {}, log: [], version: 1, schema: 5 };
@@ -193,7 +195,7 @@ function freshState() {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
       units: C.corps[k].units.map((u) => ({ name: u.name, th: Object.assign({}, u.th), noMed: u.noMed, quota: Object.assign({}, u.quota) })),
-      settings: Object.assign({ rounds: C.corps[k].rounds }, STG_DEFAULT),
+      settings: Object.assign({ rounds: C.corps[k].rounds }, STG_DEFAULT), ug: {},
     };
   });
   return st;
@@ -239,7 +241,7 @@ function fitOf(k, cand, u) {
     out.push({ l: s.l + (s.low ? ' עד ' : ' לפחות ') + t + (miss ? ' (חסר נתון)' : ''), s: s.l.split(' ')[0], ok: !miss && (s.low ? v <= t : v >= t) });
   });
   if (u.noMed) out.push({ l: 'ללא מגבלות רפואיות', s: 'רפואי', ok: cand.med === 'ללא מגבלות' });
-  out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: cand.rec !== 'לא מומלץ' });
+  if (C.needsGibush(u)) out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: cand.rec !== 'לא מומלץ' }); // units without a pre-assignment gibush do not require it
   return out;
 }
 function chooseFor(k, unitName) {
@@ -268,7 +270,7 @@ function doPick(k, unitName, candId, auto) {
   if (cs.picks.some((p) => p.id === candId)) throw new Error('המועמד כבר נבחר');
   if (!auto) { // hard rules (set by the admin) apply to manual picks; automatic picks stay soft so the demo never gets stuck
     const S = stg(k), u = unitCfg(k, unitName);
-    if (S.blockNotRecommended && c.rec === 'לא מומלץ') throw new Error('המועמד אינו מומלץ – הדראפט מוגדר ללא אפשרות לבחור מועמד כזה');
+    if (S.blockNotRecommended && C.needsGibush(u) && c.rec === 'לא מומלץ') throw new Error('המועמד אינו מומלץ – הדראפט מוגדר ללא אפשרות לבחור מועמד כזה');
     if (S.strictThresholds && fitOf(k, c, u).some((x) => !x.ok && x.s !== 'המלצה')) throw new Error('המועמד אינו עומד בתנאי הסף של היחידה – הדראפט מוגדר לדרוש עמידה בתנאי הסף');
     if (S.strictQuotas) { const q = u.quota[c.role] || 0, have = cs.picks.filter((p) => p.unit === unitName && (cs.cands.find((x) => x.id === p.id) || {}).role === c.role).length; if (have >= q) throw new Error('המכסה של היחידה לתפקיד ' + c.role + ' כבר מולאה (או שלא נתבקש) – הדראפט מוגדר לדרוש עמידה במכסות'); }
   }
@@ -414,7 +416,7 @@ http.createServer(async (req, res) => {
       let lines = []; try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-150); } catch (e) { /* none yet */ }
       return json(res, 200, { events: lines.map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean).reverse() });
     }
-    if (p === '/api/config') return json(res, 200, { orgs: C.ORGS, roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+    if (p === '/api/config') return json(res, 200, { orgs: C.ORGS, roles: C.ROLES, UG: C.UG, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
     if (p === '/api/state') { const gu = gate(); if (!gu) return; return json(res, 200, snapshot(AUTH ? gu.id : req.headers['x-user'])); }
     if (p === '/api/events') {
       const gu = gate(); if (!gu) return;
@@ -565,17 +567,33 @@ http.createServer(async (req, res) => {
         cst.favs = cst.favs || {}; const set = new Set(cst.favs[user.id] || []); if (b.on) set.add(b.id); else set.delete(b.id); cst.favs[user.id] = Array.from(set);
         save(); return json(res, 200, { ok: true });
       }
+      if (p === '/api/ugibush') { // post-arrival unit gibush (יח״טיות): status per soldier, set by the unit's שלישות (own soldiers) or the admin
+        needCorps(); if (!canDo(user, 'ugibush', k)) throw new Error('אין הרשאה לעדכן גיבוש יח״טיות');
+        const cst = state.corps[k]; cst.ug = cst.ug || {};
+        if (!C.UG.statuses.includes(b.status)) throw new Error('סטטוס לא מוכר');
+        const sub = C.UG.subUnits.includes(b.sub) ? b.sub : '', ids = Array.isArray(b.ids) ? b.ids.slice(0, 200) : [b.id]; let n = 0;
+        ids.forEach((id) => {
+          const pk = cst.picks.find((x) => x.id === id), c = cst.cands.find((x) => x.id === id); if (!pk || !c) throw new Error('החייל עדיין לא שובץ ליחידה');
+          if (C.ROLES[user.role].scope !== 'all' && pk.unit !== user.unit) throw new Error('אפשר לעדכן רק לוחמים של היחידה שלך');
+          if (C.needsGibush(unitCfg(k, pk.unit))) throw new Error('ליחידה זו הגיבוש נערך לפני השיבוץ – אין גיבוש יח״טיות');
+          const old = cst.ug[id] || { status: 'לא הוזמן', sub: '' }, keepSub = b.sub === undefined ? old.sub : sub;
+          if (old.status === b.status && old.sub === keepSub) return;
+          cst.ug[id] = { status: b.status, sub: b.status === 'לא הוזמן' ? '' : keepSub, ts: Date.now(), by: user.title };
+          state.log.push({ ts: Date.now(), corps: k, text: `${user.title} עדכנ/ה גיבוש יח״טיות: ${c.name} (${pk.unit}) – ${b.status}${cst.ug[id].sub ? ' · ' + cst.ug[id].sub : ''}` }); n++;
+        });
+        save(); return json(res, 200, { ok: true, updated: n });
+      }
       if (p === '/api/undo') {
         needCorps(); if (!canDo(user, 'undo', k)) throw new Error('אין הרשאה');
         const cst = state.corps[k]; if (!cst.picks.length) throw new Error('אין בחירות לביטול');
-        const last = cst.picks.pop(), c = cst.cands.find((x) => x.id === last.id);
+        const last = cst.picks.pop(), c = cst.cands.find((x) => x.id === last.id); pruneUg(cst);
         cst.turnStartedAt = Date.now();
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} ביטל/ה את הבחירה של ${last.unit}: ${c ? c.name : last.id}` });
         save(); return json(res, 200, { ok: true });
       }
       if (p === '/api/reset') {
         needCorps(); if (!canDo(user, 'reset', k)) throw new Error('אין הרשאה');
-        state.corps[k].picks = []; playUntilMine(k);
+        state.corps[k].picks = []; state.corps[k].ug = {}; playUntilMine(k);
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} איפסה את הדראפט` });
         save(); return json(res, 200, { ok: true });
       }
@@ -588,7 +606,7 @@ http.createServer(async (req, res) => {
         const cs = state.corps[k], order = orderOf(k), target = b.steps ? Math.min(order.length, cs.picks.length + (b.steps | 0)) : Math.max(0, Math.min(4, b.rounds | 0)) * cfg(k).units.length;
         if (target < cs.picks.length) cs.picks = cs.picks.slice(0, target);
         while (cs.picks.length < target) { const slot = order[cs.picks.length]; const c = chooseFor(k, slot.u); if (!c) break; doPick(k, slot.u, c.id, true); }
-        cs.turnStartedAt = Date.now(); save(); return json(res, 200, { ok: true });
+        pruneUg(cs); cs.turnStartedAt = Date.now(); save(); return json(res, 200, { ok: true });
       }
     }
     // static
