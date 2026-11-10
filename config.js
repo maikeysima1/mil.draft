@@ -8,7 +8,7 @@ const RECS=['מומלץ','מומלץ בהסתייגות','לא מומלץ'];
 // official IDF data - replace them with the real structure before any real use. Measures (stats) are illustrative.
 const corps = {
   combat: {
-    key: 'combat', label: 'יח״טיות חטיבתיות (גדס״ר)', corps: 'יח״טיות חטיבתיות', short: 'יח״טיות', prefix: 'C-2', size: 22, eventName: 'גיבוש יח״טיות', evalSource: 'גיבוש יח״טיות ומפקדי ההכשרה', myUnit: 'גדס״ר גבעתי', targetLabel: 'פלוגה',
+    key: 'combat', label: 'יח״טיות חטיבתיות (גדס״ר)', corps: 'יח״טיות חטיבתיות', short: 'יח״טיות', prefix: 'C-2', size: 22, eventName: 'גיבוש יח״טיות', evalSource: 'גיבוש יח״טיות ומפקדי ההכשרה', myUnit: 'גדס״ר גבעתי', targetLabel: 'פלוגה', fallback: 'גדוד חי״ר בחטיבת האם',
     roles: ['לוחם/ת סיור', 'נגביסט', 'מאגיסט', 'חובש קרבי', 'צלף', 'קשר מבצעי'],
     mix: ['לוחם/ת סיור', 'לוחם/ת סיור', 'נגביסט', 'לוחם/ת סיור', 'מאגיסט', 'חובש קרבי', 'לוחם/ת סיור', 'צלף', 'קשר מבצעי', 'נגביסט', 'חובש קרבי'],
     traits: ['מקצועיות', 'עבודה תחת לחץ', 'עבודה בצוות', 'יכולת הובלה', 'ניווט'],
@@ -24,7 +24,7 @@ const corps = {
     ],
   },
   intel: {
-    key: 'intel', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות',
+    key: 'intel', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות', fallback: 'שיבוץ מחדש מחוץ ליחידות המיוחדות',
     roles: ['לוחם/ת', 'חובש/ת', 'צלף/ת', 'קשר/ית'],
     mix: ['לוחם/ת', 'לוחם/ת', 'חובש/ת', 'לוחם/ת', 'צלף/ת', 'לוחם/ת', 'קשר/ית', 'לוחם/ת'],
     traits: ['עמידה בעומס', 'עבודה בצוות', 'קור רוח', 'משמעת מבצעית', 'למידה מהירה'],
@@ -34,12 +34,12 @@ const corps = {
     good: ['ממשיך/ה לתפקד היטב גם אחרי ימים של עומס.', 'מרים/ה את הצוות ברגעים קשים.', 'נשאר/ת רגוע/ה כשהתרגיל משתבש.', 'מקפיד/ה על נהלים גם בלי פיקוח.', 'מיישם/ת תיקונים כבר בתרגיל הבא.'],
     weak: ['יורד/ת בתפקוד כשהעומס נמשך.', 'מתקשה להשתלב בצוות.', 'מאבד/ת ריכוז תחת לחץ.', 'מעגל/ת פינות בנהלים.', 'צריך/ה כמה חזרות עד שמפנים/ה.'],
     units: [
-      { name: 'שייטת 13', badge: '13', desc: 'קומנדו ימי' }, { name: 'סיירת מטכ״ל', badge: 'מט', desc: 'יחידה מיוחדת של אגף המודיעין' }, { name: 'שלדג', badge: 'של', desc: 'יחידה מיוחדת של חיל האוויר' },
-      { name: 'יחידה 669', badge: '669', desc: 'חילוץ והצלה בהיטס' }, { name: 'מגלן', badge: 'מג', desc: 'חטיבת הקומנדו' }, { name: 'דובדבן', badge: 'דו', desc: 'חטיבת הקומנדו' },
+      { name: 'שייטת 13', badge: '13', desc: 'קומנדו ימי', tier: 1 }, { name: 'סיירת מטכ״ל', badge: 'מט', desc: 'יחידה מיוחדת של אגף המודיעין', tier: 1 }, { name: 'שלדג', badge: 'של', desc: 'יחידה מיוחדת של חיל האוויר', tier: 1 },
+      { name: 'יחידה 669', badge: '669', desc: 'חילוץ והצלה בהיטס', tier: 1 }, { name: 'מגלן', badge: 'מג', desc: 'חטיבת הקומנדו', tier: 2, need: 2 }, { name: 'דובדבן', badge: 'דו', desc: 'חטיבת הקומנדו', tier: 2, need: 3 },
     ],
   },
   signals: {
-    key: 'signals', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה',
+    key: 'signals', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה', fallback: 'שיבוץ מחדש מחוץ לקורס הטיס',
     roles: ['חניך/ת טיס', 'חניך/ת ניווט'],
     mix: ['חניך/ת טיס', 'חניך/ת טיס', 'חניך/ת ניווט', 'חניך/ת טיס'],
     traits: ['קואורדינציה', 'חלוקת קשב', 'קבלת החלטות', 'למידה מהירה', 'עבודה בצוות'],
@@ -70,12 +70,15 @@ const TR = {
   // dismissal room: every commander / the team's evaluator writes a reasoned position; a dismissal needs at least minOpinions of them
   stances: ['להדיח', 'להשאיר במעקב', 'להשאיר בהכשרה'], minOpinions: 2,
 };
+// After a dismissal the soldier moves automatically to a unit one level lower IN THE SAME TRACK that has an open need (unit.tier: 1 = highest;
+// unit.need = open places, editable in the settings screen). The tiers below are an ILLUSTRATION ONLY, not an official ranking of units.
+// When no lower unit has an open need, the soldier leaves the track to corps.fallback.
 // special units the soldiers are candidates for (generic names – replace with the real ones)
 const TARGETS = { combat: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], intel: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], signals: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'regroup', 'fav', 'evalbulk', 'settings', 'factory'], desc: 'שליטה מלאה בכל החילות: גיוס מועמדים, מעקב יומי, סטטוס תקופתי, בדיקות הדחה, הגדרות, משתמשים ואיפוס מערכת.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'opine', 'complete', 'regroup', 'fav', 'evalbulk', 'settings', 'factory'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, מעקב, נימוקים בחדר ההדחה, צורכי היחידות, הגדרות, משתמשים ואיפוס. ההחלטה על הדחה אינה שלו/ה – היא של מפקד/ת ההכשרה בלבד.' },
   'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'fav'], desc: 'מזין/ה מעקב יומי וסטטוס תקופתי, פותח/ת בדיקת הדחה, רושם/ת נימוק בחדר ההדחה ומחליט/ה, ומסמן/ת סיום הכשרה. רואה את דפי המגבש בצפייה בלבד.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה בלבד בתמונת המצב של כל החילות. אין גישה לתיקי החיילים.' },
   'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import', 'fav'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },

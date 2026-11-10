@@ -99,6 +99,18 @@ async function main() {
       await deny('u3', 'complete', { corps: K, id: t3.id }, 'completing training while a dismissal review is open');
       ok((await api('dismiss-decide', 'u3', { corps: K, id: t3.id, decision: 'נשאר/ת במעקב', note: 'שיפור אחרי שיחה, ממשיך במעקב' })).status === 200 && by(await st(), t3.id).tstatus === 'במעקב', 'review closed: stays in follow-up');
       ok((await api('complete', 'u3', { corps: K, id: s2.id })).status === 200 && by(await st(), s2.id).tstatus === 'סיים/ה הכשרה', 'training commander marks training as completed');
+      // dismissal -> automatic move one level down by the system's needs (same track); only the training commander decides
+      const I = 'intel', sti = async () => (await api('state', 'a1')).json.corps[I], i0 = await sti(), sp = i0.cands.find((x) => x.unit === 'שייטת 13' && x.tstatus === 'בהכשרה');
+      await api('dismiss-open', 'u3', { corps: I, id: sp.id, reason: 'בדיקה: אי עמידה ברף המסלול' });
+      await api('dismiss-opinion', 'u3', { corps: I, id: sp.id, stance: 'להדיח', text: 'לא עומד ברף לאורך זמן' });
+      await api('dismiss-opinion', 'e-intel-' + sp.group, { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }).then(async (r) => { if (r.status !== 200) await api('dismiss-opinion', 'u5', { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }); });
+      await deny('a1', 'dismiss-decide', { corps: I, id: sp.id, decision: 'הודח/ה', note: 'ניסיון החלטה של מנהל מערכת' }, 'admin deciding a dismissal (only the training commander may)');
+      const dz = await api('dismiss-decide', 'u3', { corps: I, id: sp.id, decision: 'הודח/ה', note: 'הוחלט לאחר שמיעת כל הנימוקים' }), i1 = await sti(), sp1 = i1.cands.find((x) => x.id === sp.id);
+      ok(dz.json.movedTo === 'דובדבן' && sp1.unit === 'דובדבן' && sp1.tstatus === 'בהכשרה' && sp1.transfers.length === 1, 'dismissed from a tier-1 unit: moved automatically to the tier-2 unit with the largest open need (דובדבן)');
+      ok(i1.needs['דובדבן'] === i0.needs['דובדבן'] - 1, 'the open need of the receiving unit went down by one');
+      await deny('u1', 'needs', { corps: K, unit: 'גדס״ר גולני', need: 3 }, 'שלישות editing the system needs');
+      ok((await api('needs', 'a1', { corps: I, unit: 'מגלן', need: 9 })).status === 200 && (await sti()).needs['מגלן'] === 9, 'admin updates the open places of a unit');
+      ok(by(await st(), t1.id).exitTo === cfg.corps[K].fallback, 'no lower unit in the track: the dismissed soldier leaves to the fallback destination');
       // intake
       await deny('u3', 'intake', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], unit: cfg.corps[K].units[0].name, target: cfg.TARGETS[K][0], group: 1 }, 'training commander doing intake');
       await deny('u1', 'intake', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], group: 1 }, 'intake without a target unit');

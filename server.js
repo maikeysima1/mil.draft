@@ -189,7 +189,7 @@ function seedCands() {
 // ---------- training model + api (shared with the standalone build) ----------
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-const SCHEMA = 6;
+const SCHEMA = 7;
 const DAY = 86400e3;
 const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ts)); // YYYY-MM-DD, Israel time
 // current review period: quarter (רבעון) or half-year (חציון)
@@ -200,6 +200,14 @@ function periodOf(ts, type) {
 const periodType = () => (state.settings && C.TR.periods.includes(state.settings.period) ? state.settings.period : 'רבעון');
 const isActive = (c) => !['הודח/ה', 'סיים/ה הכשרה'].includes(c.tstatus);
 const openDismiss = (c) => (c.dismiss || []).find((d) => d.status === 'פתוחה');
+// where a dismissed soldier goes: the unit one level lower in the same track with the largest open need; null = leaves the track
+const unitTier = (k, name) => { const u = cfg(k).units.find((x) => x.name === name); return (u && u.tier) || 1; };
+const needOf = (k, name) => ((state.corps[k].needs || {})[name]) || 0;
+function nextUnit(k, c) {
+  const t = unitTier(k, c.unit), lower = cfg(k).units.filter((u) => (u.tier || 1) > t && needOf(k, u.name) > 0); if (!lower.length) return null;
+  const tier = Math.min.apply(null, lower.map((u) => u.tier));
+  return lower.filter((u) => u.tier === tier).sort((a, b) => needOf(k, b.name) - needOf(k, a.name))[0].name;
+}
 const logAct = (k, text) => { state.log.push({ ts: Date.now(), corps: k, text }); if (state.log.length > 1500) state.log.shift(); };
 // training fields of a soldier who enters the system (event 1: intake)
 function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; return c; }
@@ -221,14 +229,14 @@ function seedTraining(k, cands) {
   });
   const low = cands.filter((c) => c.tstatus === 'במעקב');
   if (low[0]) { low[0].tstatus = 'בבדיקת הדחה'; low[0].dismiss.push({ id: 'd1', status: 'פתוחה', openedTs: now - 3 * DAY, openedBy: 'מגבש/ת צוות ' + low[0].group, reason: 'ירידה מתמשכת בתפקוד בשבועיים האחרונים וקושי לעמוד בעומס.', prev: 'במעקב', opinions: [{ byId: 'seed', by: 'מגבש/ת צוות ' + low[0].group, stance: C.TR.stances[0], text: 'שלושה תרגילים רצופים שבהם לא עמד/ה בקצב הצוות, גם אחרי שיחה אישית.', ts: now - 3 * DAY }] }); }
-  if (low[1]) { low[1].tstatus = 'הודח/ה'; low[1].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 30 * DAY, openedBy: 'מפקד/ת הכשרה · ' + low[1].unit, reason: 'אי עמידה ברף המקצועי לאחר תקופת מעקב.', prev: 'במעקב', decision: 'הודח/ה', decidedBy: 'מפקד/ת הכשרה · ' + low[1].unit, decidedTs: now - 24 * DAY, note: 'הוחלט לאחר שיחה עם החייל/ת ועם המגבש/ת. מומלץ לשיבוץ בתפקיד אחר.' }); }
+  if (low[1]) { low[1].tstatus = 'הודח/ה'; low[1].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 30 * DAY, openedBy: 'מפקד/ת הכשרה · ' + low[1].unit, reason: 'אי עמידה ברף המקצועי לאחר תקופת מעקב.', prev: 'במעקב', decision: 'הודח/ה', decidedBy: 'מפקד/ת הכשרה · ' + low[1].unit, decidedTs: now - 24 * DAY, note: 'הוחלט לאחר שיחה עם החייל/ת ועם המגבש/ת. מומלץ לשיבוץ בתפקיד אחר.', from: low[1].unit, exitTo: cf.fallback }); low[1].exitTo = cf.fallback; }
   if (low[2]) { low[2].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 45 * DAY, openedBy: 'מגבש/ת צוות ' + low[2].group, reason: 'קושי בעבודת צוות.', prev: 'בהכשרה', decision: 'נשאר/ת במעקב', decidedBy: 'מפקד/ת הכשרה · ' + low[2].unit, decidedTs: now - 40 * DAY, note: 'שיפור ניכר לאחר שיחה. ממשיך/ה במעקב צמוד.' }); }
   return cands;
 }
 function freshState() {
   const cands = seedCands();
   const st = { corps: {}, log: [], version: 1, schema: SCHEMA, settings: { period: 'רבעון' } };
-  Object.keys(C.corps).forEach((k) => { st.corps[k] = { cands: seedTraining(k, cands[k]), favs: {} }; });
+  Object.keys(C.corps).forEach((k) => { const needs = {}; C.corps[k].units.forEach((u) => { needs[u.name] = u.need || 0; }); st.corps[k] = { cands: seedTraining(k, cands[k]), favs: {}, needs }; });
   return st;
 }
 // what a client receives. Favorites are private: every client only gets its own list.
@@ -347,19 +355,30 @@ function apiHandle(p, b, user) {
     logAct(k, `${user.title} רשמ/ה נימוק בחדר ההדחה על ${c.name}: ${b.stance}`); save(); return { ok: true };
   }
   if (p === 'dismiss-decide') {
-    allow('decide', 'ההחלטה בבדיקת הדחה היא של מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
+    allow('decide', 'הדחה והחלטה בבדיקה – רק באישור מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
     if (!d) throw new Error('אין בדיקת הדחה פתוחה ל' + c.name);
     if (!T.decisions.includes(b.decision)) throw new Error('יש לבחור החלטה');
     const note = text(b.note, 1000); if (note.length < 10) throw new Error('יש לנמק את ההחלטה (לפחות 10 תווים)');
     const nOp = (d.opinions || []).length; if (b.decision === T.decisions[2] && nOp < T.minOpinions) throw new Error('אי אפשר להדיח לפני שנרשמו לפחות ' + T.minOpinions + ' נימוקים בחדר ההדחה (נרשמו ' + nOp + ')');
     Object.assign(d, { status: 'נסגרה', decision: b.decision, decidedBy: user.title, decidedTs: Date.now(), note });
-    c.tstatus = b.decision === T.decisions[2] ? 'הודח/ה' : (b.decision === T.decisions[1] ? 'במעקב' : 'בהכשרה');
-    logAct(k, `${user.title} החליט/ה בבדיקת ההדחה של ${c.name}: ${b.decision}`); save(); return { ok: true };
+    let movedTo = null;
+    if (b.decision === T.decisions[2]) { // dismissed from this unit: move one level down by the system's needs, or leave the track
+      movedTo = nextUnit(k, c); d.from = c.unit;
+      if (movedTo) { cst.needs[movedTo]--; d.movedTo = movedTo; c.transfers = (c.transfers || []).concat([{ ts: Date.now(), from: c.unit, to: movedTo, by: user.title }]); c.unit = movedTo; c.target = ''; c.tstatus = 'בהכשרה'; }
+      else { d.exitTo = cf.fallback; c.exitTo = cf.fallback; c.tstatus = 'הודח/ה'; }
+    } else c.tstatus = b.decision === T.decisions[1] ? 'במעקב' : 'בהכשרה';
+    logAct(k, `${user.title} החליט/ה בבדיקת ההדחה של ${c.name}: ${b.decision}${b.decision === T.decisions[2] ? (movedTo ? ' · הועבר/ה אוטומטית ל' + movedTo : ' · יוצא/ת מהמסלול ל' + cf.fallback) : ''}`); save(); return { ok: true, movedTo, exitTo: movedTo ? null : (b.decision === T.decisions[2] ? cf.fallback : null) };
   }
   if (p === 'complete') {
     allow('complete', 'סיום הכשרה מסומן ע״י מפקד/ת הכשרה'); const c = soldier(b.id); mustBeActive(c);
     if (openDismiss(c)) throw new Error('יש לסגור קודם את בדיקת ההדחה הפתוחה');
     c.tstatus = 'סיים/ה הכשרה'; c.doneTs = Date.now(); logAct(k, `${user.title} סימנ/ה סיום הכשרה ל${c.name}`); save(); return { ok: true };
+  }
+  if (p === 'needs') { // open places per unit ("צורכי מערכת"), used to place dismissed soldiers
+    needCorps(); if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת מעדכן/ת את צורכי היחידות');
+    if (!cf.units.some((u) => u.name === b.unit)) throw new Error('יחידה לא מוכרת');
+    const n = parseInt(b.need, 10); if (!(n >= 0 && n <= 99)) throw new Error('מספר לא תקין');
+    cst.needs = cst.needs || {}; cst.needs[b.unit] = n; logAct(k, `${user.title} עדכנ/ה צורך פתוח ב${b.unit}: ${n}`); save(); return { ok: true };
   }
   if (p === 'settings') {
     if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לשנות הגדרות');
