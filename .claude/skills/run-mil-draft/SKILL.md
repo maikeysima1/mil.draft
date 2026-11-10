@@ -70,7 +70,8 @@ There is no unit-test suite; the test is `node $D smoke` against a fresh server 
 ## Gotchas
 
 - **State is persistent.** `data/state.json` survives restarts, so a previous run's picks/favorites leak into the next. Reset with `rm -f data/state.json` before starting, or `POST /api/factory-reset` as `a1`.
-- **The draft only advances while a שלישות user of that corps is connected.** Other units auto-pick (every 1.5 s) only while someone from that corps is online over SSE; with nobody connected the draft stays frozen at its opening state (2 pre-played picks in combat). The driver's session counts as "connected".
+- **The draft only advances while a שלישות user of that corps is connected.** Other units auto-pick (every 1 s) only while someone from that corps is online over SSE; with nobody connected the draft stays frozen at its opening state (2 pre-played picks in combat). The driver's session counts as "connected".
+- **Turn clock = 60 s** (a human unit that does not pick is auto-picked when it expires). Override for fast tests: `CLOCK_SECONDS=5 DATA_DIR=<tmpdir> PORT=3002 node server.js` (use a separate `DATA_DIR` so it does not touch `data/state.json`).
 - **`window.confirm()`** guards picking and resetting - the driver auto-accepts dialogs; a raw Playwright script must do `page.on('dialog', d => d.accept())`.
 - **Rendering is async (rAF).** Wait ~300-500 ms after a click/route change before reading the DOM; `data-act="..."` attributes are the stable selectors (Hebrew text changes often).
 - **Standalone build vs server build.** The standalone file keeps all state in `localStorage` per browser context and runs the "server" in-page, so two Playwright contexts never see each other's changes and `/api` does not exist on `file://`. Use the server build for multi-user behaviour.

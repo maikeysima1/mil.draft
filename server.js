@@ -10,8 +10,8 @@ try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) { /* ignore */ }
 const DATA_FILE = path.join(DATA_DIR, 'state.json');
 const ACCESS_CODE = process.env.ACCESS_CODE || '';
 const PUB = path.join(__dirname, 'public');
-const CLOCK_SECONDS = 120;   // time a human unit has to pick
-const BOT_DELAY_MS = 1500;   // delay between automatic picks
+const CLOCK_SECONDS = Number(process.env.CLOCK_SECONDS) || 60;   // time a human unit has to pick (override with CLOCK_SECONDS=...)
+const BOT_DELAY_MS = 1000;   // delay between automatic picks
 
 // ---------- users (demo users, as in the mockup login screen) ----------
 const USERS = [
@@ -57,7 +57,7 @@ function cleanBaseline(cf, rows) {
     if (!cf.roles.includes(r.role)) return;
     const stats = {}; cf.stats.forEach((s) => { stats[s.k] = toNum((r.stats || {})[s.k]); });
     const mot = toNum(r.motivation), cb = toNum(r.combat);
-    out.push({ role: r.role, rec: C.RECS.includes(r.rec) ? r.rec : null, med: C.MEDS.includes(r.med) ? r.med : C.MEDS[0], profile: toNum(r.profile), stats,
+    out.push({ role: r.role, rec: C.RECS.includes(r.rec) ? r.rec : null, med: C.MEDS.includes(r.med) ? r.med : null, profile: toNum(r.profile), stats,
       motivation: mot >= 1 && mot <= 5 ? Math.round(mot) : null, combat: cb === 0 || cb === 1 || cb === 2 ? cb : null, unit: cf.units.some((u) => u.name === r.unit) ? r.unit : '' });
   });
   return out;
@@ -70,7 +70,7 @@ function applyUpdate(cf, c, r) {
   if (C.MEDS.includes(r.med)) { c.med = r.med; n++; }
   if (toNum(r.profile) != null) { c.profile = toNum(r.profile); n++; }
   cf.stats.forEach((s) => { const v = toNum((r.stats || {})[s.k]); if (v != null) { c.stats[s.k] = v; n++; } });
-  const mot = toNum(r.motivation); if (mot >= 1 && mot <= 5) { c.extra = Object.assign({ motivation: 3, discipline: 1, potential: 0, confidence: 1, second: '', follow: false, medNote: '' }, c.extra, { motivation: Math.round(mot) }); n++; }
+  const mot = toNum(r.motivation); if (mot >= 1 && mot <= 5) { c.extra = Object.assign({}, c.extra, { motivation: Math.round(mot) }); n++; }
   const cb = toNum(r.combat); if (cb === 0 || cb === 1 || cb === 2) { c.wish = Object.assign({ role: '', units: [] }, c.wish, { combat: cb }); n++; }
   return n;
 }
@@ -88,7 +88,7 @@ function applyEval(cf, c, b, who) {
   if (typeof b.summary === 'string') { c.summary = b.summary.slice(0, 600); n++; }
   if (b.extra && Object.keys(b.extra).length) { c.extra = cleanExtra(cf, b.extra, c.extra); n++; }
   if (b.wish && Object.keys(b.wish).length) {
-    const o = Object.assign({ role: '', units: [], combat: 1 }, c.wish), w = b.wish;
+    const o = Object.assign({ role: '', units: [], combat: null }, c.wish), w = b.wish;
     if ('role' in w) o.role = cf.roles.includes(w.role) ? w.role : '';
     if ('units' in w) o.units = cleanWish(cf, { units: w.units }).units;
     if (w.combat === 0 || w.combat === 1 || w.combat === 2) o.combat = w.combat;
@@ -99,12 +99,12 @@ function applyEval(cf, c, b, who) {
 }
 function newCand(cf, cst, name, role, group, source) {
   const max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0) + 1, stats = {}; cf.stats.forEach((s) => { stats[s.k] = null; });
-  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => 1), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
+  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => 1), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
   cst.cands.push(c); return c;
 }
-function cleanExtra(cf, x, old) {
-  const o = Object.assign({}, old || {}), n = (v, lo, hi, d) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
-  o.motivation = n(x.motivation, 1, 5, o.motivation || 3); o.discipline = n(x.discipline, 0, 2, o.discipline || 1); o.potential = n(x.potential, 0, 2, o.potential || 0); o.confidence = n(x.confidence, 0, 2, o.confidence || 1);
+function cleanExtra(cf, x, old) { // only the fields present in x are touched; unknown stays unknown (null/undefined), never a made-up default
+  const o = Object.assign({}, old || {}), num = (v, lo, hi) => { v = parseInt(v, 10); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : undefined; };
+  [['motivation', 1, 5], ['discipline', 0, 2], ['potential', 0, 2], ['confidence', 0, 2]].forEach(([key, lo, hi]) => { if (key in x) { const v = num(x[key], lo, hi); if (v !== undefined) o[key] = v; else if (x[key] === null) o[key] = null; } });
   if ('second' in x) o.second = cf.roles.includes(x.second) ? x.second : '';
   if ('follow' in x) o.follow = !!x.follow;
   if ('medNote' in x) o.medNote = String(x.medNote || '').slice(0, 200);
@@ -389,7 +389,7 @@ http.createServer(async (req, res) => {
           cs.cands.push({
             id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats,
             rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72),
-            area: '—', pref: '—', wish: { role: '', units: [], combat: 1 }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
+            area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
           });
           applyUpdate(cf, cs.cands[cs.cands.length - 1], { motivation: r.motivation, combat: r.combat });
           added++;

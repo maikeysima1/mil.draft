@@ -6,9 +6,8 @@ function evalForm(k, c) { // working copy kept in A.ui.form until sent
   if (!A.ui.form || A.ui.form.id !== c.id || A.ui.form.k !== k) {
     let draft = null; try { draft = JSON.parse(localStorage.getItem(evalDraftKey(k, c.id))); } catch (e) { /* none */ }
     A.ui.form = draft && draft.id === c.id ? draft : { id: c.id, k, lv: c.lv.slice(), role: c.role, skills: (c.skills || []).slice(), stats: Object.assign({}, c.stats), rec: c.rec || '', med: c.med, obs: c.obs || '', summary: c.summary || '' };
-    A.ui.form.extra = Object.assign({ motivation: 3, discipline: 1, potential: 0, confidence: 1, second: '', follow: false, medNote: '' }, c.extra, A.ui.form.extra);
-    if (!A.ui.form.wish) A.ui.form.wish = { role: (c.wish && c.wish.role) || '', units: [0, 1, 2].map((i) => (c.wish && c.wish.units[i]) || ''), combat: c.wish && c.wish.combat != null ? c.wish.combat : 1 };
-    if (A.ui.form.wish.combat == null) A.ui.form.wish.combat = 1;
+    A.ui.form.extra = Object.assign({ second: '', follow: false, medNote: '' }, c.extra, A.ui.form.extra); // unknown values stay empty (null), never defaults
+    if (!A.ui.form.wish) A.ui.form.wish = { role: (c.wish && c.wish.role) || '', units: [0, 1, 2].map((i) => (c.wish && c.wish.units[i]) || ''), combat: c.wish && c.wish.combat != null ? c.wish.combat : null };
   }
   return A.ui.form;
 }
@@ -71,7 +70,7 @@ function evalRows(k) {
 }
 function evalTemplateAoa(k, g, sample) {
   const c = cf(k), fl = evalFields(k), head = fl.map((x) => x.label), cands = cs(k).cands.filter((x) => x.group === g);
-  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => WORDS[v]), c.stats.map((s) => cellVal(s, x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', COMBAT[w.combat == null ? 1 : w.combat], x.obs || '', x.summary || '']); };
+  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => WORDS[v]), c.stats.map((s) => cellVal(s, x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', (w.combat == null ? '' : COMBAT[w.combat]), x.obs || '', x.summary || '']); };
   const rows = cands.map(rowOf);
   if (sample) {
     rows.slice(0, 3).forEach((r, i) => { const mi = head.indexOf('מוטיבציה (1–5)'), oi = head.indexOf('תצפיות והתרשמות'), ri = head.indexOf('המלצת מגבש'); r[mi] = [5, 4, 2][i]; r[oi] = ['הוביל את הצוות בתרגיל הלילי ושמר על קצב.', 'עבודה מסודרת, צריך לחזק ביטחון עצמי.', 'מתקשה כשהלחץ עולה.'][i]; r[ri] = A.cfg.RECS[i]; });
@@ -119,9 +118,9 @@ SCREENS.eval = (k) => {
     return `<div class="card" style="background:var(--bg2)"><div class="mut small">תצוגה מקדימה – כך זה ייכנס לתיק המועמד</div><h3>${esc(cur.name)} <span class="mut small">· תיק מועמד · ${esc(c.corps)}</span></h3>
      <div class="small"><b>תפקיד מומלץ:</b> ${esc(f.role)} · <b>חוזקות בולטות:</b> ${esc(str.join(', ') || '—')} · <b>המלצה:</b> ${esc(f.rec || '—')} · <b>מגבלות:</b> ${esc(f.med)}</div>
      <div class="small">${c.stats.map((s) => `<b>${esc(s.l)}:</b> ${fmtStat(s, f.stats[s.k] === '' ? null : f.stats[s.k])}`).join(' · ')}</div>
-     <div class="small"><b>העדפת החייל:</b> קרבי: ${COMBAT[f.wish.combat]} · תפקיד ${esc(f.wish.role || '—')} · יחידות ${esc(f.wish.units.filter(Boolean).join(' › ') || '—')}</div>
+     <div class="small"><b>העדפת החייל:</b> קרבי: ${f.wish.combat == null ? 'לא צוין' : COMBAT[f.wish.combat]} · תפקיד ${esc(f.wish.role || '—')} · יחידות ${esc(f.wish.units.filter(Boolean).join(' › ') || '—')}</div>
      <div class="small"><b>כישורים:</b> ${esc(f.skills.join(' · ') || '—')}</div>
-     <div class="small"><b>ערכים נוספים:</b> מוטיבציה ${f.extra.motivation}/5 · משמעת ${WORDS[f.extra.discipline]} · פוטנציאל פיקודי ${LOWHIGH[f.extra.potential]} · ביטחון בהערכה ${LOWHIGH[f.extra.confidence]}${f.extra.second ? ' · תפקיד חלופי ' + esc(f.extra.second) : ''}${f.extra.follow ? ' · <b>דורש מעקב</b>' : ''}</div><p class="small" style="margin:4px 0">${esc(f.obs) || '—'}</p>
+     <div class="small"><b>ערכים נוספים:</b> מוטיבציה ${f.extra.motivation != null ? f.extra.motivation + '/5' : '—'} · משמעת ${WORDS[f.extra.discipline] || '—'} · פוטנציאל פיקודי ${LOWHIGH[f.extra.potential] || '—'} · ביטחון בהערכה ${LOWHIGH[f.extra.confidence] || '—'}${f.extra.second ? ' · תפקיד חלופי ' + esc(f.extra.second) : ''}${f.extra.follow ? ' · <b>דורש מעקב</b>' : ''}</div><p class="small" style="margin:4px 0">${esc(f.obs) || '—'}</p>
      <div class="small mut">סיכום המגבש: ${esc(f.summary) || `מתאים/ה לתפקיד ${esc(f.role)}. חוזקות בולטות: ${esc(str.join(', ') || '—')}. המלצה: ${esc(f.rec || '—')}.`}</div></div>`;
   })();
   return `<div class="row spread"><div><span class="chip navy">${esc(c.eventName)} · ${esc(c.corps)}</span><h1 style="font-size:28px;font-weight:800;margin-top:6px">דף מגבש – צוות ${g}</h1>${!ro ? `<div class="mut small">אתם אחראים על צוות ${g} בלבד</div>` : ''}</div>
@@ -162,10 +161,10 @@ SCREENS.eval = (k) => {
 };
 Object.assign(ACTIONS, {
   team: (d) => { A.ui.group = +d.g; A.ui.evalCand = null; A.ui.form = null; rerender(); },
-  wishcombat: (d) => { A.ui.form.wish.combat = +d.v; rerender(); },
+  wishcombat: (d) => { A.ui.form.wish.combat = A.ui.form.wish.combat === +d.v ? null : +d.v; rerender(); }, // click again to clear
   wishrole: (d, t) => { A.ui.form.wish.role = t.value; rerender(); },
   wishunit: (d, t) => { const u = A.ui.form.wish.units; u.forEach((x, j) => { if (t.value && x === t.value) u[j] = ''; }); u[+d.i] = t.value; rerender(); },
-  ex: (d) => { A.ui.form.extra[d.f] = +d.v; rerender(); },
+  ex: (d) => { A.ui.form.extra[d.f] = A.ui.form.extra[d.f] === +d.v ? null : +d.v; rerender(); }, // click again to clear
   exfld: (d, t) => { A.ui.form.extra[d.f] = t.type === 'checkbox' ? t.checked : t.value; if (t.tagName === 'SELECT' || t.type === 'checkbox') rerender(); },
   regroup: async (d, t) => {
     const k = corpsKey(), c = candOf(k, d.id), g = +t.value; if (!c || g === c.group) return;
@@ -196,53 +195,54 @@ Object.assign(ACTIONS, {
 
 // ---------------- people distribution (charts) ----------------
 // Colors follow the entity (willingness level), never its rank. Order of segments: interested → open → not interested.
-const WCOL = ['var(--s2)', 'var(--s3)', 'var(--s1)']; // index = combat willingness 0,1,2
+const WCOL = ['var(--s2)', 'var(--s3)', 'var(--s1)', 'var(--ref)']; // 0 not interested, 1 open, 2 interested, 3 unknown (gray) // index = combat willingness 0,1,2
 const W_ORDER = [2, 1, 0];
 function distView(k) {
   const c = cf(k), d = draftInfo(k), scope = A.ui.dist || 'all';
   const list = cs(k).cands.filter((x) => scope === 'all' || (scope === 'free' ? !d.takenBy[x.id] : !!d.takenBy[x.id]));
-  const n = list.length, cw = (x) => (x.wish && x.wish.combat != null ? x.wish.combat : 1), mo = (x) => (x.extra ? x.extra.motivation : 3);
-  const pct = (a, b) => (b ? Math.round(a / b * 100) : 0), f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
-  const cnt = [0, 0, 0]; list.forEach((x) => { cnt[cw(x)]++; });
-  const avg = n ? list.reduce((a, x) => a + mo(x), 0) / n : 0;
+  const n = list.length, cw = (x) => (x.wish && x.wish.combat != null ? x.wish.combat : 3), mo = (x) => (x.extra && x.extra.motivation != null ? x.extra.motivation : null); // 3 = unknown: never a made-up answer
+  const pct = (a, b) => (b ? Math.round(a / b * 100) : 0), f1 = (v) => (v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1)), CL = (w) => (w === 3 ? 'לא צוין' : COMBAT[w]), mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const cnt = [0, 0, 0, 0]; list.forEach((x) => { cnt[cw(x)]++; });
+  const knownC = n - cnt[3], moList = list.map(mo).filter((v) => v != null), nMot = moList.length, avg = mean(moList);
+  const hasUnk = cnt[3] > 0, WO = hasUnk ? W_ORDER.concat([3]) : W_ORDER;
   const follow = list.filter((x) => x.extra && x.extra.follow).length;
-  const lowMot = list.filter((x) => mo(x) <= 2), lowAndNot = lowMot.filter((x) => cw(x) === 0).length;
+  const lowMot = list.filter((x) => mo(x) != null && mo(x) <= 2), lowAndNot = lowMot.filter((x) => cw(x) === 0).length;
   const hist = [1, 2, 3, 4, 5].map((m) => list.filter((x) => mo(x) === m).length);
   const scopeTxt = { all: 'כל המועמדים', free: 'פנויים בלבד', picked: 'שכבר שובצו' }[scope];
-  const byRole = c.roles.map((r) => { const g = list.filter((x) => x.role === r), cc = [0, 0, 0]; g.forEach((x) => { cc[cw(x)]++; }); return { label: r, n: g.length, cnt: cc, avg: g.length ? g.reduce((a, x) => a + mo(x), 0) / g.length : 0 }; }).filter((r) => r.n);
-  const byTeam = [1, 2, 3, 4].map((t) => { const g = list.filter((x) => x.group === t), cc = [0, 0, 0]; g.forEach((x) => { cc[cw(x)]++; }); return { label: 'צוות ' + t, n: g.length, cnt: cc, avg: g.length ? g.reduce((a, x) => a + mo(x), 0) / g.length : 0 }; }).filter((r) => r.n);
+  const byRole = c.roles.map((r) => { const g = list.filter((x) => x.role === r), cc = [0, 0, 0, 0]; g.forEach((x) => { cc[cw(x)]++; }); return { label: r, n: g.length, cnt: cc, avg: mean(g.map(mo).filter((v) => v != null)), nm: g.map(mo).filter((v) => v != null).length }; }).filter((r) => r.n);
+  const byTeam = [1, 2, 3, 4].map((t) => { const g = list.filter((x) => x.group === t), cc = [0, 0, 0, 0]; g.forEach((x) => { cc[cw(x)]++; }); return { label: 'צוות ' + t, n: g.length, cnt: cc, avg: mean(g.map(mo).filter((v) => v != null)), nm: g.map(mo).filter((v) => v != null).length }; }).filter((r) => r.n);
 
   // donut (2px surface gap between slices)
   const C = 2 * Math.PI * 54; let off = 0;
-  const slices = W_ORDER.map((w) => { const frac = n ? cnt[w] / n : 0, gap = frac > 0 && frac < 1 ? 2 : 0, len = Math.max(0, frac * C - gap);
-    const s = `<circle cx="70" cy="70" r="54" fill="none" stroke="${WCOL[w]}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 70 70)" data-tip="${cnt[w]} (${pct(cnt[w], n)}%)|${esc(COMBAT[w])}" tabindex="0"/>`; off += frac * C; return frac > 0 ? s : ''; }).join('');
-  const legend = W_ORDER.map((w) => `<div class="lg"><i class="sq" style="background:${WCOL[w]}"></i><span>${esc(COMBAT[w])}</span><b>${cnt[w]}</b><span class="mut small">${pct(cnt[w], n)}%</span></div>`).join('');
+  const slices = WO.map((w) => { const frac = n ? cnt[w] / n : 0, gap = frac > 0 && frac < 1 ? 2 : 0, len = Math.max(0, frac * C - gap);
+    const s = `<circle cx="70" cy="70" r="54" fill="none" stroke="${WCOL[w]}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 70 70)" data-tip="${cnt[w]} (${pct(cnt[w], n)}%)|${esc(CL(w))}" tabindex="0"/>`; off += frac * C; return frac > 0 ? s : ''; }).join('');
+  const legend = WO.map((w) => `<div class="lg"><i class="sq" style="background:${WCOL[w]}"></i><span>${esc(CL(w))}</span><b>${cnt[w]}</b><span class="mut small">${pct(cnt[w], n)}%</span></div>`).join('');
 
   // motivation histogram (single series, 4px rounded cap, value on the cap)
   const maxV = Math.max(...hist, 1), top = Math.ceil(maxV / 2) * 2 || 2, W0 = 40, BW = (340 - W0) / 5, BASE = 160, H = 128;
   const grid = [0, top / 2, top].map((t) => { const y = BASE - t / top * H; return `<line x1="${W0}" x2="340" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="${W0 - 8}" y="${y + 4}" text-anchor="end" font-size="11" class="svgm">${t}</text>`; }).join('');
   const cols = hist.map((v, i) => { const h = v / top * H, x = W0 + BW * i + (BW - 24) / 2, y = BASE - h;
     const bar = v ? `<path d="M${x},${BASE} V${y + 4} Q${x},${y} ${x + 4},${y} H${x + 20} Q${x + 24},${y} ${x + 24},${y + 4} V${BASE} Z" fill="var(--s1)"/><text x="${x + 12}" y="${y - 6}" text-anchor="middle" font-size="12" font-weight="700" class="svgt">${v}</text>` : '';
-    return `<g data-tip="${v} מועמדים (${pct(v, n)}%)|מוטיבציה ${i + 1}" tabindex="0"><rect x="${W0 + BW * i}" y="20" width="${BW}" height="${BASE - 20}" fill="transparent"/>${bar}<text x="${x + 12}" y="${BASE + 18}" text-anchor="middle" font-size="12" class="svgm">${i + 1}</text></g>`; }).join('');
+    return `<g data-tip="${v} מועמדים (${pct(v, nMot)}%)|מוטיבציה ${i + 1}" tabindex="0"><rect x="${W0 + BW * i}" y="20" width="${BW}" height="${BASE - 20}" fill="transparent"/>${bar}<text x="${x + 12}" y="${BASE + 18}" text-anchor="middle" font-size="12" class="svgm">${i + 1}</text></g>`; }).join('');
   const histSvg = `<svg viewBox="0 0 340 190" width="100%" role="img" aria-label="התפלגות מוטיבציה" dir="ltr">${grid}<line x1="${W0}" x2="340" y1="${BASE}" y2="${BASE}" stroke="var(--line)"/>${cols}</svg>`;
 
   // stacked 100% rows (2px gap between segments; label inside only when it fits)
-  const stack = (rows) => rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="strack">${W_ORDER.map((w) => (r.cnt[w] ? `<i class="seg" style="flex:${r.cnt[w]};background:${WCOL[w]}" data-tip="${r.cnt[w]} (${pct(r.cnt[w], r.n)}%)|${esc(r.label)} · ${esc(COMBAT[w])}" tabindex="0">${r.cnt[w] / r.n >= 0.14 ? r.cnt[w] : ''}</i>` : '')).join('')}</div><span class="srow-n" title="מועמדים">${r.n}</span></div>`).join('');
-  const bars = (rows) => rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="htrack" data-tip="${f1(r.avg)} מתוך 5 · ${r.n} מועמדים|${esc(r.label)}" tabindex="0"><i style="width:${(r.avg / 5 * 100).toFixed(1)}%"></i></div><b class="srow-n">${f1(r.avg)}</b></div>`).join('');
-  const table = `<details class="tbl"><summary>תצוגת טבלה</summary><div style="overflow:auto"><table><thead><tr><th>תפקיד</th><th>מועמדים</th><th>מוטיבציה ממוצעת</th>${W_ORDER.map((w) => `<th>${esc(COMBAT[w])}</th>`).join('')}</tr></thead><tbody>${byRole.map((r) => `<tr><td>${esc(r.label)}</td><td>${r.n}</td><td>${f1(r.avg)}</td>${W_ORDER.map((w) => `<td>${r.cnt[w]}</td>`).join('')}</tr>`).join('')}<tr><td><b>סה״כ</b></td><td><b>${n}</b></td><td><b>${f1(avg)}</b></td>${W_ORDER.map((w) => `<td><b>${cnt[w]}</b></td>`).join('')}</tr></tbody></table></div></details>`;
+  const stack = (rows) => rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="strack">${WO.map((w) => (r.cnt[w] ? `<i class="seg" style="flex:${r.cnt[w]};background:${WCOL[w]}" data-tip="${r.cnt[w]} (${pct(r.cnt[w], r.n)}%)|${esc(r.label)} · ${esc(CL(w))}" tabindex="0">${r.cnt[w] / r.n >= 0.14 ? r.cnt[w] : ''}</i>` : '')).join('')}</div><span class="srow-n" title="מועמדים">${r.n}</span></div>`).join('');
+  const bars = (rows) => rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="htrack" data-tip="${r.avg == null ? 'אין נתון מוטיבציה' : f1(r.avg) + ' מתוך 5 · ' + r.nm + ' מתוך ' + r.n + ' עם נתון'}|${esc(r.label)}" tabindex="0"><i style="width:${r.avg == null ? 0 : (r.avg / 5 * 100).toFixed(1)}%"></i></div><b class="srow-n">${f1(r.avg)}</b></div>`).join('');
+  const table = `<details class="tbl"><summary>תצוגת טבלה</summary><div style="overflow:auto"><table><thead><tr><th>תפקיד</th><th>מועמדים</th><th>מוטיבציה ממוצעת</th>${WO.map((w) => `<th>${esc(CL(w))}</th>`).join('')}</tr></thead><tbody>${byRole.map((r) => `<tr><td>${esc(r.label)}</td><td>${r.n}</td><td>${f1(r.avg)}</td>${WO.map((w) => `<td>${r.cnt[w]}</td>`).join('')}</tr>`).join('')}<tr><td><b>סה״כ</b></td><td><b>${n}</b></td><td><b>${f1(avg)}</b></td>${WO.map((w) => `<td><b>${cnt[w]}</b></td>`).join('')}</tr></tbody></table></div></details>`;
   const notes = [];
-  if (n) {
-    notes.push(`${cnt[0]} מתוך ${n} (${pct(cnt[0], n)}%) לא מעוניינים בתפקיד קרבי, ו־${cnt[1]} פתוחים לכך.`);
+  if (n && knownC) {
+    notes.push(`${cnt[0]} מתוך ${knownC} שענו (${pct(cnt[0], knownC)}%) לא מעוניינים בתפקיד קרבי, ו־${cnt[1]} פתוחים לכך${cnt[3] ? '; ל־' + cnt[3] + ' מועמדים אין תשובה' : ''}.`);
     if (lowMot.length) notes.push(`${lowMot.length} מועמדים עם מוטיבציה נמוכה (1–2), ומהם ${lowAndNot} גם לא מעוניינים בתפקיד קרבי.`);
     const worst = byRole.filter((r) => r.n >= 2).sort((a, b) => b.cnt[0] / b.n - a.cnt[0] / a.n)[0];
     if (worst && worst.cnt[0]) notes.push(`התפקיד עם שיעור ה״לא מעוניין״ הגבוה ביותר: ${worst.label} (${worst.cnt[0]} מתוך ${worst.n}).`);
   }
   return `<div class="row spread"><div class="tabs">${[['all', 'כל המועמדים'], ['free', 'פנויים'], ['picked', 'שובצו']].map((s) => `<button class="${scope === s[0] ? 'on' : ''}" data-act="distScope" data-s="${s[0]}">${s[1]}</button>`).join('')}</div><span class="mut small">${esc(scopeTxt)} · ${esc(c.corps)}</span></div>
-   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))"><div class="kpi"><b>${n}</b><span>מועמדים בפילוג</span></div><div class="kpi"><b><bdi dir="ltr">${cnt[0]} <small class="mut" style="font-size:15px">(${pct(cnt[0], n)}%)</small></bdi></b><span>לא מעוניינים בתפקיד קרבי</span></div><div class="kpi"><b><bdi dir="ltr">${f1(avg)}<small class="mut" style="font-size:15px"> / 5</small></bdi></b><span>מוטיבציה ממוצעת</span></div><div class="kpi"><b>${follow}</b><span>דורשים מעקב</span></div></div>
-   <div class="grid g2"><div class="card"><h2>נכונות לתפקיד קרבי</h2><div class="row" style="gap:22px;flex-wrap:nowrap"><svg viewBox="0 0 140 140" width="170" role="img" aria-label="נכונות לתפקיד קרבי"><circle cx="70" cy="70" r="54" fill="none" stroke="var(--line2)" stroke-width="18"/>${slices}<text x="70" y="68" text-anchor="middle" font-size="24" font-weight="800" class="svgt">${pct(cnt[0], n)}%</text><text x="70" y="86" text-anchor="middle" font-size="10" class="svgm">לא מעוניינים</text></svg><div class="legend">${legend}</div></div></div>
-    <div class="card"><h2>התפלגות מוטיבציה</h2><div class="mut small" style="margin-bottom:6px">מספר מועמדים לכל רמה (1 = נמוכה, 5 = גבוהה)</div>${histSvg}</div></div>
-   <div class="grid g2"><div class="card"><h2>נכונות לתפקיד קרבי – לפי תפקיד</h2><div class="legend row" style="margin-bottom:8px">${W_ORDER.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(COMBAT[w])}</span>`).join('')}</div>${stack(byRole)}</div>
-    <div class="card"><h2>נכונות לתפקיד קרבי – לפי צוות</h2><div class="legend row" style="margin-bottom:8px">${W_ORDER.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(COMBAT[w])}</span>`).join('')}</div>${stack(byTeam)}</div></div>
+   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))"><div class="kpi"><b>${n}</b><span>מועמדים בפילוג</span></div><div class="kpi"><b><bdi dir="ltr">${cnt[0]} <small class="mut" style="font-size:15px">(${pct(cnt[0], knownC)}%)</small></bdi></b><span>לא מעוניינים בתפקיד קרבי</span><div class="mut small">מתוך ${knownC} שענו${cnt[3] ? ' · ' + cnt[3] + ' ללא תשובה' : ''}</div></div><div class="kpi"><b><bdi dir="ltr">${f1(avg)}<small class="mut" style="font-size:15px"> / 5</small></bdi></b><span>מוטיבציה ממוצעת</span><div class="mut small">מתוך ${nMot} עם נתון${nMot < n ? ' · ' + (n - nMot) + ' ללא נתון' : ''}</div></div><div class="kpi"><b>${follow}</b><span>דורשים מעקב</span></div></div>
+   <div class="grid g2"><div class="card"><h2>נכונות לתפקיד קרבי</h2><div class="row" style="gap:22px;flex-wrap:nowrap"><svg viewBox="0 0 140 140" width="170" role="img" aria-label="נכונות לתפקיד קרבי"><circle cx="70" cy="70" r="54" fill="none" stroke="var(--line2)" stroke-width="18"/>${slices}<text x="70" y="68" text-anchor="middle" font-size="24" font-weight="800" class="svgt">${pct(cnt[0], knownC)}%</text><text x="70" y="86" text-anchor="middle" font-size="10" class="svgm">לא מעוניינים</text></svg><div class="legend">${legend}</div></div></div>
+    <div class="card"><h2>התפלגות מוטיבציה</h2><div class="mut small" style="margin-bottom:6px">מספר מועמדים לכל רמה (1 = נמוכה, 5 = גבוהה)${nMot < n ? ' · ' + (n - nMot) + ' מועמדים ללא נתון אינם נכללים' : ''}</div>${histSvg}</div></div>
+   <div class="grid g2"><div class="card"><h2>נכונות לתפקיד קרבי – לפי תפקיד</h2><div class="legend row" style="margin-bottom:8px">${WO.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(CL(w))}</span>`).join('')}</div>${stack(byRole)}</div>
+    <div class="card"><h2>נכונות לתפקיד קרבי – לפי צוות</h2><div class="legend row" style="margin-bottom:8px">${WO.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(CL(w))}</span>`).join('')}</div>${stack(byTeam)}</div></div>
    <div class="grid g2"><div class="card"><h2>מוטיבציה ממוצעת – לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">ממוצע מתוך 5</div>${bars(byRole)}</div>
     <div class="card"><h2>מוטיבציה ממוצעת – לפי צוות</h2><div class="mut small" style="margin-bottom:6px">ממוצע מתוך 5</div>${bars(byTeam)}</div></div>
    <div class="card"><h2>נקודות בולטות</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.9">${notes.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>אין נתונים לתצוגה.</li>'}</ul><div class="mut small" style="margin-top:8px">נוצר מכללים שקופים על הנתונים. אין כאן המלצה על אדם או יחידה, וההעדפות אינן מחייבות את השיבוץ.</div>${table}</div>`;
@@ -260,12 +260,12 @@ function cmpView(k) {
   const sgn = (v, fmt) => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v));
   const kp = [
     { t: 'מועמדים', now: cur.length, pre: prev.length, fmt: (v) => String(Math.round(v)), dir: 0, tol: 1, unit: '' },
-    { t: 'שיעור ״מומלץ״', now: pc(cur.filter((x) => x.rec === 'מומלץ').length, cur.length), pre: pc(prev.filter((x) => x.rec === 'מומלץ').length, prev.length), fmt: pf, dfmt: (v) => String(Math.round(v)), dir: 1, tol: 1, unit: ' נק׳' },
-    { t: 'מוטיבציה ממוצעת', now: avgOf(cur, (x) => (x.extra ? x.extra.motivation : null)), pre: avgOf(prev, (x) => x.motivation), fmt: f1, dir: 1, tol: 0.05, unit: '' },
-    { t: 'לא מעוניינים בתפקיד קרבי', now: pc(cur.filter((x) => x.wish && x.wish.combat === 0).length, cur.length), pre: pc(prev.filter((x) => x.combat === 0).length, prev.filter((x) => x.combat != null).length), fmt: pf, dfmt: (v) => String(Math.round(v)), dir: -1, tol: 1, unit: ' נק׳' },
+    { t: 'שיעור ״מומלץ״', now: pc(cur.filter((x) => x.rec === 'מומלץ').length, cur.filter((x) => x.rec).length), pre: pc(prev.filter((x) => x.rec === 'מומלץ').length, prev.filter((x) => x.rec).length), nn: cur.filter((x) => x.rec).length, np: prev.filter((x) => x.rec).length, fmt: pf, dfmt: (v) => String(Math.round(v)), dir: 1, tol: 1, unit: ' נק׳' },
+    { t: 'מוטיבציה ממוצעת', now: avgOf(cur, (x) => (x.extra ? x.extra.motivation : null)), pre: avgOf(prev, (x) => x.motivation), nn: cur.filter((x) => x.extra && x.extra.motivation != null).length, np: prev.filter((x) => x.motivation != null).length, fmt: f1, dir: 1, tol: 0.05, unit: '' },
+    { t: 'לא מעוניינים בתפקיד קרבי', now: pc(cur.filter((x) => x.wish && x.wish.combat === 0).length, cur.filter((x) => x.wish && x.wish.combat != null).length), pre: pc(prev.filter((x) => x.combat === 0).length, prev.filter((x) => x.combat != null).length), nn: cur.filter((x) => x.wish && x.wish.combat != null).length, np: prev.filter((x) => x.combat != null).length, fmt: pf, dfmt: (v) => String(Math.round(v)), dir: -1, tol: 1, unit: ' נק׳' },
     { t: 'תיקים עם נתונים חסרים', now: pc(cur.filter((x) => missingOf(k, x).length).length, cur.length), pre: pc(prev.filter((r) => !r.rec || c.stats.some((s) => r.stats[s.k] == null)).length, prev.length), fmt: pf, dfmt: (v) => String(Math.round(v)), dir: -1, tol: 1, unit: ' נק׳' },
   ];
-  const kpis = kp.map((m) => { const d = m.now != null && m.pre != null ? m.now - m.pre : null, v = verdict(d, m.dir, m.tol); return `<div class="kpi"><b><bdi dir="ltr">${m.now == null ? '—' : m.fmt(m.now)}</bdi></b><span>${m.t}</span><div class="row" style="gap:6px;margin-top:6px"><span class="pill ${v[0]}">${v[1]}${d != null && Math.abs(d) >= m.tol ? ' <bdi dir="ltr">' + sgn(d, m.dfmt || m.fmt) + m.unit + '</bdi>' : ''}</span></div><div class="mut small" style="margin-top:2px">${esc(L)}: <bdi dir="ltr">${m.pre == null ? '—' : m.fmt(m.pre)}</bdi></div></div>`; }).join('');
+  const kpis = kp.map((m) => { const d = m.now != null && m.pre != null ? m.now - m.pre : null, v = verdict(d, m.dir, m.tol); return `<div class="kpi"><b><bdi dir="ltr">${m.now == null ? '—' : m.fmt(m.now)}</bdi></b><span>${m.t}${m.nn != null && m.nn !== cur.length ? ` <span class="small">(מתוך ${m.nn})</span>` : ''}</span><div class="row" style="gap:6px;margin-top:6px"><span class="pill ${v[0]}">${v[1]}${d != null && Math.abs(d) >= m.tol ? ' <bdi dir="ltr">' + sgn(d, m.dfmt || m.fmt) + m.unit + '</bdi>' : ''}</span></div><div class="mut small" style="margin-top:2px">${esc(L)}: <bdi dir="ltr">${m.pre == null ? '—' : m.fmt(m.pre)}</bdi>${m.np != null && m.np !== prev.length ? ` <span class="small">(מתוך ${m.np})</span>` : ''}</div></div>`; }).join('');
 
   // metrics: average now vs before, direction-aware (lower is better for times)
   const statRows = c.stats.map((s) => { const a = avgOf(cur, (x) => x.stats[s.k]), b = avgOf(prev, (r) => r.stats[s.k]), d = a != null && b != null ? a - b : null, v = verdict(d, s.low ? -1 : 1, (s.max - s.min) * 0.01), dd = Math.pow(10, s.d + 1);
@@ -273,7 +273,7 @@ function cmpView(k) {
   const statTable = `<div style="overflow:auto"><table><thead><tr><th>מדד</th><th>עכשיו</th><th>${esc(L)}</th><th>הפרש</th><th>הערכה</th></tr></thead><tbody>${statRows.map((r) => r.html).join('')}</tbody></table></div><div class="mut small" style="margin-top:6px">ממוצע לפי הנתונים הקיימים בלבד (מדד חסר לא נספר). בריצה ובזמנים – נמוך יותר הוא טוב יותר.</div>`;
 
   // grouped bars (HTML): two thin bars per row, value at the tip, tooltip on hover/focus
-  const grouped = (rows, maxV, fmt) => rows.map((r) => `<div class="grow"><span class="srow-l">${esc(r.label)}</span><div class="gbars">${[['now', r.now, 'עכשיו'], ['pre', r.pre, L]].map((x) => `<div class="gb" data-tip="${fmt(x[1])}|${esc(r.label)} · ${esc(x[2])}" tabindex="0"><i class="${x[0]}" style="width:${maxV ? Math.max(0, x[1] / maxV * 100).toFixed(1) : 0}%"></i><em>${fmt(x[1])}</em></div>`).join('')}</div></div>`).join('');
+  const grouped = (rows, maxV, fmt) => rows.map((r) => `<div class="grow"><span class="srow-l">${esc(r.label)}</span><div class="gbars">${[['now', r.now, 'עכשיו', r.nNow, cur.length], ['pre', r.pre, L, r.nPre, prev.length]].map((x) => `<div class="gb" data-tip="${x[1] == null ? 'אין נתון' : fmt(x[1])}${x[3] != null ? ' · מתוך ' + x[3] + ' מועמדים עם נתון מלא' : ''}|${esc(r.label)} · ${esc(x[2])}" tabindex="0"><i class="${x[0]}" style="width:${maxV && x[1] != null ? Math.max(0, x[1] / maxV * 100).toFixed(1) : 0}%"></i><em>${x[1] == null ? '—' : fmt(x[1])}${x[3] != null && x[3] < x[4] ? ` <span class="small">(${x[3]}/${x[4]})</span>` : ''}</em></div>`).join('')}</div></div>`).join('');
   const key2 = `<div class="legend row" style="margin-bottom:8px"><span class="lg"><i class="sq" style="background:var(--s1)"></i>עכשיו</span><span class="lg"><i class="sq" style="background:var(--ref)"></i>${esc(L)}</span></div>`;
   const roleRows = c.roles.map((r) => ({ label: r, now: cur.filter((x) => x.role === r).length, pre: prev.filter((x) => x.role === r).length }));
   // gaps vs unit needs
@@ -281,13 +281,15 @@ function cmpView(k) {
   const gapTable = `<div style="overflow:auto"><table><thead><tr><th>תפקיד</th><th>נדרש</th><th>זמינים</th><th>${esc(L)}</th><th>פער</th></tr></thead><tbody>${gapRows.map((g) => `<tr><td>${esc(g.r)}</td><td>${g.demand}</td><td>${g.supply} <span class="mut small"><bdi dir="ltr">(${sgn(g.supply - g.before, String) || '0'})</bdi></span></td><td>${g.before}</td><td>${g.gap > 0 ? `<span class="pill p-orange">חוסר ${g.gap}</span>` : (g.demand ? `<span class="pill p-green">מכוסה${g.gap < 0 ? ' · עודף ' + -g.gap : ''}</span>` : '<span class="pill p-gray">אין דרישה</span>')}</td></tr>`).join('')}</tbody></table></div><div class="mut small" style="margin-top:6px">נדרש = סך מכסות היחידות בחיל. זמינים = מועמדים עם המלצה שאינה שלילית (בסוגריים: שינוי מול הנתונים שהועלו). עמודת הכותרת עם שם הנתונים = כמה היו אז.</div>`;
   // threshold coverage per unit (recommendation ignored – thresholds only)
   const okThr = (x, u) => fitOf(k, x, u).filter((e) => e.s !== 'המלצה').every((e) => e.ok);
-  const unitRows = units.map((u) => ({ label: u.name, now: pc(cur.filter((x) => okThr(x, u)).length, cur.length) || 0, pre: pc(prev.filter((x) => okThr(x, u)).length, prev.length) || 0 }));
+  const known = (x, u) => c.stats.filter((s) => u.th[s.k] != null).every((s) => x.stats[s.k] != null) && (!u.noMed || x.med != null); // a missing metric is unknown, not a failure
+  const cov = (arr, u) => { const kn = arr.filter((x) => known(x, u)); return { p: pc(kn.filter((x) => okThr(x, u)).length, kn.length), n: kn.length }; };
+  const unitRows = units.map((u) => { const a = cov(cur, u), b2 = cov(prev, u); return { label: u.name, now: a.p, pre: b2.p, nNow: a.n, nPre: b2.n }; });
   // insights
   const notes = [];
   gapRows.filter((g) => g.gap > 0).sort((a, b) => b.gap - a.gap).slice(0, 2).forEach((g) => notes.push(`חוסר בתפקיד ${g.r}: נדרשים ${g.demand}, זמינים ${g.supply} (ב${L} היו ${g.before}).`));
   const best = statRows.filter((r) => r.d != null).sort((a, b) => b.rel - a.rel)[0];
   if (best && best.rel > 0.02) notes.push(`השינוי הגדול ביותר במדדים: ${best.s.l} (${best.v[1].replace(/^[▲▼＝] /, '')}, ${fmtVal(best.s, best.a)} מול ${fmtVal(best.s, best.b)} ${best.s.u}).`);
-  const drop = unitRows.map((u) => ({ u, d: u.now - u.pre })).sort((a, b) => a.d - b.d)[0];
+  const drop = unitRows.filter((u) => u.now != null && u.pre != null).map((u) => ({ u, d: u.now - u.pre })).sort((a, b) => a.d - b.d)[0];
   if (drop && drop.d < -5) notes.push(`הירידה הגדולה ביותר בכיסוי תנאי הסף: ${drop.u.label} (${pf(drop.u.now)} מול ${pf(drop.u.pre)}).`);
   const nc = kp[3]; if (nc.now != null && nc.pre != null && Math.abs(nc.now - nc.pre) >= 5) notes.push(`שיעור הלא מעוניינים בתפקיד קרבי ${nc.now > nc.pre ? 'עלה' : 'ירד'} מ־${pf(nc.pre)} ל־${pf(nc.now)}.`);
   return `<div class="row spread"><div><b>השוואה מול: ${esc(L)}</b> <span class="mut small">· ${base.rows.length} שורות · הועלה ע״י ${esc(base.by)} · ${new Date(base.uploadedAt).toLocaleDateString('he-IL')}</span></div>${R().pages.includes('import') ? '<a class="btn sec sm" href="#/import" style="text-decoration:none">החלפת נתוני ייחוס</a>' : ''}</div>
@@ -295,7 +297,7 @@ function cmpView(k) {
    <div class="card"><h2>נקודות בולטות</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.9">${notes.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>אין פערים בולטים בין הנתונים.</li>'}</ul><div class="mut small" style="margin-top:8px">ההשוואה היא בין שתי אוכלוסיות שונות, נוצרה מכללים שקופים ואינה הערכה של אדם או יחידה.</div></div>
    <div class="grid g2"><div class="card"><h2>מדדים – עכשיו מול ${esc(L)}</h2>${statTable}</div><div class="card"><h2>פערים מול צורכי היחידות</h2>${gapTable}</div></div>
    <div class="grid g2"><div class="card"><h2>מועמדים לפי תפקיד</h2>${key2}${grouped(roleRows, Math.max(1, ...roleRows.map((r) => Math.max(r.now, r.pre))), (v) => String(Math.round(v)))}</div>
-    <div class="card"><h2>עמידה בתנאי הסף – לפי יחידה</h2><div class="mut small" style="margin-bottom:6px">אחוז המועמדים שעומדים בכל תנאי הסף של היחידה (ללא המלצת המגבש)</div>${key2}${grouped(unitRows, 100, (v) => Math.round(v) + '%')}</div></div>`;
+    <div class="card"><h2>עמידה בתנאי הסף – לפי יחידה</h2><div class="mut small" style="margin-bottom:6px">אחוז העומדים בכל תנאי הסף של היחידה (כולל מגבלה רפואית, ללא המלצת המגבש) – מחושב רק על מועמדים שיש להם נתון לכל תנאי הסף</div>${key2}${grouped(unitRows, 100, (v) => Math.round(v) + '%')}</div></div>`;
 }
 
 // ---------------- command overview ----------------
@@ -410,10 +412,9 @@ function buildBaseRows(k) {
   const b = A.ui.base; if (!b) return [];
   return b.data.map((r, n) => {
     const row = parseRow(k, r, b.map), errs = row.statErrs.slice();
-    if (!row.med) row.med = 'ללא מגבלות';
     if (!cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
     if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
-    if (!A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
+    if (row.med && !A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
     return Object.assign(row, { n: n + 2, errs });
   });
 }
