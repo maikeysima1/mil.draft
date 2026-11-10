@@ -220,7 +220,7 @@ function seedTraining(k, cands) {
     if (sum <= 4 && c.reviews.length) c.tstatus = 'במעקב';
   });
   const low = cands.filter((c) => c.tstatus === 'במעקב');
-  if (low[0]) { low[0].tstatus = 'בבדיקת הדחה'; low[0].dismiss.push({ id: 'd1', status: 'פתוחה', openedTs: now - 3 * DAY, openedBy: 'מגבש/ת צוות ' + low[0].group, reason: 'ירידה מתמשכת בתפקוד בשבועיים האחרונים וקושי לעמוד בעומס.', prev: 'במעקב' }); }
+  if (low[0]) { low[0].tstatus = 'בבדיקת הדחה'; low[0].dismiss.push({ id: 'd1', status: 'פתוחה', openedTs: now - 3 * DAY, openedBy: 'מגבש/ת צוות ' + low[0].group, reason: 'ירידה מתמשכת בתפקוד בשבועיים האחרונים וקושי לעמוד בעומס.', prev: 'במעקב', opinions: [{ byId: 'seed', by: 'מגבש/ת צוות ' + low[0].group, stance: C.TR.stances[0], text: 'שלושה תרגילים רצופים שבהם לא עמד/ה בקצב הצוות, גם אחרי שיחה אישית.', ts: now - 3 * DAY }] }); }
   if (low[1]) { low[1].tstatus = 'הודח/ה'; low[1].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 30 * DAY, openedBy: 'מפקד/ת הכשרה · ' + low[1].unit, reason: 'אי עמידה ברף המקצועי לאחר תקופת מעקב.', prev: 'במעקב', decision: 'הודח/ה', decidedBy: 'מפקד/ת הכשרה · ' + low[1].unit, decidedTs: now - 24 * DAY, note: 'הוחלט לאחר שיחה עם החייל/ת ועם המגבש/ת. מומלץ לשיבוץ בתפקיד אחר.' }); }
   if (low[2]) { low[2].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 45 * DAY, openedBy: 'מגבש/ת צוות ' + low[2].group, reason: 'קושי בעבודת צוות.', prev: 'בהכשרה', decision: 'נשאר/ת במעקב', decidedBy: 'מפקד/ת הכשרה · ' + low[2].unit, decidedTs: now - 40 * DAY, note: 'שיפור ניכר לאחר שיחה. ממשיך/ה במעקב צמוד.' }); }
   return cands;
@@ -333,14 +333,25 @@ function apiHandle(p, b, user) {
     allow('dismiss', 'אין הרשאה לפתוח בדיקת הדחה'); const c = soldier(b.id); mustBeActive(c);
     if (openDismiss(c)) throw new Error('כבר פתוחה בדיקת הדחה ל' + c.name);
     const reason = text(b.reason, 1000); if (reason.length < 10) throw new Error('יש לפרט את הסיבה לבדיקה (לפחות 10 תווים)');
-    c.dismiss.push({ id: 'd' + (c.dismiss.length + 1), status: 'פתוחה', openedTs: Date.now(), openedBy: user.title, reason, prev: c.tstatus }); c.tstatus = 'בבדיקת הדחה';
+    c.dismiss.push({ id: 'd' + (c.dismiss.length + 1), status: 'פתוחה', openedTs: Date.now(), openedBy: user.title, reason, prev: c.tstatus, opinions: [] }); c.tstatus = 'בבדיקת הדחה';
     logAct(k, `${user.title} פתח/ה בדיקת הדחה ל${c.name}`); save(); return { ok: true };
+  }
+  // the dismissal room: one reasoned position per person per review (saving again replaces it)
+  if (p === 'dismiss-opinion') {
+    allow('opine', 'נימוק בחדר ההדחה נרשם ע״י מפקד/ת הכשרה או מגבש/ת הצוות'); const c = soldier(b.id), d = openDismiss(c);
+    if (!d) throw new Error('אין בדיקת הדחה פתוחה ל' + c.name);
+    if (!T.stances.includes(b.stance)) throw new Error('יש לבחור עמדה');
+    const txt = text(b.text, 1000); if (txt.length < 10) throw new Error('יש לנמק את העמדה (לפחות 10 תווים)');
+    d.opinions = d.opinions || []; const o = { byId: user.id, by: user.title, stance: b.stance, text: txt, ts: Date.now() }, i = d.opinions.findIndex((x) => x.byId === user.id);
+    if (i >= 0) d.opinions[i] = o; else d.opinions.push(o);
+    logAct(k, `${user.title} רשמ/ה נימוק בחדר ההדחה על ${c.name}: ${b.stance}`); save(); return { ok: true };
   }
   if (p === 'dismiss-decide') {
     allow('decide', 'ההחלטה בבדיקת הדחה היא של מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
     if (!d) throw new Error('אין בדיקת הדחה פתוחה ל' + c.name);
     if (!T.decisions.includes(b.decision)) throw new Error('יש לבחור החלטה');
     const note = text(b.note, 1000); if (note.length < 10) throw new Error('יש לנמק את ההחלטה (לפחות 10 תווים)');
+    const nOp = (d.opinions || []).length; if (b.decision === T.decisions[2] && nOp < T.minOpinions) throw new Error('אי אפשר להדיח לפני שנרשמו לפחות ' + T.minOpinions + ' נימוקים בחדר ההדחה (נרשמו ' + nOp + ')');
     Object.assign(d, { status: 'נסגרה', decision: b.decision, decidedBy: user.title, decidedTs: Date.now(), note });
     c.tstatus = b.decision === T.decisions[2] ? 'הודח/ה' : (b.decision === T.decisions[1] ? 'במעקב' : 'בהכשרה');
     logAct(k, `${user.title} החליט/ה בבדיקת ההדחה של ${c.name}: ${b.decision}`); save(); return { ok: true };

@@ -399,3 +399,10 @@ table td,table th{font-variant-numeric:tabular-nums}
 /* training timeline */
 .tl{padding:9px 0;border-bottom:1px solid var(--line2)}.tl:last-of-type{border-bottom:0}
 .drawer textarea{font:inherit}
+
+/* dismissal room */
+.room{border-inline-start:4px solid var(--red)}
+.opn{padding:8px 12px;margin:6px 0;border-radius:12px;background:var(--bg2)}
+.opform,.decide{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.decide{background:color-mix(in srgb,var(--blue) 6%,transparent);border-radius:12px;padding:12px;border-top:0}
+details.tl summary{cursor:pointer}

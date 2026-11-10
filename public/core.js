@@ -73,7 +73,7 @@ const PAGES = [
   { id: 'roster', name: 'חיילים בהכשרה', icon: 'users' },
   { id: 'daily', name: 'מעקב יומי', icon: 'clip' },
   { id: 'periodic', name: 'סטטוס תקופתי', icon: 'grid' },
-  { id: 'dismiss', name: 'בדיקות הדחה', icon: 'flag' },
+  { id: 'dismiss', name: 'חדר הדחה', icon: 'flag' },
   { id: 'intake', name: 'גיוס מועמד', icon: 'upload' },
   { id: 'eval', name: 'דף מגבש', icon: 'scale' },
   { id: 'log', name: 'יומן וייצוא', icon: 'file' },
@@ -175,7 +175,7 @@ function loginAuto() { // skip steps that have a single option
   const units = loginUnits(org); if (!A.ui.lunit && units.length === 1) A.ui.lunit = units[0];
   if (A.ui.lunit && !A.ui.sel) { const rs = loginRoles(org, A.ui.lunit); if (rs.length === 1) A.ui.sel = rs[0].id; }
 }
-const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', decide: 'החלטה בבדיקה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', fav: 'מעקב אישי', settings: 'הגדרות', factory: 'איפוס מערכת' };
+const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', opine: 'נימוק בחדר ההדחה', decide: 'החלטה בהדחה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', fav: 'מעקב אישי', settings: 'הגדרות', factory: 'איפוס מערכת' };
 function layerMatrix(selRole) {
   const rows = Object.keys(A.cfg.roles).sort((a, b) => roleOf(a).layer - roleOf(b).layer);
   return `<div class="card matrix"><h2>שכבות סיווג והרשאות</h2><div class="mut small" style="margin-bottom:10px">כל שכבה רואה ומפעילה רק את מה שנקבע לה (העמודות: חדר בחירה, לוח, דף מגבש, תמונת מצב, ייבוא). השרת בודק כל פעולה מחדש.</div>

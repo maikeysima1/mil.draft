@@ -82,7 +82,17 @@ async function main() {
       await deny('u4', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'נימוק ארוך מספיק לבדיקה' }, 'evaluator deciding a dismissal review');
       await deny('u1', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'נימוק ארוך מספיק לבדיקה' }, 'שלישות deciding a dismissal review');
       await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: '' }, 'decision without a written reason');
-      ok((await api('dismiss-decide', 'u3', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' })).status === 200, 'training commander decides: dismissed');
+      // dismissal room: reasoned positions first, then the decision
+      await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' }, 'dismissal before 2 positions were written in the room');
+      await deny('u1', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'נימוק ארוך מספיק לבדיקה' }, 'שלישות writing a position in the dismissal room');
+      await deny('u4', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'נימוק ארוך מספיק לבדיקה' }, 'evaluator of team 3 writing a position on a team-1 soldier');
+      await deny('u3', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'קצר' }, 'position without a real reason');
+      await api('dismiss-opinion', 'u3', { corps: K, id: t1.id, stance: 'להשאיר במעקב', text: 'עדיין רואה פוטנציאל לשיפור' });
+      await api('dismiss-opinion', 'u3', { corps: K, id: t1.id, stance: 'להדיח', text: 'אחרי שבוע נוסף אין שיפור בתפקוד' });
+      let ops = by(await st(), t1.id).dismiss.find((d) => d.status === 'פתוחה').opinions; ok(ops.length === 1 && ops[0].stance === 'להדיח', 'one position per person: saving again replaces it');
+      await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' }, 'dismissal with only 1 position');
+      ok((await api('dismiss-opinion', 'e-combat-1', { corps: K, id: t1.id, stance: 'להדיח', text: 'לא עומד בקצב הצוות כבר חודש' })).status === 200, 'evaluator of team 1 writes a position on an own-team soldier');
+      ok((await api('dismiss-decide', 'u3', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' })).status === 200, 'training commander decides after 2 positions: dismissed');
       ok(by(await st(), t1.id).tstatus === 'הודח/ה', 'soldier status is now dismissed');
       await deny('u3', 'daily', { corps: K, id: t1.id, level: 1 }, 'daily entry for a dismissed soldier');
       ok((await api('dismiss-open', 'u4', { corps: K, id: t3.id, reason: 'שלושה ימים רצופים של קושי בעומס' })).status === 200, 'evaluator recommends a dismissal review for an own-team soldier');
@@ -112,6 +122,12 @@ async function main() {
       await cm.page.locator('tr.clk .clink').first().click(); await cm.page.waitForSelector('.drawer');
       await cm.page.click('[data-act=cfOpen][data-t=periodic]'); await cm.page.selectOption('select[data-f=rec]', 'ממשיך/ה'); await cm.page.fill('#cf-summary', 'התחלה טובה, משתלב/ת בצוות'); await cm.page.click('[data-act=cfSave]'); await cm.page.waitForTimeout(600);
       ok(/הסטטוס נשמר/.test(await cm.page.locator('#toast').innerText()) && /סטטוס/.test(await cm.page.locator('.drawer .tl').first().innerText()), 'periodic status entered from the soldier file and shown in the timeline');
+      await api('dismiss-open', 'u3', { corps: K, id: nc.id, reason: 'בדיקה לצורך הדגמת חדר ההדחה' }); await go(cm.page, 'dismiss');
+      ok(await cm.page.locator('.room').count() >= 1 && /נימוקים נדרשים/.test(await cm.page.locator('.room').first().innerText()), 'dismissal room lists the open candidates with the positions counter');
+      const rc = cm.page.locator('#room-' + nc.id); await rc.locator('[data-act=opStance]').nth(1).click(); await cm.page.waitForTimeout(300);
+      await cm.page.fill('#op-' + nc.id, 'נימוק שנכתב מתוך חדר ההדחה'); await cm.page.locator('#room-' + nc.id + ' [data-act=opSave]').click(); await cm.page.waitForTimeout(600);
+      ok(/הנימוק נרשם/.test(await cm.page.locator('#toast').innerText()) && await cm.page.locator('#room-' + nc.id + ' .opn').count() === 1, 'position written from the dismissal room and listed there');
+      ok(await cm.page.locator('#room-' + nc.id + ' select[data-f=decision] option[disabled]').count() === 1, '"הודח/ה" is disabled in the room until enough positions exist');
       const hq = await session(browser, 'h1'); ok(await hq.page.locator('.clink').count() === 0 && /מספרים מסכמים בלבד/.test(await hq.page.locator('main').innerText()), 'ראש מטה sees totals only, no names');
       ok(ev.errs.length + cm.errs.length + hq.errs.length === 0, 'no page errors in the UI flows ' + ev.errs.concat(cm.errs, hq.errs).join('|'));
       console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); process.exitCode = bad ? 1 : 0;

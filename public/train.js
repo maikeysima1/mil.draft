@@ -40,7 +40,7 @@ function timeline(k, c) {
   const ev = [{ ts: c.intakeTs, t: 'גיוס למערכת', cls: 'p-blue', by: c.intakeBy, body: `שובץ/ה ל${esc(c.unit || 'יחידה לא נקבעה')}${c.target ? ' · ' + esc(cf(k).targetLabel) + ': ' + esc(c.target) : ''}` }];
   (c.daily || []).forEach((e) => ev.push({ ts: e.ts, t: 'מעקב יומי', cls: LV_CLS[e.level], by: e.by, body: `<b>${esc(TR().daily[e.level])}</b>${e.att !== TR().attend[0] ? ' · ' + esc(e.att) : ''}${e.text ? ' – ' + esc(e.text) : ''}` }));
   (c.reviews || []).forEach((r) => ev.push({ ts: r.ts, t: 'סטטוס ' + r.label, cls: r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red'), by: r.by, body: `<b>${esc(r.rec)}</b> – ${esc(r.summary)}` }));
-  (c.dismiss || []).forEach((d) => { ev.push({ ts: d.openedTs, t: 'נפתחה בדיקת הדחה', cls: 'p-red', by: d.openedBy, body: esc(d.reason) }); if (d.status === 'נסגרה') ev.push({ ts: d.decidedTs, t: 'החלטה בבדיקת הדחה', cls: d.decision === TR().decisions[2] ? 'p-gray' : 'p-green', by: d.decidedBy, body: `<b>${esc(d.decision)}</b> – ${esc(d.note)}` }); });
+  (c.dismiss || []).forEach((d) => { ev.push({ ts: d.openedTs, t: 'נפתחה בדיקת הדחה', cls: 'p-red', by: d.openedBy, body: esc(d.reason) }); (d.opinions || []).forEach((o) => ev.push({ ts: o.ts, t: 'נימוק בחדר ההדחה', cls: stanceCls(o.stance), by: o.by, body: `<b>${esc(o.stance)}</b> – ${esc(o.text)}` })); if (d.status === 'נסגרה') ev.push({ ts: d.decidedTs, t: 'החלטה בבדיקת הדחה', cls: d.decision === TR().decisions[2] ? 'p-gray' : 'p-green', by: d.decidedBy, body: `<b>${esc(d.decision)}</b> – ${esc(d.note)}` }); });
   if (c.doneTs) ev.push({ ts: c.doneTs, t: 'סיום הכשרה', cls: 'p-blue', by: '', body: '' });
   ev.sort((a, b) => b.ts - a.ts);
   const all = A.ui.tlAll, list = all ? ev : ev.slice(0, 8);
@@ -62,12 +62,12 @@ function drawer(k, id) {
   const c = candOf(k, id); if (!c) return '';
   const od = openDis(c), act = isActive(c), mine = A.me.role !== 'מגבש/ת' || c.group === A.me.group, miss = missingOf(k, c);
   const b = (type, label, cls) => `<button class="btn ${cls || 'sec'} sm" data-act="cfOpen" data-t="${type}">${label}</button>`;
-  const actions = !mine || !act ? '' : [can('daily', k) ? b('daily', myToday(c) ? 'עדכון המעקב של היום' : 'מעקב יומי') : '', can('periodic', k) ? b('periodic', periodRv(c) ? 'עדכון סטטוס ' + A.S.period.label : 'סטטוס ' + A.S.period.label) : '', !od && can('dismiss', k) ? b('open', 'פתיחת בדיקת הדחה') : '', od && can('decide', k) ? b('decide', 'החלטה בבדיקת ההדחה', '') : '', !od && can('complete', k) ? '<button class="btn sec sm" data-act="complete">סיום הכשרה</button>' : ''].join('');
+  const actions = !mine || !act ? '' : [can('daily', k) ? b('daily', myToday(c) ? 'עדכון המעקב של היום' : 'מעקב יומי') : '', can('periodic', k) ? b('periodic', periodRv(c) ? 'עדכון סטטוס ' + A.S.period.label : 'סטטוס ' + A.S.period.label) : '', !od && can('dismiss', k) ? b('open', 'פתיחת בדיקת הדחה') : '', od && (can('opine', k) || can('decide', k)) ? '<button class="btn sm" data-act="goRoom">לחדר ההדחה</button>' : '', !od && can('complete', k) ? '<button class="btn sec sm" data-act="complete">סיום הכשרה</button>' : ''].join('');
   return `<div class="drawer-bg" data-act="closeCand"><aside class="drawer" role="dialog" aria-label="תיק חייל/ת">
    <div class="row spread" style="flex-wrap:nowrap;align-items:flex-start">${can('fav', k) ? favBtn(k, id, 'lg') : ''}<div class="row" style="flex:1;flex-wrap:nowrap;gap:14px;align-items:center">${avatar(c, 72)}<div style="flex:1"><div class="small" style="color:var(--orange);font-weight:600">תיק חייל/ת · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small"><bdi>${c.id}</bdi> · ${esc(c.role)} · צוות ${c.group}</div></div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
    ${navBar(id)}
    <div class="row">${stPill(c)}<span class="pill p-gray">${esc(c.unit || 'יחידה לא נקבעה')}</span><span class="pill p-violet">${esc(cf(k).targetLabel)}: ${esc(c.target || 'לא נקבע')}</span><span class="pill p-gray">${c.profile == null ? 'פרופיל לא הוזן' : 'פרופיל ' + c.profile} · ${esc(c.med)}</span></div>
-   ${od ? `<div class="demo-note" style="border-color:var(--red)"><b>בדיקת הדחה פתוחה</b> · ${esc(od.openedBy)} · ${fmtD(od.openedTs)}<div>${esc(od.reason)}</div></div>` : ''}
+   ${od ? `<div class="demo-note" style="border-color:var(--red)"><b>בדיקת הדחה פתוחה</b> · ${esc(od.openedBy)} · ${fmtD(od.openedTs)}<div>${esc(od.reason)}</div><div style="margin-top:4px">${tallyHtml(od)}</div></div>` : ''}
    ${miss.length ? `<div class="demo-note">חסר בתיק: ${esc(miss.join(', '))}</div>` : ''}
    ${actions ? `<div class="row no-print">${actions}</div>` : ''}${cardForm(k, c)}
    <div class="card"><h3 style="margin:0 0 6px">ציר זמן</h3>${timeline(k, c)}</div>
@@ -81,6 +81,7 @@ Object.assign(ACTIONS, {
   cand: (d) => ACTIONS.openCand(d),
   navPrev: () => navStep(-1), navNext: () => navStep(1),
   closeCand: () => { A.ui.cand = null; A.ui.cf = null; rerender(); },
+  goRoom: () => { A.ui.cand = null; A.ui.cf = null; go('dismiss'); },
   tlAll: () => { A.ui.tlAll = !A.ui.tlAll; rerender(); },
   fav: async (d, t, e) => { e.stopPropagation(); const k = corpsKey(); try { await api('fav', { corps: k, id: d.id, on: !isFav(k, d.id) }); } catch (x) { /* toast shown */ } },
   cfOpen: (d) => { const k = corpsKey(), c = candOf(k, A.ui.cand), m = myToday(c), r = periodRv(c); A.ui.cf = { type: d.t, id: c.id, level: m ? m.level : null, att: m ? m.att : TR().attend[0], text: m ? m.text : '', lv: r ? r.lv.slice() : c.lv.map(() => null), rec: r ? r.rec : '', summary: r ? r.summary : '', reason: '', decision: '', note: '' }; rerender(); },
@@ -180,18 +181,51 @@ SCREENS.periodic = (k) => {
    <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>יחידה</th><th>סטטוס נוכחי</th><th>תקופה קודמת</th><th>${esc(A.S.period.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x), pr = (x.reviews || []).filter((y) => y.period !== A.S.period.key).sort((a, b) => b.ts - a.ts)[0];
      return `<tr><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<b>${candLink(k, x.id, x.name)}</b></span></td><td>${esc(x.unit)}</td><td>${stPill(x)}</td><td>${pr ? `<span class="pill p-gray">${esc(pr.rec)}</span> <span class="mut small">${esc(pr.label)}</span>` : '<span class="mut">—</span>'}</td><td>${r ? `<span class="pill ${r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red')}">${esc(r.rec)}</span> <span class="mut small">${esc(r.by)} · ${fmtD(r.ts)}</span>` : '<span class="pill p-orange">חסר</span>'}</td><td>${can('periodic', k) ? `<button class="btn sec sm" data-act="pOpen" data-id="${x.id}">${r ? 'עדכון' : 'הזנת סטטוס'}</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">לכל החיילים הפעילים הוזן סטטוס לתקופה</td></tr>'}</tbody></table></div></div>`;
 };
-// ---- dismissal reviews ----
+// ---- dismissal room (חדר הדחה): every commander writes a reasoned position per candidate, then the decision is taken on that basis ----
+const STANCE_CLS = ['p-red', 'p-orange', 'p-green'];
+const stanceCls = (s) => STANCE_CLS[TR().stances.indexOf(s)] || 'p-gray';
+const tally = (d) => TR().stances.map((s) => ({ s, n: (d.opinions || []).filter((o) => o.stance === s).length }));
+const tallyHtml = (d) => tally(d).filter((t) => t.n).map((t) => `<span class="pill ${stanceCls(t.s)}">${t.n} ${esc(t.s)}</span>`).join(' ') || '<span class="mut small">עדיין אין נימוקים</span>';
+function opinionsHtml(d) { return (d.opinions || []).slice().sort((a, b) => a.ts - b.ts).map((o) => `<div class="opn"><div class="row" style="gap:8px"><span class="pill ${stanceCls(o.stance)}">${esc(o.stance)}</span><b class="small">${esc(o.by)}</b><span class="mut small">${fmtD(o.ts)} · ${agoTxt(o.ts)}</span></div><div style="margin-top:3px">${esc(o.text)}</div></div>`).join(''); }
+function roomCard(k, x) {
+  const d = openDis(x), ops = d.opinions || [], mine = ops.find((o) => o.byId === A.me.id), min = TR().minOpinions;
+  const week = (x.daily || []).filter((e) => daysAgo(e.ts) <= 7), wk = TR().daily.map((w, j) => week.filter((e) => e.level === j).length), rv = lastRv(x);
+  const st = (A.ui.op || {})[x.id] || {}, stance = st.stance != null ? st.stance : (mine ? mine.stance : ''), txt = st.text != null ? st.text : (mine ? mine.text : '');
+  const dc = (A.ui.dec || {})[x.id] || {}, canDismiss = ops.length >= min;
+  return `<div class="card room" id="room-${x.id}">
+    <div class="row spread" style="align-items:flex-start"><span class="row" style="gap:12px;flex-wrap:nowrap">${avatar(x, 56)}<span><b style="font-size:19px">${candLink(k, x.id, x.name)}</b><div class="mut small"><bdi>${x.id}</bdi> · ${esc(x.role)} · ${esc(x.unit)} · צוות ${x.group}</div></span></span><span class="row" style="gap:6px">${tallyHtml(d)}<span class="pill ${canDismiss ? 'p-blue' : 'p-gray'}">${ops.length} מתוך ${min} נימוקים נדרשים</span></span></div>
+    <div class="grid g2" style="margin-top:12px"><div><div class="mut small">סיבת הבדיקה · ${esc(d.openedBy)} · ${fmtD(d.openedTs)}</div><div>${esc(d.reason)}</div></div>
+     <div><div class="mut small">נתונים מהתיק</div><div class="row" style="gap:6px">${week.length ? TR().daily.map((w, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(w)}</span>` : '')).join('') + '<span class="mut small">ב-7 הימים האחרונים</span>' : '<span class="mut small">אין מעקב יומי ב-7 הימים האחרונים</span>'}</div><div style="margin-top:4px">${rv ? `<span class="pill p-gray">${esc(rv.label)}: ${esc(rv.rec)}</span>` : '<span class="mut small">אין סטטוס תקופתי</span>'}</div></div></div>
+    <h3 style="margin:14px 0 4px">נימוקי המפקדים (${ops.length})</h3>${opinionsHtml(d) || '<div class="mut">עדיין לא נרשמו נימוקים לבדיקה הזו.</div>'}
+    ${can('opine', k) ? `<div class="opform"><b>${mine ? 'הנימוק שלי (עדכון)' : 'הנימוק שלי'}</b><div class="seg" style="margin:6px 0">${TR().stances.map((w) => `<button type="button" class="${stance === w ? 'on' : ''}" data-act="opStance" data-id="${x.id}" data-v="${esc(w)}">${esc(w)}</button>`).join('')}</div><textarea id="op-${x.id}" data-inp="opText" data-id="${x.id}" rows="2" placeholder="עובדות ומקרים שמבססים את העמדה שלך" style="width:100%">${esc(txt)}</textarea><div class="row" style="margin-top:6px"><button class="btn sec sm" data-act="opSave" data-id="${x.id}">${mine ? 'עדכון הנימוק' : 'רישום הנימוק'}</button></div></div>` : ''}
+    ${can('decide', k) ? `<div class="decide"><b>החלטה</b><div class="mut small">${canDismiss ? 'נרשמו מספיק נימוקים. ההחלטה נרשמת בתיק עם הנימוק שלך.' : 'כדי להדיח נדרשים לפחות ' + min + ' נימוקים. אפשר כבר להחליט להשאיר.'}</div><div class="row" style="margin-top:6px;align-items:flex-end"><label>החלטה<select data-chg="decSet" data-f="decision" data-id="${x.id}"><option value="">בחרו…</option>${TR().decisions.map((o) => `<option ${o === dc.decision ? 'selected' : ''} ${o === TR().decisions[2] && !canDismiss ? 'disabled' : ''}>${esc(o)}</option>`).join('')}</select></label><label style="flex:1;min-width:220px">נימוק ההחלטה<input type="text" id="dec-${x.id}" data-inp="decSet" data-f="note" data-id="${x.id}" value="${esc(dc.note || '')}" placeholder="חובה – כולל עמדת החייל/ת אם נשמעה" style="width:100%"></label><button class="btn sm" data-act="decSave" data-id="${x.id}">שמירת ההחלטה</button></div></div>` : ''}
+   </div>`;
+}
 SCREENS.dismiss = (k) => {
-  const c = cf(k), vis = visible(k), open = vis.filter(openDis), closed = []; vis.forEach((x) => (x.dismiss || []).filter((d) => d.status === 'נסגרה').forEach((d) => closed.push({ x, d }))); closed.sort((a, b) => b.d.decidedTs - a.d.decidedTs);
+  const c = cf(k), vis = visible(k), open = vis.filter(openDis).sort((a, b) => openDis(a).openedTs - openDis(b).openedTs), closed = []; vis.forEach((x) => (x.dismiss || []).filter((d) => d.status === 'נסגרה').forEach((d) => closed.push({ x, d }))); closed.sort((a, b) => b.d.decidedTs - a.d.decidedTs);
   A.ui.list = open.map((x) => x.id);
-  return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">בדיקות הדחה – ${esc(c.label)}</h1><div class="mut small">פתיחת בדיקה אינה הדחה. ההחלטה מתקבלת ע״י מפקד/ת ההכשרה ונרשמת בתיק עם נימוק.${can('decide', k) ? '' : ' צפייה בלבד.'}</div></div>
-   <div class="card"><h2>בדיקות פתוחות (${open.length})</h2>${open.map((x) => { const d = openDis(x); return `<div class="tl"><div class="row spread"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 36)}<span><b>${candLink(k, x.id, x.name)}</b> <span class="mut small">${esc(x.unit)} · צוות ${x.group}</span></span></span><span class="row"><span class="mut small">נפתחה ${agoTxt(d.openedTs)} · ${esc(d.openedBy)}</span>${can('decide', k) ? `<button class="btn sm" data-act="dOpen" data-id="${x.id}">החלטה</button>` : ''}</span></div><div style="margin-top:4px">${esc(d.reason)}</div></div>`; }).join('') || '<span class="mut">אין בדיקות הדחה פתוחות.</span>'}</div>
-   <div class="card"><h2>בדיקות שנסגרו (${closed.length})</h2>${closed.map(({ x, d }) => `<div class="tl"><div class="row spread"><span><b>${candLink(k, x.id, x.name)}</b> <span class="mut small">${esc(x.unit)}</span></span><span class="row"><span class="pill ${d.decision === TR().decisions[2] ? 'p-gray' : 'p-green'}">${esc(d.decision)}</span><span class="mut small">${fmtD(d.decidedTs)} · ${esc(d.decidedBy)}</span></span></div><div class="mut small" style="margin-top:4px">סיבת הבדיקה: ${esc(d.reason)}</div><div style="margin-top:2px">${esc(d.note)}</div></div>`).join('') || '<span class="mut">עדיין לא נסגרו בדיקות.</span>'}</div>`;
+  return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר הדחה – ${esc(c.label)}</h1><div class="mut small">כל מפקד/ת רושם/ת נימוק על כל מועמד/ת להדחה, ועל בסיס הנימוקים מתקבלת ההחלטה. פתיחת בדיקה אינה הדחה.${can('opine', k) || can('decide', k) ? '' : ' צפייה בלבד.'}</div></div>
+   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div class="kpi"><b>${open.length}</b><span>מועמדים להדחה בחדר</span></div><div class="kpi"><b>${open.filter((x) => (openDis(x).opinions || []).length >= TR().minOpinions).length}</b><span>מוכנים להחלטה</span></div><div class="kpi"><b>${can('opine', k) ? open.filter((x) => !(openDis(x).opinions || []).some((o) => o.byId === A.me.id)).length : '—'}</b><span>ממתינים לנימוק שלך</span></div></div>
+   ${open.map((x) => roomCard(k, x)).join('') || '<div class="card"><h2>החדר ריק</h2><p class="mut">אין כרגע מועמדים להדחה. בדיקה נפתחת מתיק החייל/ת, או כשסטטוס תקופתי מסתכם ב"מועמד/ת להדחה".</p></div>'}
+   <div class="card"><h2>בדיקות שנסגרו (${closed.length})</h2>${closed.map(({ x, d }) => `<details class="tl"><summary><span class="row spread" style="display:inline-flex;width:calc(100% - 24px)"><span><b>${candLink(k, x.id, x.name)}</b> <span class="mut small">${esc(x.unit)}</span></span><span class="row"><span class="pill ${d.decision === TR().decisions[2] ? 'p-gray' : 'p-green'}">${esc(d.decision)}</span><span class="mut small">${fmtD(d.decidedTs)} · ${esc(d.decidedBy)} · ${(d.opinions || []).length} נימוקים</span></span></span></summary><div class="mut small" style="margin-top:6px">סיבת הבדיקה: ${esc(d.reason)}</div><div style="margin:2px 0 6px"><b>נימוק ההחלטה:</b> ${esc(d.note)}</div>${opinionsHtml(d)}</details>`).join('') || '<span class="mut">עדיין לא נסגרו בדיקות.</span>'}</div>`;
 };
+Object.assign(ACTIONS, {
+  opStance: (d) => { const o = A.ui.op || (A.ui.op = {}); (o[d.id] || (o[d.id] = {})).stance = d.v; rerender(); },
+  opText: (d, t) => { const o = A.ui.op || (A.ui.op = {}); (o[d.id] || (o[d.id] = {})).text = t.value; },
+  opSave: async (d) => {
+    const k = corpsKey(), c = candOf(k, d.id), mine = (openDis(c).opinions || []).find((o) => o.byId === A.me.id), st = (A.ui.op || {})[d.id] || {};
+    try { await api('dismiss-opinion', { corps: k, id: d.id, stance: st.stance != null ? st.stance : (mine ? mine.stance : ''), text: st.text != null ? st.text : (mine ? mine.text : '') }); if (A.ui.op) delete A.ui.op[d.id]; toast('הנימוק נרשם'); rerender(); } catch (x) { /* toast shown */ }
+  },
+  decSet: (d, t) => { const o = A.ui.dec || (A.ui.dec = {}); (o[d.id] || (o[d.id] = {}))[d.f] = t.value; },
+  decSave: async (d) => {
+    const k = corpsKey(), c = candOf(k, d.id), v = (A.ui.dec || {})[d.id] || {};
+    if (v.decision === TR().decisions[2] && !confirm('להדיח את ' + c.name + ' מההכשרה? ההחלטה נרשמת בתיק ואי אפשר לבטל אותה מהמערכת.')) return;
+    try { await api('dismiss-decide', { corps: k, id: d.id, decision: v.decision || '', note: v.note || '' }); if (A.ui.dec) delete A.ui.dec[d.id]; toast('ההחלטה נשמרה: ' + v.decision); rerender(); } catch (x) { /* toast shown */ }
+  },
+});
 Object.assign(ACTIONS, {
   pMiss: (d, t) => { A.ui.pMiss = t.checked; rerender(); },
   pOpen: (d) => { ACTIONS.openCand(d); ACTIONS.cfOpen({ t: 'periodic' }); },
-  dOpen: (d) => { ACTIONS.openCand(d); ACTIONS.cfOpen({ t: 'decide' }); },
 });
 
 // ---- intake (גיוס המועמד) ----
@@ -216,7 +250,7 @@ function exportSheets(k) {
     ['חיילים', [['מס׳', 'שם', 'תפקיד', 'יחידה', c.targetLabel, 'צוות', 'סטטוס', 'גיוס', 'מעקב אחרון', 'סטטוס ' + A.S.period.label].concat(c.stats.map((s) => s.l + ' (' + s.u + ')'))].concat(v.map((x) => { const l = lastDaily(x), r = periodRv(x); return [x.id, x.name, x.role, x.unit, x.target, x.group, x.tstatus, fmtD(x.intakeTs), l ? TR().daily[l.level] + ' · ' + fmtD(l.ts) : '', r ? r.rec : ''].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))); }))],
     ['מעקב יומי', [['תאריך', 'מס׳', 'שם', 'רמה', 'נוכחות', 'הערה', 'מזין/ה']].concat(v.flatMap((x) => (x.daily || []).map((e) => [e.d, x.id, x.name, TR().daily[e.level], e.att, e.text, e.by])).sort((a, b) => (a[0] < b[0] ? 1 : -1)))],
     ['סטטוס תקופתי', [['תקופה', 'מס׳', 'שם', 'המלצה', 'סיכום', 'מזין/ה', 'תאריך']].concat(v.flatMap((x) => (x.reviews || []).map((r) => [r.label, x.id, x.name, r.rec, r.summary, r.by, fmtD(r.ts)])))],
-    ['בדיקות הדחה', [['מס׳', 'שם', 'מצב', 'נפתחה', 'פותח/ת', 'סיבה', 'החלטה', 'מחליט/ה', 'תאריך החלטה', 'נימוק']].concat(v.flatMap((x) => (x.dismiss || []).map((d) => [x.id, x.name, d.status, fmtD(d.openedTs), d.openedBy, d.reason, d.decision || '', d.decidedBy || '', d.decidedTs ? fmtD(d.decidedTs) : '', d.note || ''])))],
+    ['בדיקות הדחה', [['מס׳', 'שם', 'מצב', 'נפתחה', 'פותח/ת', 'סיבה', 'החלטה', 'מחליט/ה', 'תאריך החלטה', 'נימוק ההחלטה', 'נימוקי המפקדים']].concat(v.flatMap((x) => (x.dismiss || []).map((d) => [x.id, x.name, d.status, fmtD(d.openedTs), d.openedBy, d.reason, d.decision || '', d.decidedBy || '', d.decidedTs ? fmtD(d.decidedTs) : '', d.note || '', (d.opinions || []).map((o) => o.by + ' – ' + o.stance + ': ' + o.text).join(' | ')])))],
     ['יומן פעילות', logRows(k)],
   ];
 }

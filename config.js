@@ -67,17 +67,19 @@ const TR = {
   periodRec: ['ממשיך/ה', 'במעקב', 'מועמד/ת להדחה'],        // outcome of a periodic status
   decisions: ['נשאר/ת בהכשרה', 'נשאר/ת במעקב', 'הודח/ה'],   // outcome of a dismissal review
   periods: ['רבעון', 'חציון'],
+  // dismissal room: every commander / the team's evaluator writes a reasoned position; a dismissal needs at least minOpinions of them
+  stances: ['להדיח', 'להשאיר במעקב', 'להשאיר בהכשרה'], minOpinions: 2,
 };
 // special units the soldiers are candidates for (generic names – replace with the real ones)
 const TARGETS = { combat: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], intel: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], signals: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'decide', 'complete', 'regroup', 'fav', 'evalbulk', 'settings', 'factory'], desc: 'שליטה מלאה בכל החילות: גיוס מועמדים, מעקב יומי, סטטוס תקופתי, בדיקות הדחה, הגדרות, משתמשים ואיפוס מערכת.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'decide', 'complete', 'fav'], desc: 'מזין/ה מעקב יומי וסטטוס תקופתי, פותח/ת בדיקת הדחה ומחליט/ה בה, ומסמן/ת סיום הכשרה. רואה את דפי המגבש בצפייה בלבד.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'regroup', 'fav', 'evalbulk', 'settings', 'factory'], desc: 'שליטה מלאה בכל החילות: גיוס מועמדים, מעקב יומי, סטטוס תקופתי, בדיקות הדחה, הגדרות, משתמשים ואיפוס מערכת.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'fav'], desc: 'מזין/ה מעקב יומי וסטטוס תקופתי, פותח/ת בדיקת הדחה, רושם/ת נימוק בחדר ההדחה ומחליט/ה, ומסמן/ת סיום הכשרה. רואה את דפי המגבש בצפייה בלבד.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה בלבד בתמונת המצב של כל החילות. אין גישה לתיקי החיילים.' },
   'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import', 'fav'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
-  'מגבש/ת': { layer: 5, scope: 'group', home: 'daily', pages: ['daily', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss'], desc: 'אחראי/ת על צוות אחד: מעקב יומי על חיילי הצוות, דף מגבש, והמלצה לפתוח בדיקת הדחה. ההחלטה בבדיקה היא של מפקד/ת ההכשרה.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'daily', pages: ['daily', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss', 'opine'], desc: 'אחראי/ת על צוות אחד: מעקב יומי על חיילי הצוות, דף מגבש, פתיחת בדיקת הדחה ורישום נימוק בחדר ההדחה על חיילי הצוות. ההחלטה היא של מפקד/ת ההכשרה.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה במספרים המסכמים בתמונת המצב בלבד, ללא שמות, תיקים או הרשאות פעולה.' },
 };
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
