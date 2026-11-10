@@ -357,3 +357,30 @@ input.invalid{border-color:var(--red);background:var(--red-l)}
 .cmptbl tbody th{font-weight:600;color:var(--mut);white-space:nowrap}
 .cmpv.ok{color:var(--green);font-weight:800}
 .cmpv.top{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px;padding:1px 6px}
+
+/* ---- polish pass ---- */
+select,input[type=text],input[type=number],input[type=search],input[type=password],input[type=email],textarea{border:1px solid var(--line);border-radius:11px;padding:7px 11px;background:var(--card);color:inherit;min-height:38px;font:inherit;transition:border-color .15s,box-shadow .15s}
+input[type=search]{-webkit-appearance:none;appearance:none}
+select:hover,input:hover:not([type=checkbox]):not([type=file]),textarea:hover{border-color:color-mix(in srgb,var(--mut) 45%,var(--line))}
+select:focus-visible,input:focus-visible,textarea:focus-visible{border-color:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent);outline:none}
+input::placeholder,textarea::placeholder{color:color-mix(in srgb,var(--mut) 70%,transparent)}
+/* native file picker: styled button instead of the browser default */
+input[type=file]{font:inherit;color:var(--mut);max-width:100%}
+input[type=file]::file-selector-button{margin-inline-end:12px;border:1px solid var(--line);background:var(--card);color:var(--navy);border-radius:11px;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer;transition:.15s}
+input[type=file]::file-selector-button:hover{border-color:var(--green);color:var(--green)}
+/* filter checkboxes as pills */
+.filters label:has(>input[type=checkbox]){flex-direction:row;align-items:center;gap:8px;min-height:38px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:inherit;font-size:13.5px;cursor:pointer;transition:.15s}
+.filters label:has(>input[type=checkbox]:checked){border-color:var(--green);background:var(--green-l);color:var(--green-d);font-weight:700}
+.filters label:has(>input[type=checkbox]):hover{border-color:var(--green)}
+input[type=checkbox]{accent-color:var(--green);width:16px;height:16px}
+/* numbers align in tables, ids never break */
+table td,table th{font-variant-numeric:tabular-nums}
+.list-item bdi,.ctbl bdi{white-space:nowrap}
+/* tables: sticky header inside scroll areas, calmer row hover */
+.ctbl thead th{position:sticky;top:0;background:var(--card);z-index:1}
+.ctbl tr.clk:hover td{background:color-mix(in srgb,var(--blue) 6%,transparent)}
+/* respect reduced motion */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+/* touch targets on phones */
+@media(max-width:900px){.favbtn,.cmpbtn{width:44px;height:44px}.iconbtn{min-width:44px;min-height:44px}.filters label:has(>input[type=checkbox]){min-height:44px}}
+[data-theme=dark]{color-scheme:dark}:root{color-scheme:light}

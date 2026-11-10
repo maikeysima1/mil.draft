@@ -175,7 +175,7 @@ applyTheme();
 
 // ---- shell ----
 function shell(inner) {
-  const nav = PAGES.filter(allowed).map((p) => `<a href="#/${p.id}" class="${route() === p.id ? 'on' : ''}">${icon(p.icon)}<span>${p.name}</span></a>`).join('');
+  const nav = PAGES.filter(allowed).map((p) => `<a href="#/${p.id}" class="${route() === p.id ? 'on' : ''}" ${route() === p.id ? 'aria-current="page"' : ''}>${icon(p.icon)}<span>${p.name}</span></a>`).join('');
   const page = PAGES.find((p) => p.id === route());
   const dark = document.documentElement.dataset.theme === 'dark';
   const k = A.me.corps || A.ui.corps;
