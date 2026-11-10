@@ -112,7 +112,7 @@ function applyEval(cf, c, b, who) {
 }
 function newCand(cf, cst, name, role, group, source) {
   const max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0) + 1, stats = {}; cf.stats.forEach((s) => { stats[s.k] = null; });
-  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => 1), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
+  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => null), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
   cst.cands.push(c); return c;
 }
 function cleanExtra(cf, x, old) { // only the fields present in x are touched; unknown stays unknown (null/undefined), never a made-up default
@@ -252,7 +252,7 @@ function chooseFor(k, unitName) {
     if (taken[c.id]) return;
     const need = (u.quota[c.role] || 0) - (have[c.role] || 0);
     const bad = fitOf(k, c, u).filter((x) => !x.ok).length;
-    const s = (need > 0 ? 20 : 0) - bad * 6 + c.lv.reduce((a, b) => a + b, 0) + WISH_BONUS[wishRank(c, unitName)] + Math.random() * 2;
+    const s = (need > 0 ? 20 : 0) - bad * 6 + c.lv.reduce((a, b) => a + (b || 0), 0) + WISH_BONUS[wishRank(c, unitName)] + Math.random() * 2;
     if (s > bs) { bs = s; best = c; }
   });
   return best;
@@ -538,7 +538,7 @@ http.createServer(async (req, res) => {
           const stats = {}; cf.stats.forEach((s) => { stats[s.k] = num((r.stats || {})[s.k]); });
           const med = C.MEDS.includes(r.med) ? r.med : C.MEDS[0];
           cs.cands.push({
-            id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats,
+            id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => null), stats,
             rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72),
             area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
           });

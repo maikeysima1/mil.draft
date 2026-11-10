@@ -76,7 +76,7 @@ function fitOf(k, c, u) {
 }
 const fitBad = (k, c, u) => fitOf(k, c, u).filter((x) => !x.ok);
 const strengths = (k, c) => cf(k).traits.filter((t, i) => c.lv[i] === 2);
-const missingOf = (k, c) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec) m.push('המלצה'); return m; };
+const missingOf = (k, c) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec) m.push('המלצה'); if (c.lv.some((v) => v == null)) m.push('חוזקות'); return m; };
 function draftInfo(k) {
   const order = orderOf(k), picks = cs(k).picks, finished = picks.length >= order.length;
   const takenBy = {}; picks.forEach((p) => { takenBy[p.id] = p; });

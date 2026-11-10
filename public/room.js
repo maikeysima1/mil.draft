@@ -89,16 +89,10 @@ SCREENS.room = (k) => {
    ${cmpBar()}${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.cmpOpen ? cmpModal(k) : ''}`;
 };
 
-function radar(k, c) {
-  const t = cf(k).traits, n = t.length, R = 80, cx = 130, cy = 120;
-  const pt = (i, r) => [cx + r * Math.sin(2 * Math.PI * i / n), cy - r * Math.cos(2 * Math.PI * i / n)];
-  const ring = (f) => t.map((_, i) => pt(i, R * f).map((v) => v.toFixed(1)).join(',')).join(' ');
-  const val = t.map((_, i) => pt(i, R * (0.2 + 0.4 * c.lv[i])).map((v) => v.toFixed(1)).join(',')).join(' ');
-  return `<svg viewBox="0 0 260 240" width="260" role="img" aria-label="תרשים חוזקות">${[1, .66, .33].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)"/>`).join('')}
-   <polygon points="${val}" fill="var(--green)" fill-opacity=".22" stroke="var(--green)" stroke-width="2"/>
-   ${t.map((x, i) => { const p = pt(i, i === 0 ? 100 : 98); return `<text x="${p[0].toFixed(1)}" y="${(p[1] + 4).toFixed(1)}" text-anchor="middle" font-size="11" class="svgt">${esc(x)}</text><text x="${p[0].toFixed(1)}" y="${(p[1] + 16).toFixed(1)}" text-anchor="middle" font-size="10" class="svgm">${WORDS[c.lv[i]]}</text>`; }).join('')}</svg>`;
+// trait levels: three discrete steps per trait (no radar: a polygon invents area and a made-up baseline); unknown stays unknown
+function traitLevels(k, c) {
+  return `<div role="list" aria-label="חוזקות לפי רמה">${cf(k).traits.map((t, i) => { const v = c.lv[i], unk = v == null; return `<div class="tlv" role="listitem"><span>${esc(t)}</span><span class="pips" aria-hidden="true">${[0, 1, 2].map((n) => `<i class="${!unk && n <= v ? 'on' : ''}"></i>`).join('')}</span><span class="lvl ${unk ? 'mut' : ''}">${unk ? 'לא הוזן' : esc(WORDS[v])}</span></div>`; }).join('')}</div>`;
 }
-
 function statBars(k, c) {
   const myU = unitOf(k, myUnitName(k));
   return cf(k).stats.map((s) => {
@@ -126,7 +120,7 @@ function drawer(k, id) {
    ${navBar(id)}
    <div class="row">${recPill(c.rec)}<span class="pill p-gray">פרופיל ${c.profile} · ${esc(c.med)}</span>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : ''}${miss.length ? `<span class="pill p-orange">חסר בתיק: ${esc(miss.join(', '))}</span>` : ''}</div>
    <div class="card" style="padding:12px">${statBars(k, c)}<div class="mut small">הסימון הכתום: ממוצע המאגר. תיאור בלבד, לא דירוג.</div></div>
-   <div style="text-align:center">${radar(k, c)}</div>
+   ${traitLevels(k, c)}
    <div><b>כישורים שנצפו</b><div class="row" style="margin-top:4px">${(c.skills || []).map((s) => `<span class="pill p-blue">${esc(s)}</span>`).join('') || '—'}</div></div>
    ${c.extra ? `<div><b>פרטים נוספים מהמגבש</b><div class="row" style="margin-top:4px">${c.extra.motivation != null ? `<span class="pill p-blue">מוטיבציה ${c.extra.motivation}/5</span>` : '<span class="pill p-gray">מוטיבציה: לא צוין</span>'}${c.extra.discipline != null ? `<span class="pill p-blue">משמעת: ${WORDS[c.extra.discipline]}</span>` : ''}${c.extra.potential != null ? `<span class="pill p-blue">פוטנציאל פיקודי: ${LOWHIGH[c.extra.potential]}</span>` : ''}${c.extra.confidence != null ? `<span class="pill p-gray">ביטחון בהערכה: ${LOWHIGH[c.extra.confidence]}</span>` : ''}${c.extra.second ? `<span class="pill p-violet">תפקיד חלופי: ${esc(c.extra.second)}</span>` : ''}${c.extra.follow ? '<span class="pill p-orange">דורש מעקב</span>' : ''}</div>${c.extra.medNote ? `<div class="mut small" style="margin-top:4px">הערה רפואית: ${esc(c.extra.medNote)}</div>` : ''}</div>` : ''}
    <div class="card" style="padding:12px"><b>העדפת החייל</b><div class="mut small">רצון החייל – אינו מחייב. השיבוץ נקבע לפי צורכי היחידות והמערכת.</div>

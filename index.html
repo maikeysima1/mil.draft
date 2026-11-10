@@ -11,7 +11,7 @@
   --btn-a:#3B8A62; --btn-b:#2A6B4A; --note-bg:#FFF6E0; --note-fg:#6E4A10; --note-bd:#F0D9A8;
   --l1:#1E293B; --l2:#2F5FB3; --l3:#6D4BCB; --l4:#2F7A52; --l5:#CE700C; --l6:#64748B;
   --sh:0 1px 2px rgba(15,23,42,.04),0 10px 28px -12px rgba(15,23,42,.10);
-  --r:18px; --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --ref:#98a2b3;
+  --r:18px; --s1:#2a78d6; --s2:#eb6834; --s3:#14a06f; --ref:#98a2b3;
 }
 :root[data-theme=dark]{
   --navy:#E6EBF5; --solid:#2B3A57; --card:#111A2C; --bg:#0A111E; --bg2:#172238; --line:#233049; --line2:#1B2740; --mut:#93A1B8;
@@ -240,8 +240,16 @@ textarea{width:100%;min-height:90px;resize:vertical}
 .seg:first-child{border-start-start-radius:4px;border-end-start-radius:4px}
 .seg:last-child{border-start-end-radius:4px;border-end-end-radius:4px}
 .seg:hover,.seg:focus-visible{filter:brightness(1.14)}
-.htrack{height:22px;border-inline-start:1px solid var(--line);display:flex;align-items:center}
-.htrack i{display:block;height:20px;background:var(--s1);border-start-end-radius:4px;border-end-end-radius:4px;transition:filter .12s}
+.htrack{position:relative;height:24px;direction:ltr;margin-inline:6px}
+.htrack::before{content:"";position:absolute;inset-inline:0;top:50%;height:1px;background:var(--line)}
+.htrack .tk{position:absolute;top:50%;width:1px;height:8px;background:var(--line);transform:translateY(-50%)}
+.htrack i{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:var(--s1);box-shadow:0 0 0 2px var(--card);transform:translate(-50%,-50%);transition:filter .12s}
+.htscale{display:flex;justify-content:space-between;direction:ltr;margin:0 6px 4px;font-size:11px;color:var(--mut)}
+/* trait levels */
+.tlv{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line2)}
+.tlv>span:first-child{flex:1}
+.tlv .pips{display:flex;gap:2px;direction:ltr}.tlv .pips i{width:22px;height:8px;border-radius:3px;background:var(--line)}.tlv .pips i.on{background:var(--s1)}
+.tlv .lvl{min-width:60px;text-align:end;font-size:12.5px;font-weight:700}
 .htrack:hover i,.htrack:focus-visible i{filter:brightness(1.14)}
 svg [data-tip]:hover,svg [data-tip]:focus-visible{outline:none;opacity:.88}
 details.tbl{margin-top:12px}
@@ -583,7 +591,7 @@ function applyEval(cf, c, b, who) {
 }
 function newCand(cf, cst, name, role, group, source) {
   const max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0) + 1, stats = {}; cf.stats.forEach((s) => { stats[s.k] = null; });
-  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => 1), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
+  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => null), stats, rec: null, med: C.MEDS[0], profile: 97, area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
   cst.cands.push(c); return c;
 }
 function cleanExtra(cf, x, old) { // only the fields present in x are touched; unknown stays unknown (null/undefined), never a made-up default
@@ -719,7 +727,7 @@ function chooseFor(k, unitName) {
     if (taken[c.id]) return;
     const need = (u.quota[c.role] || 0) - (have[c.role] || 0);
     const bad = fitOf(k, c, u).filter((x) => !x.ok).length;
-    const s = (need > 0 ? 20 : 0) - bad * 6 + c.lv.reduce((a, b) => a + b, 0) + WISH_BONUS[wishRank(c, unitName)] + Math.random() * 2;
+    const s = (need > 0 ? 20 : 0) - bad * 6 + c.lv.reduce((a, b) => a + (b || 0), 0) + WISH_BONUS[wishRank(c, unitName)] + Math.random() * 2;
     if (s > bs) { bs = s; best = c; }
   });
   return best;
@@ -849,7 +857,7 @@ L.handle = function (p, userId, b) {
       used.add(name); max++;
       const stats = {}; cf.stats.forEach((s) => { stats[s.k] = num((r.stats || {})[s.k]); });
       const med = C.MEDS.includes(r.med) ? r.med : C.MEDS[0];
-      cst.cands.push({ id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats, rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72), area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא' });
+      cst.cands.push({ id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => null), stats, rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72), area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא' });
       applyUpdate(cf, cst.cands[cst.cands.length - 1], { motivation: r.motivation, combat: r.combat, photo: r.photo });
       added++;
     });
@@ -966,7 +974,7 @@ function fitOf(k, c, u) {
 }
 const fitBad = (k, c, u) => fitOf(k, c, u).filter((x) => !x.ok);
 const strengths = (k, c) => cf(k).traits.filter((t, i) => c.lv[i] === 2);
-const missingOf = (k, c) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec) m.push('המלצה'); return m; };
+const missingOf = (k, c) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec) m.push('המלצה'); if (c.lv.some((v) => v == null)) m.push('חוזקות'); return m; };
 function draftInfo(k) {
   const order = orderOf(k), picks = cs(k).picks, finished = picks.length >= order.length;
   const takenBy = {}; picks.forEach((p) => { takenBy[p.id] = p; });
@@ -1344,16 +1352,10 @@ SCREENS.room = (k) => {
    ${cmpBar()}${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.cmpOpen ? cmpModal(k) : ''}`;
 };
 
-function radar(k, c) {
-  const t = cf(k).traits, n = t.length, R = 80, cx = 130, cy = 120;
-  const pt = (i, r) => [cx + r * Math.sin(2 * Math.PI * i / n), cy - r * Math.cos(2 * Math.PI * i / n)];
-  const ring = (f) => t.map((_, i) => pt(i, R * f).map((v) => v.toFixed(1)).join(',')).join(' ');
-  const val = t.map((_, i) => pt(i, R * (0.2 + 0.4 * c.lv[i])).map((v) => v.toFixed(1)).join(',')).join(' ');
-  return `<svg viewBox="0 0 260 240" width="260" role="img" aria-label="תרשים חוזקות">${[1, .66, .33].map((f) => `<polygon points="${ring(f)}" fill="none" stroke="var(--line)"/>`).join('')}
-   <polygon points="${val}" fill="var(--green)" fill-opacity=".22" stroke="var(--green)" stroke-width="2"/>
-   ${t.map((x, i) => { const p = pt(i, i === 0 ? 100 : 98); return `<text x="${p[0].toFixed(1)}" y="${(p[1] + 4).toFixed(1)}" text-anchor="middle" font-size="11" class="svgt">${esc(x)}</text><text x="${p[0].toFixed(1)}" y="${(p[1] + 16).toFixed(1)}" text-anchor="middle" font-size="10" class="svgm">${WORDS[c.lv[i]]}</text>`; }).join('')}</svg>`;
+// trait levels: three discrete steps per trait (no radar: a polygon invents area and a made-up baseline); unknown stays unknown
+function traitLevels(k, c) {
+  return `<div role="list" aria-label="חוזקות לפי רמה">${cf(k).traits.map((t, i) => { const v = c.lv[i], unk = v == null; return `<div class="tlv" role="listitem"><span>${esc(t)}</span><span class="pips" aria-hidden="true">${[0, 1, 2].map((n) => `<i class="${!unk && n <= v ? 'on' : ''}"></i>`).join('')}</span><span class="lvl ${unk ? 'mut' : ''}">${unk ? 'לא הוזן' : esc(WORDS[v])}</span></div>`; }).join('')}</div>`;
 }
-
 function statBars(k, c) {
   const myU = unitOf(k, myUnitName(k));
   return cf(k).stats.map((s) => {
@@ -1381,7 +1383,7 @@ function drawer(k, id) {
    ${navBar(id)}
    <div class="row">${recPill(c.rec)}<span class="pill p-gray">פרופיל ${c.profile} · ${esc(c.med)}</span>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : ''}${miss.length ? `<span class="pill p-orange">חסר בתיק: ${esc(miss.join(', '))}</span>` : ''}</div>
    <div class="card" style="padding:12px">${statBars(k, c)}<div class="mut small">הסימון הכתום: ממוצע המאגר. תיאור בלבד, לא דירוג.</div></div>
-   <div style="text-align:center">${radar(k, c)}</div>
+   ${traitLevels(k, c)}
    <div><b>כישורים שנצפו</b><div class="row" style="margin-top:4px">${(c.skills || []).map((s) => `<span class="pill p-blue">${esc(s)}</span>`).join('') || '—'}</div></div>
    ${c.extra ? `<div><b>פרטים נוספים מהמגבש</b><div class="row" style="margin-top:4px">${c.extra.motivation != null ? `<span class="pill p-blue">מוטיבציה ${c.extra.motivation}/5</span>` : '<span class="pill p-gray">מוטיבציה: לא צוין</span>'}${c.extra.discipline != null ? `<span class="pill p-blue">משמעת: ${WORDS[c.extra.discipline]}</span>` : ''}${c.extra.potential != null ? `<span class="pill p-blue">פוטנציאל פיקודי: ${LOWHIGH[c.extra.potential]}</span>` : ''}${c.extra.confidence != null ? `<span class="pill p-gray">ביטחון בהערכה: ${LOWHIGH[c.extra.confidence]}</span>` : ''}${c.extra.second ? `<span class="pill p-violet">תפקיד חלופי: ${esc(c.extra.second)}</span>` : ''}${c.extra.follow ? '<span class="pill p-orange">דורש מעקב</span>' : ''}</div>${c.extra.medNote ? `<div class="mut small" style="margin-top:4px">הערה רפואית: ${esc(c.extra.medNote)}</div>` : ''}</div>` : ''}
    <div class="card" style="padding:12px"><b>העדפת החייל</b><div class="mut small">רצון החייל – אינו מחייב. השיבוץ נקבע לפי צורכי היחידות והמערכת.</div>
@@ -1596,7 +1598,7 @@ function evalRows(k) {
 }
 function evalTemplateAoa(k, g, sample) {
   const c = cf(k), fl = evalFields(k), head = fl.map((x) => x.label), cands = cs(k).cands.filter((x) => x.group === g);
-  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => WORDS[v]), c.stats.map((s) => cellVal(s, x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', (w.combat == null ? '' : COMBAT[w.combat]), x.obs || '', x.summary || '']); };
+  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => (v == null ? '' : WORDS[v])), c.stats.map((s) => cellVal(s, x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', (w.combat == null ? '' : COMBAT[w.combat]), x.obs || '', x.summary || '']); };
   const rows = cands.map(rowOf);
   if (sample) {
     rows.slice(0, 3).forEach((r, i) => { const mi = head.indexOf('מוטיבציה (1–5)'), oi = head.indexOf('תצפיות והתרשמות'), ri = head.indexOf('המלצת מגבש'); r[mi] = [5, 4, 2][i]; r[oi] = ['הוביל את הצוות בתרגיל הלילי ושמר על קצב.', 'עבודה מסודרת, צריך לחזק ביטחון עצמי.', 'מתקשה כשהלחץ עולה.'][i]; r[ri] = A.cfg.RECS[i]; });
@@ -1754,7 +1756,8 @@ function distView(k) {
 
   // stacked 100% rows (2px gap between segments; label inside only when it fits)
   const stack = (rows) => rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="strack">${WO.map((w) => (r.cnt[w] ? `<i class="seg" style="flex:${r.cnt[w]};background:${WCOL[w]}" data-tip="${r.cnt[w]} (${pct(r.cnt[w], r.n)}%)|${esc(r.label)} · ${esc(CL(w))}" tabindex="0">${r.cnt[w] / r.n >= 0.14 ? r.cnt[w] : ''}</i>` : '')).join('')}</div><span class="srow-n" title="מועמדים">${r.n}</span></div>`).join('');
-  const bars = (rows) => rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="htrack" data-tip="${r.avg == null ? 'אין נתון מוטיבציה' : f1(r.avg) + ' מתוך 5 · ' + r.nm + ' מתוך ' + r.n + ' עם נתון'}|${esc(r.label)}" tabindex="0"><i style="width:${r.avg == null ? 0 : (r.avg / 5 * 100).toFixed(1)}%"></i></div><b class="srow-n">${f1(r.avg)}</b></div>`).join('');
+  const scaleHdr = '<div class="htscale" aria-hidden="true"><span>1 · נמוכה</span><span>3</span><span>5 · גבוהה</span></div>';
+  const bars = (rows) => scaleHdr + rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="htrack" data-tip="${r.avg == null ? 'אין נתון מוטיבציה' : f1(r.avg) + ' מתוך 5 · ' + r.nm + ' מתוך ' + r.n + ' עם נתון'}|${esc(r.label)}" tabindex="0">${[0, 25, 50, 75, 100].map((x) => `<span class="tk" style="left:${x}%"></span>`).join('')}${r.avg == null ? '' : `<i style="left:${((r.avg - 1) / 4 * 100).toFixed(1)}%"></i>`}</div><b class="srow-n">${f1(r.avg)}</b></div>`).join('');
   const table = `<details class="tbl"><summary>תצוגת טבלה</summary><div style="overflow:auto"><table><thead><tr><th>תפקיד</th><th>מועמדים</th><th>מוטיבציה ממוצעת</th>${WO.map((w) => `<th>${esc(CL(w))}</th>`).join('')}</tr></thead><tbody>${byRole.map((r) => `<tr><td>${esc(r.label)}</td><td>${r.n}</td><td>${f1(r.avg)}</td>${WO.map((w) => `<td>${r.cnt[w]}</td>`).join('')}</tr>`).join('')}<tr><td><b>סה״כ</b></td><td><b>${n}</b></td><td><b>${f1(avg)}</b></td>${WO.map((w) => `<td><b>${cnt[w]}</b></td>`).join('')}</tr></tbody></table></div></details>`;
   const notes = [];
   if (n && knownC) {
@@ -1769,8 +1772,8 @@ function distView(k) {
     <div class="card"><h2>התפלגות מוטיבציה</h2><div class="mut small" style="margin-bottom:6px">מספר מועמדים לכל רמה (1 = נמוכה, 5 = גבוהה)${nMot < n ? ' · ' + (n - nMot) + ' מועמדים ללא נתון אינם נכללים' : ''}</div>${histSvg}</div></div>
    <div class="grid g2"><div class="card"><h2>נכונות לתפקיד קרבי – לפי תפקיד</h2><div class="legend row" style="margin-bottom:8px">${WO.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(CL(w))}</span>`).join('')}</div>${stack(byRole)}</div>
     <div class="card"><h2>נכונות לתפקיד קרבי – לפי צוות</h2><div class="legend row" style="margin-bottom:8px">${WO.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(CL(w))}</span>`).join('')}</div>${stack(byTeam)}</div></div>
-   <div class="grid g2"><div class="card"><h2>מוטיבציה ממוצעת – לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">ממוצע מתוך 5</div>${bars(byRole)}</div>
-    <div class="card"><h2>מוטיבציה ממוצעת – לפי צוות</h2><div class="mut small" style="margin-bottom:6px">ממוצע מתוך 5</div>${bars(byTeam)}</div></div>
+   <div class="grid g2"><div class="card"><h2>מוטיבציה ממוצעת – לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">הנקודה = הממוצע על סקאלה 1–5 (לא אחוז)</div>${bars(byRole)}</div>
+    <div class="card"><h2>מוטיבציה ממוצעת – לפי צוות</h2><div class="mut small" style="margin-bottom:6px">הנקודה = הממוצע על סקאלה 1–5 (לא אחוז)</div>${bars(byTeam)}</div></div>
    <div class="card"><h2>נקודות בולטות</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.9">${notes.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>אין נתונים לתצוגה.</li>'}</ul><div class="mut small" style="margin-top:8px">נוצר מכללים שקופים על הנתונים. אין כאן המלצה על אדם או יחידה, וההעדפות אינן מחייבות את השיבוץ.</div>${table}</div>`;
 }
 
