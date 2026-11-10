@@ -24,7 +24,7 @@ function needsCard(k) {
   const unit = unitOf(k, myUnitName(k)), c = cf(k);
   const roles = Object.keys(unit.quota);
   const total = roles.reduce((a, r) => a + unit.quota[r], 0), got = roles.reduce((a, r) => a + Math.min(unit.quota[r], countRole(k, unit.name, r)), 0);
-  const th = c.stats.filter((s) => unit.th[s.k] != null).map((s) => s.l + (s.low ? ' עד ' : ' לפחות ') + unit.th[s.k] + ' ' + s.u);
+  const th = c.stats.filter((s) => unit.th[s.k] != null).map((s) => s.l + (s.low ? ' עד ' : ' לפחות ') + fmtVal(s, unit.th[s.k]) + ' ' + s.u);
   if (unit.noMed) th.push('ללא מגבלות רפואיות');
   return `<div class="card"><div class="row spread"><h2 style="margin:0">צורכי ${esc(unit.name)}</h2><span class="mut small">${esc(unit.desc)} · קדימות ${A.cfg.PR ? '' : ['גבוהה', 'רגילה', 'נמוכה'][unit.prio]}</span></div>
    <div class="row" style="margin:12px 0"><div><div class="mut small">מכסות שמולאו</div><b style="font-size:26px">${got} / ${total}</b></div>
@@ -38,6 +38,10 @@ function needsCard(k) {
 // prominent favorites toggle (own control, not part of the filter row); on = filter active
 function favToggle(k, on, act) {
   return `<button class="favtoggle ${on ? 'on' : ''}" data-act="${act}" data-v="${on ? 0 : 1}" aria-pressed="${on}" title="${on ? 'הצגת כל המועמדים' : 'הצגת המועדפים שלי בלבד'}">${heartIcon(true, 18)}<span>המועדפים שלי</span><b>${favList(k).length}</b>${on ? '<em>מסונן</em>' : ''}</button>`;
+}
+// the candidate's numbers; a metric that meets the unit's threshold is highlighted green (with a ✓, so it is not color-only)
+function metricChips(k, x, unit) {
+  return `<span class="mchips">${cf(k).stats.map((s) => { const v = x.stats[s.k], p = statPass(s, v, unit); return `<span class="mchip ${p ? 'ok' : ''}" title="${esc(s.l)}${v == null ? ' – חסר נתון' : ''}${p ? ' – עומד בתנאי הסף' : ''}"><i>${esc(s.l.split(' ')[0])}</i><b>${v == null ? '—' : fmtVal(s, v)}</b></span>`; }).join('')}</span>`;
 }
 function wishCell(k, x) {
   const w = x.wish || { role: '', units: [] }, r = wishRank(x, myUnitName(k)), short = (n) => n.replace(/^(חטיבת|יחידת|גדוד) /, '');
@@ -76,10 +80,10 @@ SCREENS.room = (k) => {
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
-   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
-   ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
+   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
+   ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${metricChips(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
-     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
+     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
    <div class="card"><h2>יומן בחירות</h2>${log}</div>
    ${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}`;
 };
@@ -95,13 +99,14 @@ function radar(k, c) {
 }
 
 function statBars(k, c) {
+  const myU = unitOf(k, myUnitName(k));
   return cf(k).stats.map((s) => {
     const vals = cs(k).cands.map((x) => x.stats[s.k]).filter((v) => v != null), v = c.stats[s.k];
     if (v == null) return `<div style="margin:8px 0"><div class="row spread"><span>${esc(s.l)}</span><b class="pill p-red">חסר נתון</b></div><div class="mut small">הנתון לא הוזן עדיין</div></div>`;
     const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
     const pos = (x) => Math.max(0, Math.min(100, (s.low ? s.max - x : x - s.min) / (s.max - s.min) * 100));
     const worse = vals.filter((x) => (s.low ? x > v : x < v)).length;
-    return `<div style="margin:10px 0"><div class="row spread"><span>${esc(s.l)}</span><b>${v} ${esc(s.u)}</b></div><div class="bar"><i style="width:${Math.max(4, pos(v)).toFixed(0)}%"></i><u style="inset-inline-start:${pos(avg).toFixed(0)}%"></u></div><div class="mut small">אחוזון ${Math.round(worse / vals.length * 100)} במאגר ה${esc(cf(k).short)}</div></div>`;
+    return `<div style="margin:10px 0"><div class="row spread"><span>${esc(s.l)}${myU.th[s.k] != null ? ` <span class="mut small">· תנאי סף ${s.low ? 'עד' : 'לפחות'} ${fmtVal(s, myU.th[s.k])}</span>` : ''}</span><b class="${statPass(s, v, myU) ? 'okval' : ''}">${statPass(s, v, myU) ? '✓ ' : ''}${fmtVal(s, v)} ${esc(s.u)}</b></div><div class="bar"><i style="width:${Math.max(4, pos(v)).toFixed(0)}%"></i><u style="inset-inline-start:${pos(avg).toFixed(0)}%"></u></div><div class="mut small">אחוזון ${Math.round(worse / vals.length * 100)} במאגר ה${esc(cf(k).short)}</div></div>`;
   }).join('');
 }
 
@@ -140,7 +145,7 @@ function thModal(k) {
    <div><b>מכסות לפי תפקיד</b><div class="mut small">כמה מועמדים נדרשים לכל תפקיד (0 = לא נדרש). אפשר להוריד מתחת למה שכבר נבחר.</div>
    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:8px">${cf(k).roles.map((r, i) => `<label class="row spread">${esc(r)} <span class="row" style="gap:4px"><span class="mut small">נבחרו ${countRole(k, u.name, r)}</span><input type="number" min="0" max="9" id="q-${i}" style="width:70px" value="${u.quota[r] || 0}"></span></label>`).join('')}</div></div>
    <b>תנאי סף</b><p class="mut small" style="margin:0">השאירו ריק כדי לבטל תנאי. עדכון התנאים ישפיע מיד על סימוני ההתאמה.</p>
-   ${cf(k).stats.map((s) => `<label class="row spread">${esc(s.l)} (${s.low ? 'עד' : 'לפחות'}, ${esc(s.u)})<input type="number" step="any" id="th-${s.k}" style="width:120px" value="${u.th[s.k] == null ? '' : u.th[s.k]}"></label>`).join('')}
+   ${cf(k).stats.map((s) => `<label class="row spread">${esc(s.l)} (${s.low ? 'עד' : 'לפחות'}, ${isTime(s) ? 'דק׳:שנ׳' : esc(s.u)})<input type="text" inputmode="${isTime(s) ? 'text' : 'decimal'}" id="th-${s.k}" style="width:120px" placeholder="${isTime(s) ? '13:30' : ''}" value="${u.th[s.k] == null ? '' : (isTime(s) ? fmtTime(u.th[s.k]) : u.th[s.k])}"></label>`).join('')}
    <label class="row"><input type="checkbox" id="th-med" ${u.noMed ? 'checked' : ''}> ללא מגבלות רפואיות</label>
    <div class="row"><button class="btn" data-act="saveTh">שמירה</button><button class="btn sec" data-act="closeTh">ביטול</button></div></div></div>`;
 }
@@ -162,7 +167,8 @@ Object.assign(ACTIONS, {
   editTh: () => { A.ui.editTh = true; rerender(); },
   closeTh: () => { A.ui.editTh = false; rerender(); },
   saveTh: async () => {
-    const k = corpsKey(), th = {}; cf(k).stats.forEach((s) => { const v = $('#th-' + s.k).value; if (v !== '') th[s.k] = Number(v); });
+    const k = corpsKey(), th = {}; let bad = null; cf(k).stats.forEach((s) => { const raw = $('#th-' + s.k).value.trim(); if (raw === '') return; const v = parseStat(s, raw); if (v == null) bad = bad || s.l; else th[s.k] = v; });
+    if (bad) { toast('ערך לא תקין ב' + bad + (cf(k).stats.some((s) => isTime(s)) ? ' (זמנים בפורמט 13:30)' : ''), true); return; }
     const quota = {}; cf(k).roles.forEach((r, i) => { quota[r] = $('#q-' + i).value; });
     await api('thresholds', { corps: k, th, quota, noMed: $('#th-med').checked }); A.ui.editTh = false; toast('המכסות ותנאי הסף עודכנו'); rerender();
   },

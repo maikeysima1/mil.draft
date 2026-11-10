@@ -49,7 +49,7 @@ function evalRows(k) {
     const put = (key, v) => { row[key] = v; row.fields++; };
     if (row.role) { if (c.roles.includes(row.role)) row.fields++; else errs.push('תפקיד לא מוכר'); }
     c.traits.forEach((t, i) => { const v = wordIdx(cells(r, 't' + i), WORDS); if (v === null) row.lv.push(null); else if (Number.isNaN(v)) { row.lv.push(null); errs.push('רמה לא מוכרת: ' + t); } else { row.lv.push(v); row.fields++; } });
-    c.stats.forEach((s) => { const raw = cells(r, 's:' + s.k); if (String(raw).trim() === '') return; const v = Number(String(raw).replace(',', '.')); if (Number.isFinite(v)) { row.stats[s.k] = v; row.fields++; } else errs.push('מדד לא מספרי: ' + s.l); });
+    c.stats.forEach((s) => { const raw = cells(r, 's:' + s.k); if (String(raw).trim() === '') return; const v = parseStat(s, raw); if (v != null) { row.stats[s.k] = v; row.fields++; } else errs.push('מדד לא תקין: ' + s.l); });
     const rec = txt(r, 'rec'); if (rec) { if (A.cfg.RECS.includes(rec)) put('rec', rec); else errs.push('המלצה לא מוכרת'); }
     const med = txt(r, 'med'); if (med) { if (A.cfg.MEDS.includes(med)) put('med', med); else errs.push('מגבלה לא מוכרת'); }
     const mot = txt(r, 'motivation'); if (mot) { const v = Number(mot.replace(',', '.')); if (v >= 1 && v <= 5) { row.extra.motivation = Math.round(v); row.fields++; } else errs.push('מוטיבציה חייבת להיות 1–5'); }
@@ -71,7 +71,7 @@ function evalRows(k) {
 }
 function evalTemplateAoa(k, g, sample) {
   const c = cf(k), fl = evalFields(k), head = fl.map((x) => x.label), cands = cs(k).cands.filter((x) => x.group === g);
-  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => WORDS[v]), c.stats.map((s) => (x.stats[s.k] == null ? '' : x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', COMBAT[w.combat == null ? 1 : w.combat], x.obs || '', x.summary || '']); };
+  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => WORDS[v]), c.stats.map((s) => cellVal(s, x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', COMBAT[w.combat == null ? 1 : w.combat], x.obs || '', x.summary || '']); };
   const rows = cands.map(rowOf);
   if (sample) {
     rows.slice(0, 3).forEach((r, i) => { const mi = head.indexOf('מוטיבציה (1–5)'), oi = head.indexOf('תצפיות והתרשמות'), ri = head.indexOf('המלצת מגבש'); r[mi] = [5, 4, 2][i]; r[oi] = ['הוביל את הצוות בתרגיל הלילי ושמר על קצב.', 'עבודה מסודרת, צריך לחזק ביטחון עצמי.', 'מתקשה כשהלחץ עולה.'][i]; r[ri] = A.cfg.RECS[i]; });
@@ -138,7 +138,7 @@ SCREENS.eval = (k) => {
      ${c.traits.map((t, i) => `<div class="row spread" style="padding:5px 0"><span>${esc(t)}</span><div class="seg">${WORDS.map((w, j) => `<button type="button" class="${f.lv[i] === j ? 'on l' + j : ''}" data-act="lv" data-i="${i}" data-v="${j}">${w}</button>`).join('')}</div></div>`).join('')}</div>
     <label>תפקיד מומלץ<br><select data-chg="fld" data-f="role">${c.roles.map((r) => `<option ${r === f.role ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
     <div><b>כישורים שנצפו</b><div class="row" style="margin-top:4px">${allSkills.map((s) => `<button type="button" class="sw ${f.skills.includes(s) ? 'on' : ''}" data-act="skill" data-s="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>
-    <div><h3 style="font-size:16px">מדדים שנמדדו</h3><div class="mut small">ערכים אמיתיים מהמבחנים. מדד ריק יסומן בתיק כחסר.</div><div class="row" style="margin-top:6px">${c.stats.map((s) => `<label class="small mut">${esc(s.l)} (${esc(s.u)})<br><input type="number" step="any" style="width:130px" id="st-${s.k}" data-inp="stat" data-f="${s.k}" value="${f.stats[s.k] == null ? '' : f.stats[s.k]}"></label>`).join('')}</div></div>
+    <div><h3 style="font-size:16px">מדדים שנמדדו</h3><div class="mut small">ערכים אמיתיים מהמבחנים. מדד ריק יסומן בתיק כחסר.</div><div class="row" style="margin-top:6px">${c.stats.map((s) => `<label class="small mut">${esc(s.l)} (${isTime(s) ? 'דק׳:שנ׳' : esc(s.u)})<br><input type="text" inputmode="${isTime(s) ? 'text' : 'decimal'}" style="width:130px" id="st-${s.k}" data-inp="stat" data-f="${s.k}" placeholder="${isTime(s) ? '12:30' : ''}" value="${f.stats[s.k] == null ? '' : (isTime(s) ? fmtTime(f.stats[s.k]) : f.stats[s.k])}"></label>`).join('')}</div></div>
     <div class="row"><div><b>המלצת מגבש</b><br><div class="seg">${A.cfg.RECS.map((r) => `<button type="button" class="${f.rec === r ? 'on' : ''}" data-act="rec" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div></div>
      <div><b>מגבלות רפואיות (מצו ראשון)</b><br><div class="seg">${A.cfg.MEDS.map((r) => `<button type="button" class="${f.med === r ? 'on' : ''}" data-act="med" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div></div></div>
     <div><h3 style="font-size:16px">ערכים נוספים</h3><div class="mut small">נתונים משלימים שנכנסים לתיק המועמד</div>
@@ -179,7 +179,7 @@ Object.assign(ACTIONS, {
   med: (d) => { A.ui.form.med = d.v; rerender(); },
   skill: (d) => { const s = A.ui.form.skills, i = s.indexOf(d.s); if (i >= 0) s.splice(i, 1); else s.push(d.s); rerender(); },
   fld: (d, t) => { A.ui.form[d.f] = t.value; if (d.f === 'role') { A.ui.form.skills = (cf(corpsKey()).skills[t.value] || []).slice(); } rerender(); },
-  stat: (d, t) => { A.ui.form.stats[d.f] = t.value === '' ? null : Number(t.value); },
+  stat: (d, t) => { const s = cf(corpsKey()).stats.find((x) => x.k === d.f), v = t.value.trim() === '' ? null : parseStat(s, t.value), bad = t.value.trim() !== '' && v == null; A.ui.form.stats[d.f] = v; (A.ui.form.badStat = A.ui.form.badStat || {})[d.f] = bad; t.classList.toggle('invalid', bad); t.title = bad ? 'פורמט לא תקין – למשל 12:30 או 12.5' : ''; },
   evalDraft: () => {
     const k = corpsKey(), f = A.ui.form; localStorage.setItem(evalDraftKey(k, f.id), JSON.stringify(f));
     const g = cs(k).cands.filter((x) => x.group === evalGroup(k)), i = g.findIndex((x) => x.id === f.id);
@@ -188,6 +188,7 @@ Object.assign(ACTIONS, {
   evalSend: async () => {
     const k = corpsKey(), f = A.ui.form;
     if (!f.rec) { toast('בחרו המלצת מגבש לפני השליחה', true); return; }
+    if (Object.values(f.badStat || {}).some(Boolean)) { toast('תקנו מדד בפורמט לא תקין (זמן: 12:30)', true); return; }
     await api('eval', { corps: k, id: f.id, lv: f.lv, role: f.role, skills: f.skills, stats: f.stats, rec: f.rec, med: f.med, obs: f.obs, summary: f.summary, extra: f.extra, wish: { role: f.wish.role, units: f.wish.units.filter(Boolean), combat: f.wish.combat } });
     localStorage.removeItem(evalDraftKey(k, f.id)); A.ui.form = null; toast('ההתרשמות נשמרה בתיק המועמד. אפשר לעדכן ולשלוח שוב.'); rerender();
   },
@@ -268,7 +269,7 @@ function cmpView(k) {
 
   // metrics: average now vs before, direction-aware (lower is better for times)
   const statRows = c.stats.map((s) => { const a = avgOf(cur, (x) => x.stats[s.k]), b = avgOf(prev, (r) => r.stats[s.k]), d = a != null && b != null ? a - b : null, v = verdict(d, s.low ? -1 : 1, (s.max - s.min) * 0.01), dd = Math.pow(10, s.d + 1);
-    return { s, a, b, d, v, rel: d == null ? 0 : Math.abs(d) / (s.max - s.min), html: `<tr><td>${esc(s.l)}</td><td><bdi dir="ltr">${a == null ? '—' : Math.round(a * dd) / dd} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${b == null ? '—' : Math.round(b * dd) / dd} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${d == null ? '—' : sgn(d, (x) => Math.round(x * dd) / dd)}</bdi></td><td><span class="pill ${v[0]}">${v[1]}</span></td></tr>` }; });
+    return { s, a, b, d, v, rel: d == null ? 0 : Math.abs(d) / (s.max - s.min), html: `<tr><td>${esc(s.l)}</td><td><bdi dir="ltr">${a == null ? '—' : fmtVal(s, a)} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${b == null ? '—' : fmtVal(s, b)} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${d == null ? '—' : sgn(d, (x) => (isTime(s) ? fmtTime(x) : Math.round(x * dd) / dd))}</bdi></td><td><span class="pill ${v[0]}">${v[1]}</span></td></tr>` }; });
   const statTable = `<div style="overflow:auto"><table><thead><tr><th>מדד</th><th>עכשיו</th><th>${esc(L)}</th><th>הפרש</th><th>הערכה</th></tr></thead><tbody>${statRows.map((r) => r.html).join('')}</tbody></table></div><div class="mut small" style="margin-top:6px">ממוצע לפי הנתונים הקיימים בלבד (מדד חסר לא נספר). בריצה ובזמנים – נמוך יותר הוא טוב יותר.</div>`;
 
   // grouped bars (HTML): two thin bars per row, value at the tip, tooltip on hover/focus
@@ -285,7 +286,7 @@ function cmpView(k) {
   const notes = [];
   gapRows.filter((g) => g.gap > 0).sort((a, b) => b.gap - a.gap).slice(0, 2).forEach((g) => notes.push(`חוסר בתפקיד ${g.r}: נדרשים ${g.demand}, זמינים ${g.supply} (ב${L} היו ${g.before}).`));
   const best = statRows.filter((r) => r.d != null).sort((a, b) => b.rel - a.rel)[0];
-  if (best && best.rel > 0.02) notes.push(`השינוי הגדול ביותר במדדים: ${best.s.l} (${best.v[1].replace(/^[▲▼＝] /, '')}, ${best.a != null ? f1(best.a) : '—'} מול ${best.b != null ? f1(best.b) : '—'} ${best.s.u}).`);
+  if (best && best.rel > 0.02) notes.push(`השינוי הגדול ביותר במדדים: ${best.s.l} (${best.v[1].replace(/^[▲▼＝] /, '')}, ${fmtVal(best.s, best.a)} מול ${fmtVal(best.s, best.b)} ${best.s.u}).`);
   const drop = unitRows.map((u) => ({ u, d: u.now - u.pre })).sort((a, b) => a.d - b.d)[0];
   if (drop && drop.d < -5) notes.push(`הירידה הגדולה ביותר בכיסוי תנאי הסף: ${drop.u.label} (${pf(drop.u.now)} מול ${pf(drop.u.pre)}).`);
   const nc = kp[3]; if (nc.now != null && nc.pre != null && Math.abs(nc.now - nc.pre) >= 5) notes.push(`שיעור הלא מעוניינים בתפקיד קרבי ${nc.now > nc.pre ? 'עלה' : 'ירד'} מ־${pf(nc.pre)} ל־${pf(nc.now)}.`);
@@ -380,14 +381,14 @@ const autoMap = (k, headers) => autoMapFields(k, importFields(k), headers);
 function parseCombat(v) { const t = String(v == null ? '' : v).trim(); if (t === '') return null; if (['0', '1', '2'].includes(t)) return +t; if (t.includes('לא')) return 0; if (t.includes('פתוח')) return 1; if (/מעוניין|כן|רוצה/.test(t)) return 2; return null; }
 function parseRow(k, r, map) {
   const g = (key) => (map[key] >= 0 ? r[map[key]] : '');
-  const stats = {}; cf(k).stats.forEach((s) => { stats['' + s.k] = g('s:' + s.k); });
-  return { id: String(g('id') || '').trim(), name: String(g('name') || '').trim(), role: String(g('role') || '').trim(), rec: String(g('rec') || '').trim(), med: String(g('med') || '').trim(), profile: g('profile'), stats, motivation: g('motivation'), combat: parseCombat(g('combat')), unit: String(g('unit') || '').trim() };
+  const stats = {}, statErrs = []; cf(k).stats.forEach((s) => { const raw = g('s:' + s.k); if (String(raw).trim() === '') { stats[s.k] = ''; return; } const v = parseStat(s, raw); if (v == null) statErrs.push('מדד לא תקין: ' + s.l); stats[s.k] = v == null ? '' : v; });
+  return { statErrs, id: String(g('id') || '').trim(), name: String(g('name') || '').trim(), role: String(g('role') || '').trim(), rec: String(g('rec') || '').trim(), med: String(g('med') || '').trim(), profile: g('profile'), stats, motivation: g('motivation'), combat: parseCombat(g('combat')), unit: String(g('unit') || '').trim() };
 }
 function buildRows(k) {
   const im = A.ui.imp; if (!im) return [];
   const mode = A.ui.impMode || 'add';
   return im.data.map((r, n) => {
-    const row = parseRow(k, r, im.map), errs = [];
+    const row = parseRow(k, r, im.map), errs = row.statErrs.slice();
     if (mode === 'add') {
       if (!row.med) row.med = 'ללא מגבלות';
       if (!row.name) errs.push('חסר שם');
@@ -408,7 +409,7 @@ function buildRows(k) {
 function buildBaseRows(k) {
   const b = A.ui.base; if (!b) return [];
   return b.data.map((r, n) => {
-    const row = parseRow(k, r, b.map), errs = [];
+    const row = parseRow(k, r, b.map), errs = row.statErrs.slice();
     if (!row.med) row.med = 'ללא מגבלות';
     if (!cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
     if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
@@ -422,7 +423,7 @@ function sampleBaseAoa(k) { // demo previous cycle: slightly weaker results, mor
   const aoa = [baseHeaders(k)];
   for (let i = 0; i < 26; i++) {
     const role = c.roles[(i * 2 + (i % 3)) % c.roles.length], t = Math.min(1, Math.max(0, 0.28 + rnd() * 0.5));
-    aoa.push([role, A.cfg.RECS[t > 0.62 ? 0 : (t > 0.4 ? 1 : 2)], i % 7 === 3 ? A.cfg.MEDS[1] : A.cfg.MEDS[0], 90].concat(c.stats.map((s) => { if (rnd() < 0.06) return ''; const raw = s.low ? s.max - (s.max - s.min) * t : s.min + (s.max - s.min) * t; return +raw.toFixed(s.d); }), [Math.max(1, Math.min(5, Math.round(1.8 + t * 3 + (rnd() - 0.5)))), rnd() < 0.34 ? 'לא מעוניין' : (rnd() < 0.5 ? 'פתוח' : 'מעוניין'), '']));
+    aoa.push([role, A.cfg.RECS[t > 0.62 ? 0 : (t > 0.4 ? 1 : 2)], i % 7 === 3 ? A.cfg.MEDS[1] : A.cfg.MEDS[0], 90].concat(c.stats.map((s) => { if (rnd() < 0.06) return ''; const raw = s.low ? s.max - (s.max - s.min) * t : s.min + (s.max - s.min) * t; return cellVal(s, +raw.toFixed(s.d)); }), [Math.max(1, Math.min(5, Math.round(1.8 + t * 3 + (rnd() - 0.5)))), rnd() < 0.34 ? 'לא מעוניין' : (rnd() < 0.5 ? 'פתוח' : 'מעוניין'), '']));
   }
   return aoa;
 }
@@ -467,22 +468,22 @@ function setImport(k, aoa) {
 }
 function sheetRows(k) { const c = cf(k); return [['שם', 'תפקיד', 'המלצת מגבש', 'מגבלות רפואיות', 'פרופיל'].concat(c.stats.map((s) => s.l + ' (' + s.u + ')'))]; }
 function downloadX(name, aoa) { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'מועמדים'); wb.Workbook = { Views: [{ RTL: true }] }; XLSX.writeFile(wb, name); }
-const poolRows = (k) => sheetRows(k).concat(cs(k).cands.map((x) => [x.name, x.role, x.rec || '', x.med, x.profile].concat(cf(k).stats.map((s) => (x.stats[s.k] == null ? '' : x.stats[s.k])))));
+const poolRows = (k) => sheetRows(k).concat(cs(k).cands.map((x) => [x.name, x.role, x.rec || '', x.med, x.profile].concat(cf(k).stats.map((s) => cellVal(s, x.stats[s.k])))));
 Object.assign(ACTIONS, {
   file: async (d, t) => { const f = t.files[0]; if (!f) return; const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); setImport(corpsKey(), XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })); },
   map: (d, t) => { A.ui.imp.map[d.f] = +t.value; rerender(); },
   sample: () => {
     const k = corpsKey(), c = cf(k), aoa = sheetRows(k), names = ['נועה ל.', 'איתי ר.', 'שירה מ.', 'עומר ש.', 'מאיה ד.', 'דניאל כ.'];
-    names.forEach((n, i) => aoa.push([n, c.roles[i % c.roles.length], A.cfg.RECS[i % 3], A.cfg.MEDS[i % 3 === 2 ? 1 : 0], 97].concat(c.stats.map((s) => (i === 4 && s === c.stats[0] ? '' : +(s.min + (s.max - s.min) * (0.4 + 0.1 * i)).toFixed(s.d))))));
+    names.forEach((n, i) => aoa.push([n, c.roles[i % c.roles.length], A.cfg.RECS[i % 3], A.cfg.MEDS[i % 3 === 2 ? 1 : 0], 97].concat(c.stats.map((s) => (i === 4 && s === c.stats[0] ? '' : cellVal(s, +(s.min + (s.max - s.min) * (0.4 + 0.1 * i)).toFixed(s.d)))))));
     setImport(k, aoa);
   },
-  template: () => downloadX('mil-draft-template.xlsx', sheetRows(corpsKey()).concat([['דוגמה ד.', cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => s.min))])),
+  template: () => downloadX('mil-draft-template.xlsx', sheetRows(corpsKey()).concat([['דוגמה ד.', cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => cellVal(s, s.min)))])),
   impmode: (d) => { A.ui.impMode = d.m; rerender(); },
   bfile: async (d, t) => { const f = t.files[0]; if (!f) return; const k = corpsKey(), wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); setBase(k, XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })); },
   bmap: (d, t) => { A.ui.base.map[d.f] = +t.value; rerender(); },
   blabel: (d, t) => { if (A.ui.base) A.ui.base.label = t.value; else A.ui.baseLabel = t.value; },
   bsample: () => setBase(corpsKey(), sampleBaseAoa(corpsKey())),
-  btemplate: () => downloadX('mil-draft-baseline-template.xlsx', [baseHeaders(corpsKey()), [cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => s.min), [4, 'פתוח', ''])]),
+  btemplate: () => downloadX('mil-draft-baseline-template.xlsx', [baseHeaders(corpsKey()), [cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => cellVal(s, s.min)), [4, 'פתוח', ''])]),
   bcancel: () => { A.ui.base = null; rerender(); },
   bsave: async () => {
     const k = corpsKey(), rows = buildBaseRows(k).filter((r) => !r.errs.length), label = (A.ui.base && A.ui.base.label) || 'מחזור קודם';

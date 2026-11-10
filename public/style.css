@@ -321,3 +321,14 @@ html{-webkit-text-size-adjust:100%}
 .pickbtn.xl{width:100%;min-height:60px;font-size:20px;border-radius:16px}
 .pickbar{position:sticky;bottom:-24px;margin:auto -24px -24px;padding:14px 24px calc(18px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--card) 70%,transparent);z-index:3}
 @media(max-width:700px){.ctbl td:last-child{flex:1 1 100%;margin-inline-start:0}.ctbl td:last-child .row{width:100%}.ctbl td:last-child .pickbtn{flex:1;min-height:52px}.pickbar{bottom:-18px;margin:auto -18px -18px;padding-inline:18px}}
+
+/* metric numbers: green when the unit's threshold is met */
+.okval{color:var(--green);font-weight:800}
+.mchips{display:inline-flex;flex-wrap:wrap;gap:4px}
+.mchip{display:inline-flex;align-items:baseline;gap:4px;padding:2px 8px;border-radius:8px;background:var(--bg2);font-size:12.5px;white-space:nowrap;color:var(--mut)}
+.mchip b{font-variant-numeric:tabular-nums;color:var(--navy)}
+.mchip i{font-style:normal}
+.mchip.ok{background:var(--green-l);color:var(--green)}
+.mchip.ok b{color:var(--green);font-weight:800}
+.mchip.ok::before{content:'✓';font-weight:800}
+input.invalid{border-color:var(--red);background:var(--red-l)}

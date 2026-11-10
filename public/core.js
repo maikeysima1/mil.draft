@@ -53,7 +53,7 @@ function fitOf(k, c, u) {
   cf(k).stats.forEach((s) => {
     const t = u.th[s.k]; if (t == null) return;
     const v = c.stats[s.k], miss = v == null;
-    out.push({ l: s.l + (s.low ? ' עד ' : ' לפחות ') + t + (miss ? ' (חסר נתון)' : ''), s: s.l.split(' ')[0], ok: !miss && (s.low ? v <= t : v >= t) });
+    out.push({ l: s.l + (s.low ? ' עד ' : ' לפחות ') + fmtVal(s, t) + (miss ? ' (חסר נתון)' : ''), s: s.l.split(' ')[0], ok: !miss && (s.low ? v <= t : v >= t) });
   });
   if (u.noMed) out.push({ l: 'ללא מגבלות רפואיות', s: 'רפואי', ok: c.med === 'ללא מגבלות' });
   out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: !!c.rec && c.rec !== 'לא מומלץ' });
@@ -69,7 +69,22 @@ function draftInfo(k) {
 }
 const countRole = (k, unit, role) => cs(k).picks.filter((p) => p.unit === unit && cs(k).cands.find((c) => c.id === p.id).role === role).length;
 const candOf = (k, id) => cs(k).cands.find((c) => c.id === id);
-function fmtStat(s, v) { return v == null ? 'חסר' : v + ' ' + s.u; }
+// run / fault-finding times are stored as decimal minutes (12.5) but always shown and typed as minutes:seconds (12:30)
+const isTime = (s) => s.u === 'דק׳';
+function fmtTime(v) { const t = Math.round(v * 60); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
+function fmtVal(s, v) { return v == null || v === '' ? '—' : (isTime(s) ? fmtTime(v) : String(Math.round(v * 100) / 100)); }
+function fmtStat(s, v) { return v == null ? 'חסר' : fmtVal(s, v) + ' ' + s.u; }
+const cellVal = (s, v) => (v == null || v === '' ? '' : (isTime(s) ? fmtTime(v) : v)); // for Excel/CSV cells (times as text, so Excel keeps mm:ss)
+// accepts "12:30", "12.5", "12,5" or an Excel time cell; returns decimal minutes / number, or null when invalid or empty
+function parseStat(s, raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'number') return !isFinite(raw) ? null : (isTime(s) && raw > 0 && raw < 1 ? raw * 24 : raw); // Excel stores 12:30 as a fraction of a day (12h30m)
+  const t = String(raw).trim().replace(',', '.'); if (t === '') return null;
+  if (isTime(s) && t.includes(':')) { const p = t.split(':').map(Number); if (p.some((x) => !isFinite(x) || x < 0)) return null; const sec = p.length > 1 ? p[1] : 0; return sec >= 60 ? null : p[0] + sec / 60; }
+  const v = Number(t); return isFinite(v) ? v : null;
+}
+// does the candidate's value meet this unit's threshold for the metric? null = no threshold or no value
+function statPass(s, v, unit) { const t = unit && unit.th ? unit.th[s.k] : null; if (t == null || v == null) return null; return s.low ? v <= t : v >= t; }
 
 // ---- permissions / routing ----
 const PAGES = [
