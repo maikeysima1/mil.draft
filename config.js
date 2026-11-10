@@ -15,10 +15,10 @@ const corps = {
         good: ['ביצע את התרגילים בדייקנות ולמד מהר מתיקונים.', 'שמר על קור רוח במסע האלונקה ובתרגיל הלחץ.', 'עזר לחברים בקבוצה ונתן כתף בלי שביקשו.', 'לקח פיקוד על הצוות כשהמשימה הסתבכה.', 'הציע פתרון מקורי בתרגיל הבנייה הקבוצתי.'],
         weak: ['צריך לחדד דיוק בביצוע.', 'מתקשה כשהלחץ עולה.', 'נוטה לעבוד לבד.', 'פחות לוקח יוזמה בקבוצה.', 'פחות גמיש כשהתוכנית משתנה.'],
         units: [
-          { name: 'חטיבת גולני', gibushBefore: false, badge: 'גו', desc: 'חטיבת חי״ר · צפון', prio: 0, quota: { 'קלע': 2, 'נגביסט': 1, 'חובש קרבי': 1 }, th: { shoot: 70 }, noMed: true, why: 'פתיחת פלוגה חדשה בגזרה הצפונית וחוסר בחובשים' },
-          { name: 'חטיבת הצנחנים', gibushBefore: true, badge: 'צנ', desc: 'חטיבת חי״ר · מרכז', prio: 1, quota: { 'קלע': 1, 'צלף': 1, 'קשר מבצעי': 1, 'מאגיסט': 1 }, th: { push: 40, pull: 8 }, noMed: true, why: 'השלמת צוותי צלפים ומאגיסטים לפני תעסוקה' },
-          { name: 'חטיבת גבעתי', gibushBefore: false, badge: 'גב', desc: 'חטיבת חי״ר · דרום', prio: 1, quota: { 'קלע': 2, 'חובש קרבי': 1, 'צלף': 1 }, th: { shoot: 70, push: 35 }, noMed: false, why: 'מחסור בקלעים ובחובש פלוגתי' },
-          { name: 'חטיבת כפיר', gibushBefore: false, badge: 'כפ', desc: 'חטיבת חי״ר · מרכז', prio: 2, quota: { 'קלע': 1, 'נגביסט': 1, 'מאגיסט': 1, 'קשר מבצעי': 1 }, th: { run: 13.5 }, noMed: false, why: 'ריענון שורות אחרי שחרור מחזור' }
+          { name: 'חטיבת גולני', badge: 'גו', desc: 'חטיבת חי״ר · צפון', prio: 0, quota: { 'קלע': 2, 'נגביסט': 1, 'חובש קרבי': 1 }, th: { shoot: 70 }, noMed: true, why: 'פתיחת פלוגה חדשה בגזרה הצפונית וחוסר בחובשים' },
+          { name: 'חטיבת הצנחנים', badge: 'צנ', desc: 'חטיבת חי״ר · מרכז', prio: 1, quota: { 'קלע': 1, 'צלף': 1, 'קשר מבצעי': 1, 'מאגיסט': 1 }, th: { push: 40, pull: 8 }, noMed: true, why: 'השלמת צוותי צלפים ומאגיסטים לפני תעסוקה' },
+          { name: 'חטיבת גבעתי', badge: 'גב', desc: 'חטיבת חי״ר · דרום', prio: 1, quota: { 'קלע': 2, 'חובש קרבי': 1, 'צלף': 1 }, th: { shoot: 70, push: 35 }, noMed: false, why: 'מחסור בקלעים ובחובש פלוגתי' },
+          { name: 'חטיבת כפיר', badge: 'כפ', desc: 'חטיבת חי״ר · מרכז', prio: 2, quota: { 'קלע': 1, 'נגביסט': 1, 'מאגיסט': 1, 'קשר מבצעי': 1 }, th: { run: 13.5 }, noMed: false, why: 'ריענון שורות אחרי שחרור מחזור' }
         ]
       },
       intel: {
@@ -57,19 +57,28 @@ const corps = {
 Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
-// Selection model. Units with gibushBefore:false (Golani, Givati, Kfir) get soldiers by draft-office assignment (profile, physical data, preferences) and
-// hold NO gibush before the assignment; after arrival the soldier may go to a unit-level gibush (יח״טיות) tracked per soldier.
-// Units with gibushBefore:true (Tzanhanim) and units that do not set the flag still rely on the camp gibush recommendation.
-const UG = { statuses: ['לא הוזמן', 'הוזמן', 'בגיבוש', 'עבר', 'לא עבר'], subUnits: ['סיירת החטיבה', 'יח״טיה אחרת'] };
-const needsGibush = (u) => !u || u.gibushBefore !== false;
-const ALL_PAGES = ['room', 'board', 'eval', 'command', 'results', 'ugibush', 'import'];
+// Training-follow-up model. The system tracks soldiers in training who are candidates for a special unit (יח״ט / יחידה מיוחדת).
+// Three core events per soldier: (1) intake – גיוס המועמד, (2) dismissal review – בדיקת מועמד להדחה, (3) periodic status – סטטוס רבעוני / חציוני.
+// Between them: a short daily entry by the training commander / the team's evaluator.
+const TR = {
+  statuses: ['בהכשרה', 'במעקב', 'בבדיקת הדחה', 'הודח/ה', 'סיים/ה הכשרה'],
+  daily: ['מתקשה', 'תקין', 'מצטיין'],                       // daily level 0..2
+  attend: ['נוכח/ת', 'חסר/ה', 'פטור רפואי'],
+  periodRec: ['ממשיך/ה', 'במעקב', 'מועמד/ת להדחה'],        // outcome of a periodic status
+  decisions: ['נשאר/ת בהכשרה', 'נשאר/ת במעקב', 'הודח/ה'],   // outcome of a dismissal review
+  periods: ['רבעון', 'חציון'],
+};
+// special units the soldiers are candidates for (generic names – replace with the real ones)
+const TARGETS = { combat: ['סיירת החטיבה', 'פלוגת סיור', 'יחידת חבלה'], intel: ['יחידה מיוחדת א׳', 'יחידה מיוחדת ב׳'], signals: ['יחידה מיוחדת א׳', 'יחידה מיוחדת ב׳'] };
+// Classification layers: who can open which screen, which actions they may run, and how much data they see.
+// scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES.concat(['settings']), can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav', 'evalbulk', 'settings', 'ugibush'], desc: 'שליטה מלאה בכל החילות: הגדרות דראפט (סבבים, סדר וכללים), עריכת מכסות של כל יחידה, ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance', 'fav'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש (צפייה בלבד, ללא עריכה), וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
-  'ראש מטה': { layer: 3, scope: 'all', home: 'command', pages: ['board', 'command', 'results'], can: [], desc: 'צפייה בלבד בלוח הדראפט ובתמונת המצב של כל החילות. אין גישה לתיקי מועמדים או לדפי מגבש.' },
-  'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance', 'fav', 'ugibush'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה את דפי המגבש בצפייה בלבד (ללא עריכה), ורק את מועמדי החיל שלה.' },
-  'מגבש/ת': { layer: 5, scope: 'group', home: 'eval', pages: ['eval'], can: ['eval', 'regroup', 'evalbulk'], desc: 'אחראי/ת על צוות אחד: הזנת התרשמות על מועמדי הצוות שלו/ה והעברת מועמד לצוות אחר. אין גישה לחדר הבחירה ולתוצאות הדראפט.' },
-  'צופה/ת': { layer: 6, scope: 'all', home: 'board', pages: ['board'], can: [], desc: 'צפייה בלוח הדראפט החי בלבד (שמות ובחירות), ללא תיקים, מדדים או הרשאות פעולה.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'decide', 'complete', 'regroup', 'fav', 'evalbulk', 'settings', 'factory'], desc: 'שליטה מלאה בכל החילות: גיוס מועמדים, מעקב יומי, סטטוס תקופתי, בדיקות הדחה, הגדרות, משתמשים ואיפוס מערכת.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'decide', 'complete', 'fav'], desc: 'מזין/ה מעקב יומי וסטטוס תקופתי, פותח/ת בדיקת הדחה ומחליט/ה בה, ומסמן/ת סיום הכשרה. רואה את דפי המגבש בצפייה בלבד.' },
+  'ראש מטה': { layer: 3, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה בלבד בתמונת המצב של כל החילות. אין גישה לתיקי החיילים.' },
+  'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import', 'fav'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'daily', pages: ['daily', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss'], desc: 'אחראי/ת על צוות אחד: מעקב יומי על חיילי הצוות, דף מגבש, והמלצה לפתוח בדיקת הדחה. ההחלטה בבדיקה היא של מפקד/ת ההכשרה.' },
+  'צופה/ת': { layer: 6, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה במספרים המסכמים בתמונת המצב בלבד, ללא שמות, תיקים או הרשאות פעולה.' },
 };
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
 // Login step 1 ("חיל"): the five entrances. Users carry org / orgUnit / roleLabel for steps 1-3.
@@ -77,4 +86,4 @@ const ORGS = [
   { key: 'combat', label: 'חיל רגלים' }, { key: 'intel', label: 'חיל המודיעין' }, { key: 'signals', label: 'חיל הקשר והתקשוב' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
-module.exports={ORGS,ROLES,canDo,UG,needsGibush,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
+module.exports={ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};

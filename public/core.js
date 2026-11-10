@@ -47,43 +47,11 @@ const nowS = () => Date.now() + A.skew;
 
 // ---- domain helpers ----
 const cfRaw = (k) => A.cfg.corps[k];
-// corps config with each unit's live overrides (quota / thresholds) applied
-function cf(k) { const base = A.cfg.corps[k]; if (!A.S || !A.S.corps[k]) return base; return Object.assign({}, base, { units: base.units.map((u) => unitOf(k, u.name)) }); }
+const cf = (k) => A.cfg.corps[k];
 const cs = (k) => A.S.corps[k];
-function unitOf(k, name) {
-  const base = cfRaw(k).units.find((u) => u.name === name);
-  const ov = cs(k).units.find((u) => u.name === name);
-  return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed, quota: ov.quota || base.quota } : {});
-}
-// draft settings (admin-configurable): rounds, order (snake / linear), optional hard rules for manual picks
-const STG_DEFAULT = { order: 'snake', strictThresholds: false, strictQuotas: false, blockNotRecommended: false };
-const stg = (k) => Object.assign({ rounds: cf(k).rounds }, STG_DEFAULT, cs(k).settings);
-function orderOf(k) {
-  const c = cf(k), S = stg(k), o = [];
-  for (let r = 0; r < S.rounds; r++) { (S.order === 'snake' && r % 2 === 1 ? c.units.slice().reverse() : c.units).forEach((u) => o.push({ r: r + 1, u: u.name })); }
-  return o;
-}
-const needsGibush = (u) => !u || u.gibushBefore !== false; // false = soldiers come by draft-office assignment; gibush (if any) happens after arrival
-function fitOf(k, c, u) {
-  const out = [];
-  cf(k).stats.forEach((s) => {
-    const t = u.th[s.k]; if (t == null) return;
-    const v = c.stats[s.k], miss = v == null;
-    out.push({ l: s.l + (s.low ? ' עד ' : ' לפחות ') + fmtVal(s, t) + (miss ? ' (חסר נתון)' : ''), s: s.l.split(' ')[0], ok: !miss && (s.low ? v <= t : v >= t) });
-  });
-  if (u.noMed) out.push({ l: 'ללא מגבלות רפואיות', s: 'רפואי', ok: c.med === 'ללא מגבלות' });
-  if (needsGibush(u)) out.push({ l: 'המלצת מגבש לא שלילית', s: 'המלצה', ok: !!c.rec && c.rec !== 'לא מומלץ' });
-  return out;
-}
-const fitBad = (k, c, u) => fitOf(k, c, u).filter((x) => !x.ok);
 const strengths = (k, c) => cf(k).traits.filter((t, i) => c.lv[i] === 2);
-const missingOf = (k, c, unit) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec && needsGibush(unit)) m.push('המלצה'); if (c.lv.some((v) => v == null)) m.push('חוזקות'); return m; };
-function draftInfo(k) {
-  const order = orderOf(k), picks = cs(k).picks, finished = picks.length >= order.length;
-  const takenBy = {}; picks.forEach((p) => { takenBy[p.id] = p; });
-  return { order, picks, finished, slot: finished ? null : order[picks.length], takenBy };
-}
-const countRole = (k, unit, role) => cs(k).picks.filter((p) => p.unit === unit && cs(k).cands.find((c) => c.id === p.id).role === role).length;
+// what is still missing in the soldier's file (unknown stays unknown and is listed, never filled in)
+const missingOf = (k, c) => { const m = cf(k).stats.filter((s) => c.stats[s.k] == null).map((s) => s.l); if (!c.rec) m.push('המלצה'); if (c.lv.some((v) => v == null)) m.push('חוזקות'); return m; };
 const candOf = (k, id) => cs(k).cands.find((c) => c.id === id);
 // run / fault-finding times are stored as decimal minutes (12.5) but always shown and typed as minutes:seconds (12:30)
 const isTime = (s) => s.u === 'דק׳';
@@ -99,19 +67,17 @@ function parseStat(s, raw) {
   if (isTime(s) && t.includes(':')) { const p = t.split(':').map(Number); if (p.some((x) => !isFinite(x) || x < 0)) return null; const sec = p.length > 1 ? p[1] : 0; return sec >= 60 ? null : p[0] + sec / 60; }
   const v = Number(t); return isFinite(v) ? v : null;
 }
-// does the candidate's value meet this unit's threshold for the metric? null = no threshold or no value
-function statPass(s, v, unit) { const t = unit && unit.th ? unit.th[s.k] : null; if (t == null || v == null) return null; return s.low ? v <= t : v >= t; }
-
 // ---- permissions / routing ----
 const PAGES = [
-  { id: 'room', name: 'חדר בחירה', icon: 'users' },
-  { id: 'board', name: 'לוח הדראפט', icon: 'grid' },
-  { id: 'eval', name: 'דף מגבש', icon: 'clip' },
-  { id: 'command', name: 'תמונת מצב', icon: 'chart' },
-  { id: 'results', name: 'תוצאות ויומן', icon: 'file' },
-  { id: 'ugibush', name: 'גיבוש יח״טיות', icon: 'flag' },
-  { id: 'import', name: 'הזנה וייבוא', icon: 'upload' },
-  { id: 'settings', name: 'הגדרות דראפט', icon: 'gear' },
+  { id: 'dash', name: 'תמונת מצב', icon: 'chart' },
+  { id: 'roster', name: 'חיילים בהכשרה', icon: 'users' },
+  { id: 'daily', name: 'מעקב יומי', icon: 'clip' },
+  { id: 'periodic', name: 'סטטוס תקופתי', icon: 'grid' },
+  { id: 'dismiss', name: 'בדיקות הדחה', icon: 'flag' },
+  { id: 'intake', name: 'גיוס מועמד', icon: 'upload' },
+  { id: 'eval', name: 'דף מגבש', icon: 'scale' },
+  { id: 'log', name: 'יומן וייצוא', icon: 'file' },
+  { id: 'settings', name: 'הגדרות', icon: 'gear' },
 ];
 const ICONS = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -151,13 +117,13 @@ const isFav = (k, id) => favList(k).includes(id);
 const heartIcon = (on, s) => `<svg class="ic" width="${s || 18}" height="${s || 18}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.heart}</svg>`;
 const favBtn = (k, id, cls) => { const on = isFav(k, id), t = on ? 'הסר מהמועדפים' : 'הוסף למועדפים'; return `<button class="favbtn ${on ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" data-tip="${t}" aria-pressed="${on}" aria-label="${t}">${heartIcon(on)}</button>`; };
 // a candidate's name as a link to the candidate card (plain text for roles that cannot open candidate files)
-const candLink = (k, id, name) => (canFile() ? `<a href="#/room" class="clink" data-act="openCand" data-id="${esc(id)}" data-k="${esc(k)}" title="פתיחת כרטיס מועמד">${esc(name)}</a>` : esc(name));
+const candLink = (k, id, name) => (canFile() ? `<a href="#/room" class="clink" data-act="openCand" data-id="${esc(id)}" data-k="${esc(k)}" title="פתיחת תיק החייל/ת">${esc(name)}</a>` : esc(name));
 const roleOf = (name) => A.cfg.roles[name];
 const allowed = (p) => !!A.me && R().pages.includes(p.id);
 const homeFor = () => R().home;
 // can the current user run `action` on corps k (mirrors the server's canDo)
 const can = (action, k) => !!A.me && R().can.includes(action) && (R().scope === 'all' || A.me.corps === k);
-const canFile = () => !!A.me && R().pages.includes('room'); // may open candidate files
+const canFile = () => !!A.me && (R().pages.includes('roster') || R().pages.includes('daily')); // may open candidate files
 const SCOPE_TXT = { all: 'כל החילות', corps: 'החיל שלו/ה', group: 'הצוות שלו/ה' };
 function route() { return (location.hash.replace('#/', '') || '').split('?')[0]; }
 function go(r) { location.hash = '#/' + r; }
@@ -209,7 +175,7 @@ function loginAuto() { // skip steps that have a single option
   const units = loginUnits(org); if (!A.ui.lunit && units.length === 1) A.ui.lunit = units[0];
   if (A.ui.lunit && !A.ui.sel) { const rs = loginRoles(org, A.ui.lunit); if (rs.length === 1) A.ui.sel = rs[0].id; }
 }
-const ACTION_TXT = { pick: 'בחירה', thresholds: 'עריכת מכסות', import: 'ייבוא', reset: 'איפוס', undo: 'ביטול בחירה', advance: 'הדמיה', eval: 'הזנת התרשמות', regroup: 'העברת מועמד בין צוותים', factory: 'איפוס מערכת' };
+const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', decide: 'החלטה בבדיקה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', fav: 'מעקב אישי', settings: 'הגדרות', factory: 'איפוס מערכת' };
 function layerMatrix(selRole) {
   const rows = Object.keys(A.cfg.roles).sort((a, b) => roleOf(a).layer - roleOf(b).layer);
   return `<div class="card matrix"><h2>שכבות סיווג והרשאות</h2><div class="mut small" style="margin-bottom:10px">כל שכבה רואה ומפעילה רק את מה שנקבע לה (העמודות: חדר בחירה, לוח, דף מגבש, תמונת מצב, ייבוא). השרת בודק כל פעולה מחדש.</div>
@@ -226,9 +192,9 @@ function loginView() {
   const s3 = org && unit ? loginRoles(org, unit).map((x) => `<button class="user ${x.id === A.ui.sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.roleLabel)}</b><small>${esc(x.title)}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`).join('') : '<div class="mut small">בחרו יחידה תחילה</div>';
   const target = o ? PAGES.find((p) => p.id === o.home).name : '';
   return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-DRAFT</span></div>
-   <h1>מהגיבוש ועד השיבוץ – <em>תמונה אחת</em> של כל מועמד</h1>
-   <p>מגבשים מזינים התרשמות מקצועית, יחידות בוחרות בחדר בחירה משותף לפי מערך, ומפקדי ההכשרה מקבלים את התמונה המלאה.</p>
-   <div class="chips"><span>דראפט חי</span><span>6 שכבות סיווג</span><span>5 חילות</span></div>
+   <h1>מהגיוס ועד סיום ההכשרה – <em>תמונה אחת</em> של כל חייל/ת</h1>
+   <p>מעקב אחרי חיילים בהכשרה שמועמדים ליחידות מיוחדות: גיוס המועמד, מעקב יומי, סטטוס תקופתי ובדיקת הדחה – עם תיק אחד לכל חייל/ת.</p>
+   <div class="chips"><span>3 אירועים מרכזיים</span><span>מעקב יומי</span><span>6 שכבות סיווג</span></div>
    ${layerMatrix(u ? u.role : null)}
    <div class="demo-note">${A.auth ? 'הכניסה מוגנת בסיסמה אישית. ניסיונות כושלים חוסמים את החשבון זמנית, וכל כניסה נרשמת ביומן אבטחה.' : 'אב־טיפוס לדמו – המשתמשים פיקטיביים. הפעלת <b>AUTH=1</b> בשרת מחליפה את הבחירה החופשית בכניסה עם סיסמה אישית.'}</div></section>
    <section class="picker"><div class="row spread"><h2>כניסה למערכת</h2><button class="iconbtn" data-act="theme" aria-label="החלפת ערכת נושא">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 18)}</button></div>
@@ -330,23 +296,10 @@ function connectSSE() {
   A.es.onmessage = async (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { await refresh(); rerender(true); }
-    else if (m.type === 'tick') { const c = $('#clk'); if (c) c.textContent = clockText(); }
   };
 }
-function clockText() {
-  const k = corpsKey(), cst = cs(k); if (!cst || !A.S.clockSeconds) return ''; // no time pressure unless the server enables a clock
-  const left = Math.max(0, A.S.clockSeconds - Math.floor((nowS() - cst.turnStartedAt) / 1000));
-  return String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
-}
-function clockPct() { const k = corpsKey(), cst = cs(k); if (!cst || !A.S.clockSeconds) return 0; return Math.max(0, 100 - (nowS() - cst.turnStartedAt) / 10 / A.S.clockSeconds); }
-setInterval(() => { const c = $('#clk'); if (c) c.textContent = clockText(); const r = $('#clkring'); if (r) r.style.setProperty('--p', clockPct().toFixed(1)); }, 1000);
-
 // ---- small UI pieces ----
 function recPill(r) { return r ? `<span class="pill ${REC_CLS[r]}">${esc(r)}</span>` : '<span class="pill p-red">חסר: המלצה</span>'; }
-function fitCell(k, c, u) {
-  const bad = fitBad(k, c, u);
-  return bad.length ? `<span class="pill p-orange">חסר: ${esc(bad.map((x) => x.s).join(', '))}</span>` : '<span class="pill p-green">עומד/ת בתנאי הסף</span>';
-}
 function strengthChips(k, c) { const s = strengths(k, c); return s.length ? s.map((t) => `<span class="pill p-blue">${esc(t)}</span>`).join(' ') : '—'; }
 function csvDownload(name, rows) {
   const csv = '﻿' + rows.map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
