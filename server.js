@@ -189,7 +189,7 @@ function seedCands() {
 // ---------- training model + api (shared with the standalone build) ----------
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-const SCHEMA = 7;
+const SCHEMA = 8;
 const DAY = 86400e3;
 const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ts)); // YYYY-MM-DD, Israel time
 // current review period: quarter (רבעון) or half-year (חציון)
@@ -203,10 +203,23 @@ const openDismiss = (c) => (c.dismiss || []).find((d) => d.status === 'פתוח�
 // where a dismissed soldier goes: the unit one level lower in the same track with the largest open need; null = leaves the track
 const unitTier = (k, name) => { const u = cfg(k).units.find((x) => x.name === name); return (u && u.tier) || 1; };
 const needOf = (k, name) => ((state.corps[k].needs || {})[name]) || 0;
-function nextUnit(k, c) {
-  const t = unitTier(k, c.unit), lower = cfg(k).units.filter((u) => (u.tier || 1) > t && needOf(k, u.name) > 0); if (!lower.length) return null;
-  const tier = Math.min.apply(null, lower.map((u) => u.tier));
-  return lower.filter((u) => u.tier === tier).sort((a, b) => needOf(k, b.name) - needOf(k, a.name))[0].name;
+const byNeed = (k, us) => { const t = Math.min.apply(null, us.map((u) => u.tier || 1)); return us.filter((u) => (u.tier || 1) === t).sort((a, b) => needOf(k, b.name) - needOf(k, a.name))[0].name; };
+// { k, unit }: one level lower in the same track; if nothing is open there, the next track(s) in the chain; null = leaves to the fallback
+function nextPlace(k, c) {
+  const t = unitTier(k, c.unit), lower = cfg(k).units.filter((u) => (u.tier || 1) > t && needOf(k, u.name) > 0);
+  if (lower.length) return { k, unit: byNeed(k, lower) };
+  const seen = [k]; let n = cfg(k).nextTrack;
+  while (n && C.corps[n] && !seen.includes(n)) { const open = cfg(n).units.filter((u) => needOf(n, u.name) > 0); if (open.length) return { k: n, unit: byNeed(n, open) }; seen.push(n); n = cfg(n).nextTrack; }
+  return null;
+}
+// move a soldier to another track: new id, the track's default role, only measures that mean the same thing, levels unknown; the whole history stays
+function moveTrack(k, c, k2, unit) {
+  const src = state.corps[k], dst = state.corps[k2], cf2 = cfg(k2), cf1 = cfg(k);
+  const max = dst.cands.reduce((m, x) => Math.max(m, parseInt(x.id.slice(cf2.prefix.length), 10) || 0), 0) + 1, stats = {};
+  cf2.stats.forEach((s2) => { const s1 = cf1.stats.find((x) => x.l === s2.l && x.u === s2.u); stats[s2.k] = s1 && c.stats[s1.k] != null ? c.stats[s1.k] : null; });
+  src.cands = src.cands.filter((x) => x.id !== c.id); Object.keys(src.favs || {}).forEach((u) => { src.favs[u] = src.favs[u].filter((id) => id !== c.id); });
+  c.prevIds = (c.prevIds || []).concat([c.id]); c.prevRole = c.role; c.id = cf2.prefix + max; c.role = cf2.roles[0]; c.skills = cf2.skills[c.role] || []; c.stats = stats; c.lv = cf2.traits.map(() => null);
+  c.unit = unit; c.target = ''; c.tstatus = 'בהכשרה'; dst.cands.push(c);
 }
 const logAct = (k, text) => { state.log.push({ ts: Date.now(), corps: k, text }); if (state.log.length > 1500) state.log.shift(); };
 // training fields of a soldier who enters the system (event 1: intake)
@@ -219,8 +232,8 @@ function seedTraining(k, cands) {
   cands.forEach((c, i) => {
     intakeFields(c, cf.units[i % cf.units.length].name, C.TARGETS[k][i % C.TARGETS[k].length], 'שלישות ' + cf.units[i % cf.units.length].name, now - (120 + Math.floor(rnd() * 60)) * DAY);
     const sum = c.lv.reduce((a, b) => a + (b || 0), 0), base = sum >= 7 ? 2 : (sum >= 4 ? 1 : 0), ev = 'מגבש/ת צוות ' + c.group, top = c.lv.indexOf(Math.max.apply(null, c.lv)), weak = c.lv.indexOf(Math.min.apply(null, c.lv));
-    for (let d = 4; d >= 1; d--) { // the last four days (today is left empty on purpose)
-      if (rnd() < 0.2) continue;
+    for (let d = 24; d >= 1; d--) { // the last weeks, with gaps like real life (today is left empty on purpose)
+      if (rnd() < (d > 4 ? 0.4 : 0.2)) continue;
       const lvl = Math.max(0, Math.min(2, base + (rnd() < 0.25 ? -1 : (rnd() > 0.8 ? 1 : 0)))), att = rnd() < 0.06 ? C.TR.attend[2] : C.TR.attend[0];
       c.daily.push({ d: dayKey(now - d * DAY), ts: now - d * DAY, by: ev, byId: 'seed', level: lvl, att, text: lvl === 2 ? cf.good[top] : (lvl === 0 ? cf.weak[weak] : 'יום אימונים רגיל, עמד/ה במשימות.') });
     }
@@ -361,13 +374,16 @@ function apiHandle(p, b, user) {
     const note = text(b.note, 1000); if (note.length < 10) throw new Error('יש לנמק את ההחלטה (לפחות 10 תווים)');
     const nOp = (d.opinions || []).length; if (b.decision === T.decisions[2] && nOp < T.minOpinions) throw new Error('אי אפשר להדיח לפני שנרשמו לפחות ' + T.minOpinions + ' נימוקים בחדר ההדחה (נרשמו ' + nOp + ')');
     Object.assign(d, { status: 'נסגרה', decision: b.decision, decidedBy: user.title, decidedTs: Date.now(), note });
-    let movedTo = null;
+    let movedTo = null, movedTrack = null;
     if (b.decision === T.decisions[2]) { // dismissed from this unit: move one level down by the system's needs, or leave the track
-      movedTo = nextUnit(k, c); d.from = c.unit;
-      if (movedTo) { cst.needs[movedTo]--; d.movedTo = movedTo; c.transfers = (c.transfers || []).concat([{ ts: Date.now(), from: c.unit, to: movedTo, by: user.title }]); c.unit = movedTo; c.target = ''; c.tstatus = 'בהכשרה'; }
-      else { d.exitTo = cf.fallback; c.exitTo = cf.fallback; c.tstatus = 'הודח/ה'; }
+      const pl = nextPlace(k, c); d.from = c.unit;
+      if (pl) {
+        movedTo = pl.unit; state.corps[pl.k].needs[pl.unit]--; d.movedTo = pl.unit; if (pl.k !== k) { d.movedTrack = cfg(pl.k).corps; movedTrack = cfg(pl.k).corps; }
+        c.transfers = (c.transfers || []).concat([{ ts: Date.now(), from: c.unit, to: pl.unit, track: pl.k !== k ? cfg(pl.k).corps : '', by: user.title }]);
+        if (pl.k !== k) moveTrack(k, c, pl.k, pl.unit); else { c.unit = pl.unit; c.target = ''; c.tstatus = 'בהכשרה'; }
+      } else { d.exitTo = cf.fallback; c.exitTo = cf.fallback; c.tstatus = 'הודח/ה'; }
     } else c.tstatus = b.decision === T.decisions[1] ? 'במעקב' : 'בהכשרה';
-    logAct(k, `${user.title} החליט/ה בבדיקת ההדחה של ${c.name}: ${b.decision}${b.decision === T.decisions[2] ? (movedTo ? ' · הועבר/ה אוטומטית ל' + movedTo : ' · יוצא/ת מהמסלול ל' + cf.fallback) : ''}`); save(); return { ok: true, movedTo, exitTo: movedTo ? null : (b.decision === T.decisions[2] ? cf.fallback : null) };
+    logAct(k, `${user.title} החליט/ה בבדיקת ההדחה של ${c.name}: ${b.decision}${b.decision === T.decisions[2] ? (movedTo ? ' · הועבר/ה אוטומטית ל' + movedTo + (movedTrack ? ' (' + movedTrack + ')' : '') : ' · יוצא/ת מהמסלול ל' + cf.fallback) : ''}`); save(); return { ok: true, movedTo, movedTrack, newId: movedTrack ? c.id : null, exitTo: movedTo ? null : (b.decision === T.decisions[2] ? cf.fallback : null) };
   }
   if (p === 'complete') {
     allow('complete', 'סיום הכשרה מסומן ע״י מפקד/ת הכשרה'); const c = soldier(b.id); mustBeActive(c);

@@ -108,6 +108,15 @@ async function main() {
       const dz = await api('dismiss-decide', 'u3', { corps: I, id: sp.id, decision: 'הודח/ה', note: 'הוחלט לאחר שמיעת כל הנימוקים' }), i1 = await sti(), sp1 = i1.cands.find((x) => x.id === sp.id);
       ok(dz.json.movedTo === 'דובדבן' && sp1.unit === 'דובדבן' && sp1.tstatus === 'בהכשרה' && sp1.transfers.length === 1, 'dismissed from a tier-1 unit: moved automatically to the tier-2 unit with the largest open need (דובדבן)');
       ok(i1.needs['דובדבן'] === i0.needs['דובדבן'] - 1, 'the open need of the receiving unit went down by one');
+      // no open place left in the track -> the dismissed soldier moves to the next track (special units -> brigade recon units)
+      await api('needs', 'a1', { corps: I, unit: 'מגלן', need: 0 }); await api('needs', 'a1', { corps: I, unit: 'דובדבן', need: 0 });
+      const mt = (await sti()).cands.find((x) => x.unit === 'סיירת מטכ״ל' && x.tstatus === 'בהכשרה'), ev2 = cfg.users.find((u) => u.role === 'מגבש/ת' && u.corps === I && u.group === mt.group).id, c0 = await st();
+      await api('dismiss-open', 'u3', { corps: I, id: mt.id, reason: 'בדיקה: מעבר בין מסלולים' });
+      await api('dismiss-opinion', 'u3', { corps: I, id: mt.id, stance: 'להדיח', text: 'לא עומד ברף לאורך זמן' }); await api('dismiss-opinion', ev2, { corps: I, id: mt.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' });
+      const xz = await api('dismiss-decide', 'u3', { corps: I, id: mt.id, decision: 'הודח/ה', note: 'הוחלט לאחר שמיעת כל הנימוקים' }), c1x = await st(), mv = c1x.find((x) => (x.prevIds || []).includes(mt.id));
+      ok(xz.json.movedTo === 'גדס״ר גולני' && !!xz.json.movedTrack && !(await sti()).cands.some((x) => x.id === mt.id) && c1x.length === c0.length + 1, 'no open place in the track: moved to the next track, to its unit with the largest open need');
+      ok(!!mv && mv.id === xz.json.newId && mv.unit === 'גדס״ר גולני' && mv.tstatus === 'בהכשרה' && mv.role === cfg.corps[K].roles[0] && mv.lv.every((v) => v == null) && mv.dismiss.length >= 1 && mv.daily.length === mt.daily.length, 'moved soldier: new id, default role of the new track, levels unknown, full history kept');
+      ok(mv.stats.run === mt.stats.run && mv.stats.shoot === mt.stats.shoot && mv.stats.push == null, 'only measures that mean the same thing are carried over; the rest stay unknown');
       await deny('u1', 'needs', { corps: K, unit: 'גדס״ר גולני', need: 3 }, 'שלישות editing the system needs');
       ok((await api('needs', 'a1', { corps: I, unit: 'מגלן', need: 9 })).status === 200 && (await sti()).needs['מגלן'] === 9, 'admin updates the open places of a unit');
       ok(by(await st(), t1.id).exitTo === cfg.corps[K].fallback, 'no lower unit in the track: the dismissed soldier leaves to the fallback destination');

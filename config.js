@@ -18,13 +18,13 @@ const corps = {
     good: ['ביצע/ה את התרגילים בדייקנות ולמד/ה מהר מתיקונים.', 'שמר/ה על קור רוח במסע האלונקה ובתרגיל הלחץ.', 'עזר/ה לחברים בצוות ונתן/ה כתף בלי שביקשו.', 'לקח/ה פיקוד על הצוות כשהמשימה הסתבכה.', 'ניווט מדויק גם בתנאי לילה.'],
     weak: ['צריך לחדד דיוק בביצוע.', 'מתקשה כשהלחץ עולה.', 'נוטה לעבוד לבד.', 'פחות לוקח/ת יוזמה בצוות.', 'מתקשה בניווט עצמאי.'],
     units: [
-      { name: 'גדס״ר גולני', badge: 'גו', desc: 'גדוד הסיור של חטיבת גולני' }, { name: 'גדס״ר הצנחנים', badge: 'צנ', desc: 'גדוד הסיור של חטיבת הצנחנים' },
-      { name: 'גדס״ר גבעתי', badge: 'גב', desc: 'גדוד הסיור של חטיבת גבעתי' }, { name: 'גדס״ר נח״ל', badge: 'נח', desc: 'גדוד הסיור של חטיבת הנח״ל' },
-      { name: 'סיירת חרוב (כפיר)', badge: 'חר', desc: 'היחידה המיוחדת של חטיבת כפיר' },
+      { name: 'גדס״ר גולני', badge: 'גו', desc: 'גדוד הסיור של חטיבת גולני', need: 2 }, { name: 'גדס״ר הצנחנים', badge: 'צנ', desc: 'גדוד הסיור של חטיבת הצנחנים', need: 1 },
+      { name: 'גדס״ר גבעתי', badge: 'גב', desc: 'גדוד הסיור של חטיבת גבעתי', need: 2 }, { name: 'גדס״ר נח״ל', badge: 'נח', desc: 'גדוד הסיור של חטיבת הנח״ל', need: 1 },
+      { name: 'סיירת חרוב (כפיר)', badge: 'חר', desc: 'היחידה המיוחדת של חטיבת כפיר', need: 1 },
     ],
   },
   intel: {
-    key: 'intel', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות', fallback: 'שיבוץ מחדש מחוץ ליחידות המיוחדות',
+    key: 'intel', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות', fallback: 'שיבוץ מחדש מחוץ ליחידות המיוחדות', nextTrack: 'combat',
     roles: ['לוחם/ת', 'חובש/ת', 'צלף/ת', 'קשר/ית'],
     mix: ['לוחם/ת', 'לוחם/ת', 'חובש/ת', 'לוחם/ת', 'צלף/ת', 'לוחם/ת', 'קשר/ית', 'לוחם/ת'],
     traits: ['עמידה בעומס', 'עבודה בצוות', 'קור רוח', 'משמעת מבצעית', 'למידה מהירה'],
@@ -39,7 +39,7 @@ const corps = {
     ],
   },
   signals: {
-    key: 'signals', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה', fallback: 'שיבוץ מחדש מחוץ לקורס הטיס',
+    key: 'signals', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה', fallback: 'שיבוץ מחדש מחוץ לקורס הטיס', nextTrack: 'intel',
     roles: ['חניך/ת טיס', 'חניך/ת ניווט'],
     mix: ['חניך/ת טיס', 'חניך/ת טיס', 'חניך/ת ניווט', 'חניך/ת טיס'],
     traits: ['קואורדינציה', 'חלוקת קשב', 'קבלת החלטות', 'למידה מהירה', 'עבודה בצוות'],
@@ -72,7 +72,8 @@ const TR = {
 };
 // After a dismissal the soldier moves automatically to a unit one level lower IN THE SAME TRACK that has an open need (unit.tier: 1 = highest;
 // unit.need = open places, editable in the settings screen). The tiers below are an ILLUSTRATION ONLY, not an official ranking of units.
-// When no lower unit has an open need, the soldier leaves the track to corps.fallback.
+// When no lower unit in the track has an open need, the soldier moves to the next track (corps.nextTrack: flight course -> special units ->
+// brigade recon units - also an illustration), to its unit with the largest open need. With no next track / no open need: corps.fallback.
 // special units the soldiers are candidates for (generic names – replace with the real ones)
 const TARGETS = { combat: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], intel: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], signals: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
