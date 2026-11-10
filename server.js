@@ -10,7 +10,7 @@ try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) { /* ignore */ }
 const DATA_FILE = path.join(DATA_DIR, 'state.json');
 const ACCESS_CODE = process.env.ACCESS_CODE || '';
 const PUB = path.join(__dirname, 'public');
-const CLOCK_SECONDS = Number(process.env.CLOCK_SECONDS) || 60;   // time a human unit has to pick (override with CLOCK_SECONDS=...)
+const CLOCK_SECONDS = Number(process.env.CLOCK_SECONDS) || 0;   // 0 = no time pressure (default). Opt in with CLOCK_SECONDS=<seconds>: a human unit that does not pick in time is auto-picked
 const BOT_DELAY_MS = 1000;   // delay between automatic picks
 
 // ---------- users (demo users, as in the mockup login screen) ----------
@@ -18,10 +18,6 @@ const USERS = [
   { id: 'u1', title: 'שלישות גבעתי', unit: 'חטיבת גבעתי', corps: 'combat', role: 'שלישות', initial: 'ש' },
   { id: 'u2', title: 'שלישות מודיעין א׳', unit: 'יחידת מודיעין א׳', corps: 'intel', role: 'שלישות', initial: 'ש' },
   { id: 'u6', title: 'שלישות גדוד תקשוב א׳', unit: 'גדוד תקשוב א׳', corps: 'signals', role: 'שלישות', initial: 'ש' },
-  { id: 'u3', title: 'מפקד/ת הכשרה', unit: 'בסיס הדרכה לדוגמה', corps: null, role: 'מפקד/ת הכשרה', initial: 'מה' },
-  { id: 'h1', title: 'ראש מטה', unit: 'מטה ההכשרות', corps: null, role: 'ראש מטה', initial: 'רמ' },
-  { id: 'o1', title: 'צופה/ת', unit: 'צפייה בלבד', corps: null, role: 'צופה/ת', initial: 'צו' },
-  { id: 'a1', title: 'מנהל/ת מערכת', unit: 'צוות המערכת', corps: null, role: 'מנהל/ת מערכת', initial: 'מנ' },
 ];
 const canDo = C.canDo;
 // one evaluator per team (צוות 1..4) in every corps: "מגבש צוות 1 אחראי על צוות 1" and so on
@@ -46,7 +42,7 @@ function makeWish(cf, role, pref, rnd2, motivation) {
 function cleanWish(cf, w) {
   const names = cf.units.map((u) => u.name), units = [];
   (Array.isArray(w.units) ? w.units : []).forEach((n) => { if (names.includes(n) && !units.includes(n) && units.length < 3) units.push(n); });
-  return { role: cf.roles.includes(w.role) ? w.role : '', units, combat: [0, 1, 2].includes(parseInt(w.combat, 10)) ? parseInt(w.combat, 10) : 1 };
+  return { role: cf.roles.includes(w.role) ? w.role : '', units, combat: [0, 1, 2].includes(parseInt(w.combat, 10)) ? parseInt(w.combat, 10) : null };
 }
 // ---- Excel uploads: reference data ("previous cycle") and updates to existing candidates ----
 const toNum = (v) => { if (v === '' || v == null) return null; const x = Number(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
@@ -115,6 +111,12 @@ Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
   if (USERS.some((x) => x.role === 'שלישות' && x.unit === u.name)) return;
   USERS.push({ id: 's-' + k + '-' + i, title: 'שלישות ' + u.name.replace(/^(חטיבת|יחידת|גדוד) /, ''), unit: u.name, corps: k, role: 'שלישות', initial: 'ש' });
 }));
+// staff users: login corps "משאבי אנוש" (units: משאבי אנוש / מטה / ראש אכ״א) and "פיתוח" (system roles). Legacy ids kept: u3, h1, o1, a1.
+const INITIALS = { 'מפקד/ת הכשרה': 'מה', 'ראש מטה': 'רמ', 'צופה/ת': 'צו', 'מנהל/ת מערכת': 'מנ' };
+[['u3', 'hr', 'משאבי אנוש', 'מפקד/ת הכשרה'], ['hr-0-1', 'hr', 'משאבי אנוש', 'ראש מטה'], ['hr-1-0', 'hr', 'מטה', 'מפקד/ת הכשרה'], ['h1', 'hr', 'מטה', 'ראש מטה'], ['hr-2-0', 'hr', 'ראש אכ״א', 'מפקד/ת הכשרה'], ['hr-2-1', 'hr', 'ראש אכ״א', 'ראש מטה'],
+ ['a1', 'dev', 'צוות פיתוח', 'מנהל/ת מערכת'], ['o1', 'dev', 'צוות פיתוח', 'צופה/ת']].forEach(([id, org, unit, role]) => USERS.push({ id, title: role + ' · ' + unit, unit, corps: null, role, initial: INITIALS[role], org, orgUnit: unit, roleLabel: role }));
+// login structure for corps users: חיל ← יחידה ← תפקיד
+USERS.forEach((u) => { if (u.org) return; u.org = u.corps; u.orgUnit = u.unit; u.roleLabel = u.role === 'מגבש/ת' ? 'מגבש/ת צוות ' + u.group : u.role; });
 const userById = (id) => USERS.find((u) => u.id === id);
 
 // ---------- seed data ----------
@@ -277,7 +279,7 @@ setInterval(() => {
     const waited = Date.now() - cs.turnStartedAt;
     if (!human && waited >= BOT_DELAY_MS) {
       const c = chooseFor(k, slot.u); if (c) { doPick(k, slot.u, c.id, true); changed = true; }
-    } else if (human && waited >= CLOCK_SECONDS * 1000) {
+    } else if (human && CLOCK_SECONDS && waited >= CLOCK_SECONDS * 1000) {
       const c = chooseFor(k, slot.u); if (c) { doPick(k, slot.u, c.id, true); changed = true; }
     }
   });
@@ -309,7 +311,7 @@ http.createServer(async (req, res) => {
     if (p === '/healthz') return json(res, 200, { ok: true });
     if (p === '/api/ping') return json(res, 200, { needCode: !!ACCESS_CODE });
     if (ACCESS_CODE && p.startsWith('/api/') && (req.headers['x-code'] || url.searchParams.get('code')) !== ACCESS_CODE) return json(res, 401, { error: 'קוד גישה שגוי' });
-    if (p === '/api/config') return json(res, 200, { roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+    if (p === '/api/config') return json(res, 200, { orgs: C.ORGS, roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
     if (p === '/api/state') return json(res, 200, snapshot(req.headers['x-user']));
     if (p === '/api/events') {
       const user = userById(url.searchParams.get('user'));

@@ -332,3 +332,17 @@ html{-webkit-text-size-adjust:100%}
 .mchip.ok b{color:var(--green);font-weight:800}
 .mchip.ok::before{content:'✓';font-weight:800}
 input.invalid{border-color:var(--red);background:var(--red-l)}
+
+/* login: three steps */
+.step{display:flex;flex-direction:column;gap:8px;padding:2px 0 4px}
+.step-h{display:flex;align-items:center;gap:10px;margin-top:6px}
+.stepno{width:26px;height:26px;border-radius:50%;background:var(--bg2);color:var(--mut);display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+.step.done .stepno{background:var(--green);color:#fff}
+.orgs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.orgbtn,.choice{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:13px 16px;font-weight:700;text-align:start;transition:.15s;min-height:48px}
+.orgbtn:hover,.choice:hover{border-color:var(--green);transform:translateY(-1px)}
+.orgbtn.on,.choice.on{border:2px solid var(--green);background:var(--green-l);color:var(--green)}
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.choice{font-weight:600}
+.roles .user{margin-bottom:7px}
+.enter .btn:disabled{opacity:.45}

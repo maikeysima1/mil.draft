@@ -157,23 +157,18 @@ function shell(inner) {
 }
 
 // ---- login ----
-// selection order: training commander → שלישות (combat, intel, signals) → evaluators → oversight roles
-const CORPS_ORDER = ['combat', 'intel', 'signals'];
-const CORPS_SHORT = { combat: 'לוחמים', intel: 'מודיעין', signals: 'קשר' };
-function loginGroups() {
-  const us = A.cfg.users, unitIdx = (u) => cfRaw(u.corps).units.findIndex((x) => x.name === u.unit);
-  const byCorps = (role, k) => us.filter((u) => u.role === role && u.corps === k).sort((a, b) => (role === 'מגבש/ת' ? a.group - b.group : unitIdx(a) - unitIdx(b)));
-  const byRole = (r) => us.filter((u) => u.role === r);
-  return [{ title: 'מפקד/ת הכשרה', users: byRole('מפקד/ת הכשרה') }]
-    .concat(CORPS_ORDER.map((k) => ({ title: 'שלישות ' + CORPS_SHORT[k], users: byCorps('שלישות', k) })))
-    .concat([{ title: 'מגבשים', users: [].concat(...CORPS_ORDER.map((k) => byCorps('מגבש/ת', k))) }])
-    .concat([{ title: 'ניהול ופיקוח', users: byRole('ראש מטה').concat(byRole('צופה/ת'), byRole('מנהל/ת מערכת')) }])
-    .filter((g) => g.users.length);
+// three steps: חיל ← יחידה ← תפקיד (users carry org / orgUnit / roleLabel from the server)
+const ROLE_ORDER = ['שלישות', 'מגבש/ת', 'מפקד/ת הכשרה', 'ראש מטה', 'מנהל/ת מערכת', 'צופה/ת'];
+function loginUnits(org) { // a corps: its units in draft order, then its evaluation event; HR / dev: in config order
+  const names = []; A.cfg.users.filter((u) => u.org === org).forEach((u) => { if (!names.includes(u.orgUnit)) names.push(u.orgUnit); });
+  const corps = A.cfg.corps[org], idx = (n) => { const i = corps ? corps.units.findIndex((x) => x.name === n) : -1; return i < 0 ? 999 : i; };
+  return corps ? names.sort((a, b) => idx(a) - idx(b)) : names;
 }
-const loginOrder = () => [].concat(...loginGroups().map((g) => g.users));
-function loginList(sel) {
-  let n = 0;
-  return loginGroups().map((g) => `<div class="grp"><div class="grp-t">${esc(g.title)}</div>` + g.users.map((x) => { n++; return `<button class="user ${x.id === sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="num">${n}</span><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.title)}</b><small>${esc(x.unit)}${x.corps ? ' · ' + esc(cf(x.corps).corps) : ' · ' + SCOPE_TXT[roleOf(x.role).scope]}${x.group ? ' · צוות ' + x.group : ''}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`; }).join('') + '</div>').join('');
+const loginRoles = (org, unit) => A.cfg.users.filter((u) => u.org === org && u.orgUnit === unit).sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || (a.group || 0) - (b.group || 0));
+function loginAuto() { // skip steps that have a single option
+  const org = A.ui.lorg; if (!org) return;
+  const units = loginUnits(org); if (!A.ui.lunit && units.length === 1) A.ui.lunit = units[0];
+  if (A.ui.lunit && !A.ui.sel) { const rs = loginRoles(org, A.ui.lunit); if (rs.length === 1) A.ui.sel = rs[0].id; }
 }
 const ACTION_TXT = { pick: 'בחירה', thresholds: 'עריכת מכסות', import: 'ייבוא', reset: 'איפוס', undo: 'ביטול בחירה', advance: 'הדמיה', eval: 'הזנת התרשמות', regroup: 'העברת מועמד בין צוותים', factory: 'איפוס מערכת' };
 function layerMatrix(selRole) {
@@ -184,20 +179,27 @@ function layerMatrix(selRole) {
    </tbody></table></div></div>`;
 }
 function loginView() {
-  const sel = A.ui.sel || loginOrder()[0].id;
-  const u = A.cfg.users.find((x) => x.id === sel), o = roleOf(u.role);
-  const target = PAGES.find((p) => p.id === o.home).name;
+  loginAuto();
+  const org = A.ui.lorg, unit = A.ui.lunit, u = A.ui.sel ? A.cfg.users.find((x) => x.id === A.ui.sel) : null, o = u && roleOf(u.role);
+  const step = (n, title, done, body) => `<div class="step ${done ? 'done' : ''}"><div class="step-h"><span class="stepno">${done ? icon('check', 15) : n}</span><b>${title}</b></div>${body}</div>`;
+  const s1 = A.cfg.orgs.map((g) => `<button class="orgbtn ${org === g.key ? 'on' : ''}" data-act="lorg" data-v="${g.key}">${esc(g.label)}</button>`).join('');
+  const s2 = org ? loginUnits(org).map((n) => `<button class="choice ${unit === n ? 'on' : ''}" data-act="lunit" data-v="${esc(n)}">${esc(n)}</button>`).join('') : '<div class="mut small">בחרו חיל תחילה</div>';
+  const s3 = org && unit ? loginRoles(org, unit).map((x) => `<button class="user ${x.id === A.ui.sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.roleLabel)}</b><small>${esc(x.title)}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`).join('') : '<div class="mut small">בחרו יחידה תחילה</div>';
+  const target = o ? PAGES.find((p) => p.id === o.home).name : '';
   return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-DRAFT</span></div>
    <h1>מהגיבוש ועד השיבוץ – <em>תמונה אחת</em> של כל מועמד</h1>
    <p>מגבשים מזינים התרשמות מקצועית, יחידות בוחרות בחדר בחירה משותף לפי מערך, ומפקדי ההכשרה מקבלים את התמונה המלאה.</p>
-   <div class="chips"><span>דראפט חי</span><span>6 שכבות סיווג</span><span>3 חילות</span></div>
-   ${layerMatrix(u.role)}
+   <div class="chips"><span>דראפט חי</span><span>6 שכבות סיווג</span><span>5 חילות</span></div>
+   ${layerMatrix(u ? u.role : null)}
    <div class="demo-note">אב־טיפוס לדמו – המשתמשים פיקטיביים. במערכת אמיתית הכניסה תהיה בהזדהות מאובטחת.</div></section>
-   <section class="picker"><div class="row spread"><h2>כניסה למערכת</h2><button class="iconbtn" data-act="theme" aria-label="החלפת ערכת נושא">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 18)}</button></div><p class="mut" style="margin:0">בחרו משתמש. ההרשאות נקבעות לפי שכבת הסיווג שלו.</p>
+   <section class="picker"><div class="row spread"><h2>כניסה למערכת</h2><button class="iconbtn" data-act="theme" aria-label="החלפת ערכת נושא">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 18)}</button></div>
+   <p class="mut" style="margin:0">בחרו חיל, יחידה ותפקיד. ההרשאות נקבעות לפי שכבת הסיווג של התפקיד.</p>
    ${installBox()}
-   ${loginList(sel)}
-   <div class="card sel-info"><div class="row spread"><b>שכבה ${o.layer} · ${esc(u.role)}</b><span class="pill ${LPILL[o.layer]}">${SCOPE_TXT[o.scope]}</span></div><p class="mut small" style="margin:6px 0 0">${esc(o.desc)}</p></div>
-   <div class="enter"><button class="btn lg" data-act="login">כניסה כ${esc(u.title)} ←</button><span class="mut small">ייפתח: ${target}</span></div></section></div>`;
+   ${step(1, 'חיל', !!org, `<div class="orgs">${s1}</div>`)}
+   ${step(2, 'יחידה', !!unit, `<div class="choices">${s2}</div>`)}
+   ${step(3, 'תפקיד', !!u, `<div class="roles">${s3}</div>`)}
+   ${u ? `<div class="card sel-info"><div class="row spread"><b>שכבה ${o.layer} · ${esc(u.role)}</b><span class="pill ${LPILL[o.layer]}">${SCOPE_TXT[o.scope]}</span></div><p class="mut small" style="margin:6px 0 0">${esc(o.desc)}</p></div>` : ''}
+   <div class="enter"><button class="btn lg" data-act="login" ${u ? '' : 'disabled'}>${u ? 'כניסה כ' + esc(u.title) + ' ←' : 'בחרו חיל, יחידה ותפקיד'}</button>${u ? `<span class="mut small">ייפתח: ${target}</span>` : ''}</div></section></div>`;
 }
 
 // ---- render loop ----
@@ -229,8 +231,10 @@ function rerender(live) { if (live && A.ui.editTh) return; /* don't wipe an open
 
 // ---- global actions ----
 const ACTIONS = {
+  lorg: (d) => { A.ui.lorg = d.v; A.ui.lunit = null; A.ui.sel = null; rerender(); },
+  lunit: (d) => { A.ui.lunit = d.v; A.ui.sel = null; rerender(); },
   sel: (d) => { A.ui.sel = d.id; rerender(); },
-  login: async () => { A.me = A.cfg.users.find((x) => x.id === (A.ui.sel || loginOrder()[0].id)); localStorage.setItem('mil-user', A.me.id); connectSSE(); await refresh(); go(homeFor()); render(); },
+  login: async () => { A.me = A.ui.sel ? A.cfg.users.find((x) => x.id === A.ui.sel) : null; if (!A.me) return; localStorage.setItem('mil-user', A.me.id); connectSSE(); await refresh(); go(homeFor()); render(); },
   theme: () => { localStorage.setItem('mil-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); rerender(); },
   logout: () => { localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
   corps: (d) => { A.ui.corps = d.k; A.ui.cand = null; rerender(); },
@@ -255,11 +259,11 @@ function connectSSE() {
   };
 }
 function clockText() {
-  const k = corpsKey(), cst = cs(k); if (!cst) return '';
+  const k = corpsKey(), cst = cs(k); if (!cst || !A.S.clockSeconds) return ''; // no time pressure unless the server enables a clock
   const left = Math.max(0, A.S.clockSeconds - Math.floor((nowS() - cst.turnStartedAt) / 1000));
   return String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
 }
-function clockPct() { const k = corpsKey(), cst = cs(k); if (!cst) return 0; return Math.max(0, 100 - (nowS() - cst.turnStartedAt) / 10 / A.S.clockSeconds); }
+function clockPct() { const k = corpsKey(), cst = cs(k); if (!cst || !A.S.clockSeconds) return 0; return Math.max(0, 100 - (nowS() - cst.turnStartedAt) / 10 / A.S.clockSeconds); }
 setInterval(() => { const c = $('#clk'); if (c) c.textContent = clockText(); const r = $('#clkring'); if (r) r.style.setProperty('--p', clockPct().toFixed(1)); }, 1000);
 
 // ---- small UI pieces ----

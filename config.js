@@ -67,4 +67,9 @@ const ROLES = {
   'צופה/ת': { layer: 6, scope: 'all', home: 'board', pages: ['board'], can: [], desc: 'צפייה בלוח הדראפט החי בלבד (שמות ובחירות), ללא תיקים, מדדים או הרשאות פעולה.' },
 };
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
-module.exports={ROLES,canDo,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
+// Login step 1 ("חיל"): the five entrances. Users carry org / orgUnit / roleLabel for steps 1-3.
+const ORGS = [
+  { key: 'combat', label: 'חיל רגלים' }, { key: 'intel', label: 'חיל המודיעין' }, { key: 'signals', label: 'חיל הקשר והתקשוב' },
+  { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
+];
+module.exports={ORGS,ROLES,canDo,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};

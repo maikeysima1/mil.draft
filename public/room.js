@@ -7,9 +7,9 @@ function clockCard(k) {
   if (d.finished) return `<div class="clock done"><div><div class="small">הדראפט הסתיים</div><h2 style="color:#fff;margin:0">${esc(cf(k).label)}</h2><div class="small">כל הבחירות בחדר בוצעו</div></div><div class="t">✓</div></div>`;
   const myTurn = mine && d.slot.u === A.me.unit;
   const next = d.order[d.picks.length + 1];
-  return `<div class="clock ${myTurn ? 'me' : ''}"><div><div class="small">${myTurn ? 'התור שלכם לבחור' : 'על השעון'}</div><h2 style="color:#fff;margin:0">${esc(d.slot.u)}</h2>
+  return `<div class="clock ${myTurn ? 'me' : ''}"><div><div class="small">${myTurn ? 'התור שלכם לבחור' : 'בוחרת כעת'}</div><h2 style="color:#fff;margin:0">${esc(d.slot.u)}</h2>
    <div class="small">סבב ${d.slot.r} · בחירה ${d.picks.length + 1} מתוך ${d.order.length} · הבאה בתור: ${esc(next ? next.u : '—')}</div></div>
-   <div class="ringwrap"><div class="ring" id="clkring" style="--p:${clockPct().toFixed(1)}"><div class="t" id="clk">${clockText()}</div></div><div class="small">זמן לבחירה</div></div></div>`;
+   ${A.S.clockSeconds ? `<div class="ringwrap"><div class="ring" id="clkring" style="--p:${clockPct().toFixed(1)}"><div class="t" id="clk">${clockText()}</div></div><div class="small">זמן לבחירה</div></div>` : ''}</div>`;
 }
 
 function unitChips(k) {
@@ -209,14 +209,14 @@ SCREENS.board = (k) => {
     const idx = d.order.findIndex((o) => o.r === r && o.u === uname), p = P[idx], cand = p && candOf(k, p.id);
     const isNow = idx === P.length, mine = uname === (isHumanMine(k) ? A.me.unit : c.myUnit);
     const fv = !!cand && can('fav', k) && isFav(k, cand.id), dim = A.ui.favOnly && can('fav', k) && p && !fv;
-    return `<td><div class="cell ${p ? 'pick' : ''} ${isNow ? 'now' : ''} ${mine ? 'mine' : ''} ${dim ? 'dim' : ''} ${fv ? 'favcell' : ''}"><div class="mut small">#${idx + 1}${isNow ? ' · על השעון' : ''}</div>${cand ? `<b>${fv ? `<span class="favmark" title="מועדף">${heartIcon(true, 13)}</span> ` : ''}${esc(cand.name)}</b><div class="small">${esc(cand.role)}</div>` : (isNow ? 'בוחרים כעת…' : '—')}</div></td>`;
+    return `<td><div class="cell ${p ? 'pick' : ''} ${isNow ? 'now' : ''} ${mine ? 'mine' : ''} ${dim ? 'dim' : ''} ${fv ? 'favcell' : ''}"><div class="mut small">#${idx + 1}${isNow ? ' · בוחרת כעת' : ''}</div>${cand ? `<b>${fv ? `<span class="favmark" title="מועדף">${heartIcon(true, 13)}</span> ` : ''}${esc(cand.name)}</b><div class="small">${esc(cand.role)}</div>` : (isNow ? 'בוחרים כעת…' : '—')}</div></td>`;
   };
   const standout = standoutOf(k), canFav = can('fav', k), favOnly = canFav && !!A.ui.favOnly, favs = favList(k);
   const wanted = {}, got = {};
   unit.forEach((u) => Object.keys(u.quota).forEach((r) => { wanted[r] = (wanted[r] || 0) + u.quota[r]; got[r] = (got[r] || 0) + Math.min(u.quota[r], countRole(k, u.name, r)); }));
   return `<div class="row spread">${corpsSwitcher()}${canFav ? favToggle(k, favOnly, 'favOnly') : ''}</div>
    ${canFav ? favCard(k, d, favOnly) : ''}
-   <div class="grid g2"><div class="card"><h2>${d.finished ? 'הדראפט הסתיים' : 'על השעון · ' + esc(c.corps)}</h2>${d.finished ? '<p>כל הבחירות בוצעו.</p>' : `<div class="row spread"><div><h2 style="font-size:26px;margin:0">${esc(d.slot.u)}</h2><div class="mut small">סבב ${d.slot.r} · בחירה ${P.length + 1} מתוך ${d.order.length}</div><div class="mut small">מחפשת: ${Object.keys(unitOf(k, d.slot.u).quota).map((r) => r + ' ×' + (unitOf(k, d.slot.u).quota[r] - countRole(k, d.slot.u, r))).filter((s) => !/×0$|×-/.test(s)).join(', ') || '—'}</div></div><div style="text-align:center"><div style="font-size:38px;font-weight:900" id="clk">${clockText()}</div><div class="mut small">זמן לבחירה</div></div></div>`}
+   <div class="grid g2"><div class="card"><h2>${d.finished ? 'הדראפט הסתיים' : 'בחירה כעת · ' + esc(c.corps)}</h2>${d.finished ? '<p>כל הבחירות בוצעו.</p>' : `<div class="row spread"><div><h2 style="font-size:26px;margin:0">${esc(d.slot.u)}</h2><div class="mut small">סבב ${d.slot.r} · בחירה ${P.length + 1} מתוך ${d.order.length}</div><div class="mut small">מחפשת: ${Object.keys(unitOf(k, d.slot.u).quota).map((r) => r + ' ×' + (unitOf(k, d.slot.u).quota[r] - countRole(k, d.slot.u, r))).filter((s) => !/×0$|×-/.test(s)).join(', ') || '—'}</div></div>${A.S.clockSeconds ? `<div style="text-align:center"><div style="font-size:38px;font-weight:900" id="clk">${clockText()}</div><div class="mut small">זמן לבחירה</div></div>` : ''}</div>`}
    ${canFav ? '' : ''}${can('advance', k) ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
    <div class="card"><h2>הבחירה האחרונה</h2>${last ? `<div class="row spread"><div><b style="font-size:22px">${esc(candOf(k, last.id).name)}</b><div class="mut">${esc(candOf(k, last.id).role)} · נבחר/ה ע״י ${esc(last.unit)} · #${last.n}</div></div><div>${strengthChips(k, candOf(k, last.id))}</div></div>` : '<span class="mut">טרם נבחר איש</span>'}</div></div>
    <div class="card board"><h2>לוח הדראפט – ${esc(c.label)}</h2><div class="mut small" style="margin-bottom:8px">${P.length} מתוך ${d.order.length} בחירות · סדר מתחלף בכל סבב</div>

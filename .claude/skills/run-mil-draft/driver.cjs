@@ -31,6 +31,8 @@ async function session(browser, userId) { // fresh context, logged in as userId
   if (!CODE && (await page.locator('#codeGo').count())) throw new Error('the app asks for an access code; run the driver with MIL_CODE=<code>');
   if (CODE) { await page.waitForSelector('#code'); await page.fill('#code', CODE); await page.click('#codeGo'); }
   await page.waitForSelector('.login');
+  const u = await page.evaluate((id) => A.cfg.users.find((x) => x.id === id), userId); if (!u) throw new Error('unknown user id ' + userId + ' (run: users)');
+  await page.click(`[data-act=lorg][data-v="${u.org}"]`); await page.click(`[data-act=lunit][data-v="${u.orgUnit}"]`); // login = חיל -> יחידה -> תפקיד
   await page.click(`[data-act=sel][data-id="${userId}"]`); await page.click('[data-act=login]'); await page.waitForSelector('.side');
   if (dark && (await page.evaluate(() => document.documentElement.dataset.theme)) !== 'dark') await page.click('[data-act=theme]');
   return { ctx, page, errs };
@@ -41,8 +43,8 @@ async function main() {
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
   try {
     if (cmd === 'users') {
-      const { json } = await api('config'); console.log('id'.padEnd(14), 'layer', 'role'.padEnd(14), 'pages'); 
-      json.users.forEach((u) => { const r = json.roles[u.role]; console.log(u.id.padEnd(14), String(r.layer).padEnd(5), u.role.padEnd(14), r.pages.join(',')); });
+      const { json } = await api('config'); console.log('id'.padEnd(12), 'layer', 'role'.padEnd(14), 'login: חיל > יחידה > תפקיד');
+      json.users.forEach((u) => { const r = json.roles[u.role], org = json.orgs.find((o) => o.key === u.org).label; console.log(u.id.padEnd(12), String(r.layer).padEnd(5), u.role.padEnd(14), org + ' > ' + u.orgUnit + ' > ' + u.roleLabel); });
     } else if (cmd === 'shot') {
       const [user, route] = argv; if (!user || !route) throw new Error('usage: shot <userId> <route: room|board|eval|command|import>');
       const { page, errs } = await session(browser, user); await go(page, route);
@@ -75,7 +77,14 @@ async function main() {
       await deny('u3', 'eval', { corps: 'combat', id: 'C-2103', rec: 'מומלץ' }, 'commander eval (view-only)');
       await deny('u1', 'regroup', { corps: 'combat', id: 'C-2103', group: 2 }, 'שלישות regroup');
       await deny('e-combat-2', 'eval', { corps: 'combat', id: 'C-2105', rec: 'מומלץ' }, 'evaluator of team 2 on a team-1 candidate');
+      const lp = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage(); await lp.goto(BASE); await lp.waitForSelector('.login');
+      ok(await lp.locator('[data-act=lorg]').count() === 5, 'login step 1 offers 5 corps (רגלים, מודיעין, קשר, משאבי אנוש, פיתוח)');
+      ok(await lp.locator('[data-act=login]').isDisabled(), 'login button disabled until חיל, יחידה and תפקיד are chosen');
+      await lp.click('[data-act=lorg][data-v=hr]'); await lp.waitForTimeout(300); ok((await lp.locator('[data-act=lunit]').allInnerTexts()).join('|') === 'משאבי אנוש|מטה|ראש אכ״א', 'HR corps units: משאבי אנוש / מטה / ראש אכ״א');
+      await lp.click('[data-act=lorg][data-v=dev]'); await lp.waitForTimeout(300); ok(await lp.locator('[data-act=sel]').count() === 2, 'פיתוח: single unit auto-selected, 2 system roles offered');
+      await lp.close();
       const g = await session(browser, 'u1'); await g.page.waitForSelector('.clock.me');
+      ok((await g.page.locator('#clk, #clkring').count()) === 0 && (await api('state', 'u1')).json.clockSeconds === 0, 'no turn timer (clockSeconds = 0, no clock in the UI)');
       await g.page.locator('tr.clk:not(.taken)').first().locator('[data-act=pick]').click(); await g.page.waitForTimeout(600);
       ok(/נשמרה/.test(await g.page.locator('#toast').innerText()), 'שלישות pick accepted');
       await g.page.locator('tr.clk .favbtn').nth(2).click(); await g.page.waitForTimeout(500);
