@@ -193,186 +193,7 @@ Object.assign(ACTIONS, {
   },
 });
 
-// ---------------- people distribution (charts) ----------------
-// Colors follow the entity (willingness level), never its rank. Order of segments: interested → open → not interested.
-const WCOL = ['var(--s2)', 'var(--s3)', 'var(--s1)', 'var(--ref)']; // 0 not interested, 1 open, 2 interested, 3 unknown (gray) // index = combat willingness 0,1,2
-const W_ORDER = [2, 1, 0];
-function distView(k) {
-  const c = cf(k), d = draftInfo(k), scope = A.ui.dist || 'all';
-  const list = cs(k).cands.filter((x) => scope === 'all' || (scope === 'free' ? !d.takenBy[x.id] : !!d.takenBy[x.id]));
-  const n = list.length, cw = (x) => (x.wish && x.wish.combat != null ? x.wish.combat : 3), mo = (x) => (x.extra && x.extra.motivation != null ? x.extra.motivation : null); // 3 = unknown: never a made-up answer
-  const pct = (a, b) => (b ? Math.round(a / b * 100) : 0), f1 = (v) => (v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1)), CL = (w) => (w === 3 ? 'לא צוין' : COMBAT[w]), mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
-  const cnt = [0, 0, 0, 0]; list.forEach((x) => { cnt[cw(x)]++; });
-  const knownC = n - cnt[3], moList = list.map(mo).filter((v) => v != null), nMot = moList.length, avg = mean(moList);
-  const hasUnk = cnt[3] > 0, WO = hasUnk ? W_ORDER.concat([3]) : W_ORDER;
-  const follow = list.filter((x) => x.extra && x.extra.follow).length;
-  const lowMot = list.filter((x) => mo(x) != null && mo(x) <= 2), lowAndNot = lowMot.filter((x) => cw(x) === 0).length;
-  const hist = [1, 2, 3, 4, 5].map((m) => list.filter((x) => mo(x) === m).length);
-  const scopeTxt = { all: 'כל המועמדים', free: 'פנויים בלבד', picked: 'שכבר שובצו' }[scope];
-  const byRole = c.roles.map((r) => { const g = list.filter((x) => x.role === r), cc = [0, 0, 0, 0]; g.forEach((x) => { cc[cw(x)]++; }); return { label: r, n: g.length, cnt: cc, avg: mean(g.map(mo).filter((v) => v != null)), nm: g.map(mo).filter((v) => v != null).length }; }).filter((r) => r.n);
-  const byTeam = [1, 2, 3, 4].map((t) => { const g = list.filter((x) => x.group === t), cc = [0, 0, 0, 0]; g.forEach((x) => { cc[cw(x)]++; }); return { label: 'צוות ' + t, n: g.length, cnt: cc, avg: mean(g.map(mo).filter((v) => v != null)), nm: g.map(mo).filter((v) => v != null).length }; }).filter((r) => r.n);
-
-  // donut (2px surface gap between slices)
-  const C = 2 * Math.PI * 54; let off = 0;
-  const slices = WO.map((w) => { const frac = n ? cnt[w] / n : 0, gap = frac > 0 && frac < 1 ? 2 : 0, len = Math.max(0, frac * C - gap);
-    const s = `<circle cx="70" cy="70" r="54" fill="none" stroke="${WCOL[w]}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 70 70)" data-tip="${cnt[w]} (${pct(cnt[w], n)}%)|${esc(CL(w))}" tabindex="0"/>`; off += frac * C; return frac > 0 ? s : ''; }).join('');
-  const legend = WO.map((w) => `<div class="lg"><i class="sq" style="background:${WCOL[w]}"></i><span>${esc(CL(w))}</span><b>${cnt[w]}</b><span class="mut small">${pct(cnt[w], n)}%</span></div>`).join('');
-
-  // motivation histogram (single series, 4px rounded cap, value on the cap)
-  const maxV = Math.max(...hist, 1), top = Math.ceil(maxV / 2) * 2 || 2, W0 = 40, BW = (340 - W0) / 5, BASE = 160, H = 128;
-  const grid = [0, top / 2, top].map((t) => { const y = BASE - t / top * H; return `<line x1="${W0}" x2="340" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="${W0 - 8}" y="${y + 4}" text-anchor="end" font-size="11" class="svgm">${t}</text>`; }).join('');
-  const cols = hist.map((v, i) => { const h = v / top * H, x = W0 + BW * i + (BW - 24) / 2, y = BASE - h;
-    const bar = v ? `<path d="M${x},${BASE} V${y + 4} Q${x},${y} ${x + 4},${y} H${x + 20} Q${x + 24},${y} ${x + 24},${y + 4} V${BASE} Z" fill="var(--s1)"/><text x="${x + 12}" y="${y - 6}" text-anchor="middle" font-size="12" font-weight="700" class="svgt">${v}</text>` : '';
-    return `<g data-tip="${v} מועמדים (${pct(v, nMot)}%)|מוטיבציה ${i + 1}" tabindex="0"><rect x="${W0 + BW * i}" y="20" width="${BW}" height="${BASE - 20}" fill="transparent"/>${bar}<text x="${x + 12}" y="${BASE + 18}" text-anchor="middle" font-size="12" class="svgm">${i + 1}</text></g>`; }).join('');
-  const histSvg = `<svg viewBox="0 0 340 190" width="100%" role="img" aria-label="התפלגות מוטיבציה" dir="ltr">${grid}<line x1="${W0}" x2="340" y1="${BASE}" y2="${BASE}" stroke="var(--line)"/>${cols}</svg>`;
-
-  // stacked 100% rows (2px gap between segments; label inside only when it fits)
-  const stack = (rows) => rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="strack">${WO.map((w) => (r.cnt[w] ? `<i class="seg" style="flex:${r.cnt[w]};background:${WCOL[w]}" data-tip="${r.cnt[w]} (${pct(r.cnt[w], r.n)}%)|${esc(r.label)} · ${esc(CL(w))}" tabindex="0">${r.cnt[w] / r.n >= 0.14 ? r.cnt[w] : ''}</i>` : '')).join('')}</div><span class="srow-n" title="מועמדים">${r.n}</span></div>`).join('');
-  const scaleHdr = '<div class="htscale" aria-hidden="true"><span>1 · נמוכה</span><span>3</span><span>5 · גבוהה</span></div>';
-  const bars = (rows) => scaleHdr + rows.map((r) => `<div class="srow"><span class="srow-l">${esc(r.label)}</span><div class="htrack" data-tip="${r.avg == null ? 'אין נתון מוטיבציה' : f1(r.avg) + ' מתוך 5 · ' + r.nm + ' מתוך ' + r.n + ' עם נתון'}|${esc(r.label)}" tabindex="0">${[0, 25, 50, 75, 100].map((x) => `<span class="tk" style="left:${x}%"></span>`).join('')}${r.avg == null ? '' : `<i style="left:${((r.avg - 1) / 4 * 100).toFixed(1)}%"></i>`}</div><b class="srow-n">${f1(r.avg)}</b></div>`).join('');
-  const table = `<details class="tbl"><summary>תצוגת טבלה</summary><div style="overflow:auto"><table><thead><tr><th>תפקיד</th><th>מועמדים</th><th>מוטיבציה ממוצעת</th>${WO.map((w) => `<th>${esc(CL(w))}</th>`).join('')}</tr></thead><tbody>${byRole.map((r) => `<tr><td>${esc(r.label)}</td><td>${r.n}</td><td>${f1(r.avg)}</td>${WO.map((w) => `<td>${r.cnt[w]}</td>`).join('')}</tr>`).join('')}<tr><td><b>סה״כ</b></td><td><b>${n}</b></td><td><b>${f1(avg)}</b></td>${WO.map((w) => `<td><b>${cnt[w]}</b></td>`).join('')}</tr></tbody></table></div></details>`;
-  const notes = [];
-  if (n && knownC) {
-    notes.push(`${cnt[0]} מתוך ${knownC} שענו (${pct(cnt[0], knownC)}%) לא מעוניינים בתפקיד קרבי, ו־${cnt[1]} פתוחים לכך${cnt[3] ? '; ל־' + cnt[3] + ' מועמדים אין תשובה' : ''}.`);
-    if (lowMot.length) notes.push(`${lowMot.length} מועמדים עם מוטיבציה נמוכה (1–2), ומהם ${lowAndNot} גם לא מעוניינים בתפקיד קרבי.`);
-    const worst = byRole.filter((r) => r.n >= 2).sort((a, b) => b.cnt[0] / b.n - a.cnt[0] / a.n)[0];
-    if (worst && worst.cnt[0]) notes.push(`התפקיד עם שיעור ה״לא מעוניין״ הגבוה ביותר: ${worst.label} (${worst.cnt[0]} מתוך ${worst.n}).`);
-  }
-  return `<div class="row spread"><div class="tabs">${[['all', 'כל המועמדים'], ['free', 'פנויים'], ['picked', 'שובצו']].map((s) => `<button class="${scope === s[0] ? 'on' : ''}" data-act="distScope" data-s="${s[0]}">${s[1]}</button>`).join('')}</div><span class="mut small">${esc(scopeTxt)} · ${esc(c.corps)}</span></div>
-   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))"><div class="kpi"><b>${n}</b><span>מועמדים בפילוג</span></div><div class="kpi"><b><bdi dir="ltr">${cnt[0]} <small class="mut" style="font-size:15px">(${pct(cnt[0], knownC)}%)</small></bdi></b><span>לא מעוניינים בתפקיד קרבי</span><div class="mut small">מתוך ${knownC} שענו${cnt[3] ? ' · ' + cnt[3] + ' ללא תשובה' : ''}</div></div><div class="kpi"><b><bdi dir="ltr">${f1(avg)}<small class="mut" style="font-size:15px"> / 5</small></bdi></b><span>מוטיבציה ממוצעת</span><div class="mut small">מתוך ${nMot} עם נתון${nMot < n ? ' · ' + (n - nMot) + ' ללא נתון' : ''}</div></div><div class="kpi"><b>${follow}</b><span>דורשים מעקב</span></div></div>
-   <div class="grid g2"><div class="card"><h2>נכונות לתפקיד קרבי</h2><div class="row" style="gap:22px;flex-wrap:nowrap"><svg viewBox="0 0 140 140" width="170" role="img" aria-label="נכונות לתפקיד קרבי"><circle cx="70" cy="70" r="54" fill="none" stroke="var(--line2)" stroke-width="18"/>${slices}<text x="70" y="68" text-anchor="middle" font-size="24" font-weight="800" class="svgt">${pct(cnt[0], knownC)}%</text><text x="70" y="86" text-anchor="middle" font-size="10" class="svgm">לא מעוניינים</text></svg><div class="legend">${legend}</div></div></div>
-    <div class="card"><h2>התפלגות מוטיבציה</h2><div class="mut small" style="margin-bottom:6px">מספר מועמדים לכל רמה (1 = נמוכה, 5 = גבוהה)${nMot < n ? ' · ' + (n - nMot) + ' מועמדים ללא נתון אינם נכללים' : ''}</div>${histSvg}</div></div>
-   <div class="grid g2"><div class="card"><h2>נכונות לתפקיד קרבי – לפי תפקיד</h2><div class="legend row" style="margin-bottom:8px">${WO.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(CL(w))}</span>`).join('')}</div>${stack(byRole)}</div>
-    <div class="card"><h2>נכונות לתפקיד קרבי – לפי צוות</h2><div class="legend row" style="margin-bottom:8px">${WO.map((w) => `<span class="lg"><i class="sq" style="background:${WCOL[w]}"></i>${esc(CL(w))}</span>`).join('')}</div>${stack(byTeam)}</div></div>
-   <div class="grid g2"><div class="card"><h2>מוטיבציה ממוצעת – לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">הנקודה = הממוצע על סקאלה 1–5 (לא אחוז)</div>${bars(byRole)}</div>
-    <div class="card"><h2>מוטיבציה ממוצעת – לפי צוות</h2><div class="mut small" style="margin-bottom:6px">הנקודה = הממוצע על סקאלה 1–5 (לא אחוז)</div>${bars(byTeam)}</div></div>
-   <div class="card"><h2>נקודות בולטות</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.9">${notes.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>אין נתונים לתצוגה.</li>'}</ul><div class="mut small" style="margin-top:8px">נוצר מכללים שקופים על הנתונים. אין כאן המלצה על אדם או יחידה, וההעדפות אינן מחייבות את השיבוץ.</div>${table}</div>`;
-}
-
-// ---------------- comparison with a reference dataset (previous cycle) ----------------
-// "now" = current candidates (blue series), "before" = uploaded reference rows (neutral gray). Gaps are descriptive, not a ranking of people.
-function cmpView(k) {
-  const c = cf(k), base = cs(k).baseline, cur = cs(k).cands;
-  if (!base) return `<div class="card"><h2>השוואה למחזור קודם</h2><p class="mut">עדיין לא הועלו נתוני ייחוס. העלו אקסל של מחזור קודם (או נתונים קיימים) במסך ״הזנה וייבוא״, והמערכת תציג כאן את הפערים מול המחזור הנוכחי.</p>${R().pages.includes('import') ? '<a class="btn" href="#/import" style="text-decoration:none;display:inline-block">למסך ההעלאה ←</a>' : '<div class="mut small">ההעלאה זמינה לשלישות החיל.</div>'}</div>`;
-  const prev = base.rows, L = base.label, units = c.units;
-  const avgOf = (arr, f) => { const v = arr.map(f).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const pc = (a, b) => (b ? a / b * 100 : null), f1 = (v) => (v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1)), pf = (v) => (v == null ? '—' : Math.round(v) + '%');
-  const verdict = (delta, dir, tol) => { if (delta == null) return ['p-gray', '—']; if (Math.abs(delta) < tol) return ['p-gray', '＝ ללא שינוי']; if (dir === 0) return ['p-gray', delta > 0 ? '▲ עלייה' : '▼ ירידה']; return delta * dir > 0 ? ['p-green', (delta > 0 ? '▲' : '▼') + ' השתפר'] : ['p-orange', (delta > 0 ? '▲' : '▼') + ' הורע']; };
-  const sgn = (v, fmt) => (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v));
-  const kp = [
-    { t: 'מועמדים', now: cur.length, pre: prev.length, fmt: (v) => String(Math.round(v)), dir: 0, tol: 1, unit: '' },
-    { t: 'שיעור ״מומלץ״', now: pc(cur.filter((x) => x.rec === 'מומלץ').length, cur.filter((x) => x.rec).length), pre: pc(prev.filter((x) => x.rec === 'מומלץ').length, prev.filter((x) => x.rec).length), nn: cur.filter((x) => x.rec).length, np: prev.filter((x) => x.rec).length, fmt: pf, dfmt: (v) => String(Math.round(v)), dir: 1, tol: 1, unit: ' נק׳' },
-    { t: 'מוטיבציה ממוצעת', now: avgOf(cur, (x) => (x.extra ? x.extra.motivation : null)), pre: avgOf(prev, (x) => x.motivation), nn: cur.filter((x) => x.extra && x.extra.motivation != null).length, np: prev.filter((x) => x.motivation != null).length, fmt: f1, dir: 1, tol: 0.05, unit: '' },
-    { t: 'לא מעוניינים בתפקיד קרבי', now: pc(cur.filter((x) => x.wish && x.wish.combat === 0).length, cur.filter((x) => x.wish && x.wish.combat != null).length), pre: pc(prev.filter((x) => x.combat === 0).length, prev.filter((x) => x.combat != null).length), nn: cur.filter((x) => x.wish && x.wish.combat != null).length, np: prev.filter((x) => x.combat != null).length, fmt: pf, dfmt: (v) => String(Math.round(v)), dir: -1, tol: 1, unit: ' נק׳' },
-    { t: 'תיקים עם נתונים חסרים', now: pc(cur.filter((x) => missingOf(k, x).length).length, cur.length), pre: pc(prev.filter((r) => !r.rec || c.stats.some((s) => r.stats[s.k] == null)).length, prev.length), fmt: pf, dfmt: (v) => String(Math.round(v)), dir: -1, tol: 1, unit: ' נק׳' },
-  ];
-  const kpis = kp.map((m) => { const d = m.now != null && m.pre != null ? m.now - m.pre : null, v = verdict(d, m.dir, m.tol); return `<div class="kpi"><b><bdi dir="ltr">${m.now == null ? '—' : m.fmt(m.now)}</bdi></b><span>${m.t}${m.nn != null && m.nn !== cur.length ? ` <span class="small">(מתוך ${m.nn})</span>` : ''}</span><div class="row" style="gap:6px;margin-top:6px"><span class="pill ${v[0]}">${v[1]}${d != null && Math.abs(d) >= m.tol ? ' <bdi dir="ltr">' + sgn(d, m.dfmt || m.fmt) + m.unit + '</bdi>' : ''}</span></div><div class="mut small" style="margin-top:2px">${esc(L)}: <bdi dir="ltr">${m.pre == null ? '—' : m.fmt(m.pre)}</bdi>${m.np != null && m.np !== prev.length ? ` <span class="small">(מתוך ${m.np})</span>` : ''}</div></div>`; }).join('');
-
-  // metrics: average now vs before, direction-aware (lower is better for times)
-  const statRows = c.stats.map((s) => { const a = avgOf(cur, (x) => x.stats[s.k]), b = avgOf(prev, (r) => r.stats[s.k]), d = a != null && b != null ? a - b : null, v = verdict(d, s.low ? -1 : 1, (s.max - s.min) * 0.01), dd = Math.pow(10, s.d + 1);
-    return { s, a, b, d, v, rel: d == null ? 0 : Math.abs(d) / (s.max - s.min), html: `<tr><td>${esc(s.l)}</td><td><bdi dir="ltr">${a == null ? '—' : fmtVal(s, a)} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${b == null ? '—' : fmtVal(s, b)} ${esc(s.u)}</bdi></td><td><bdi dir="ltr">${d == null ? '—' : sgn(d, (x) => (isTime(s) ? fmtTime(x) : Math.round(x * dd) / dd))}</bdi></td><td><span class="pill ${v[0]}">${v[1]}</span></td></tr>` }; });
-  const statTable = `<div style="overflow:auto"><table><thead><tr><th>מדד</th><th>עכשיו</th><th>${esc(L)}</th><th>הפרש</th><th>הערכה</th></tr></thead><tbody>${statRows.map((r) => r.html).join('')}</tbody></table></div><div class="mut small" style="margin-top:6px">ממוצע לפי הנתונים הקיימים בלבד (מדד חסר לא נספר). בריצה ובזמנים – נמוך יותר הוא טוב יותר.</div>`;
-
-  // grouped bars (HTML): two thin bars per row, value at the tip, tooltip on hover/focus
-  const grouped = (rows, maxV, fmt) => rows.map((r) => `<div class="grow"><span class="srow-l">${esc(r.label)}</span><div class="gbars">${[['now', r.now, 'עכשיו', r.nNow, cur.length], ['pre', r.pre, L, r.nPre, prev.length]].map((x) => `<div class="gb" data-tip="${x[1] == null ? 'אין נתון' : fmt(x[1])}${x[3] != null ? ' · מתוך ' + x[3] + ' מועמדים עם נתון מלא' : ''}|${esc(r.label)} · ${esc(x[2])}" tabindex="0"><i class="${x[0]}" style="width:${maxV && x[1] != null ? Math.max(0, x[1] / maxV * 100).toFixed(1) : 0}%"></i><em>${x[1] == null ? '—' : fmt(x[1])}${x[3] != null && x[3] < x[4] ? ` <span class="small">(${x[3]}/${x[4]})</span>` : ''}</em></div>`).join('')}</div></div>`).join('');
-  const key2 = `<div class="legend row" style="margin-bottom:8px"><span class="lg"><i class="sq" style="background:var(--s1)"></i>עכשיו</span><span class="lg"><i class="sq" style="background:var(--ref)"></i>${esc(L)}</span></div>`;
-  const roleRows = c.roles.map((r) => ({ label: r, now: cur.filter((x) => x.role === r).length, pre: prev.filter((x) => x.role === r).length }));
-  // gaps vs unit needs
-  const gapRows = c.roles.map((r) => { const demand = units.reduce((a, u) => a + (u.quota[r] || 0), 0), supply = cur.filter((x) => x.role === r && x.rec !== 'לא מומלץ').length, before = prev.filter((x) => x.role === r && x.rec !== 'לא מומלץ').length, gap = demand - supply; return { r, demand, supply, before, gap }; }).filter((g) => g.demand || g.supply || g.before);
-  const gapTable = `<div style="overflow:auto"><table><thead><tr><th>תפקיד</th><th>נדרש</th><th>זמינים</th><th>${esc(L)}</th><th>פער</th></tr></thead><tbody>${gapRows.map((g) => `<tr><td>${esc(g.r)}</td><td>${g.demand}</td><td>${g.supply} <span class="mut small"><bdi dir="ltr">(${sgn(g.supply - g.before, String) || '0'})</bdi></span></td><td>${g.before}</td><td>${g.gap > 0 ? `<span class="pill p-orange">חוסר ${g.gap}</span>` : (g.demand ? `<span class="pill p-green">מכוסה${g.gap < 0 ? ' · עודף ' + -g.gap : ''}</span>` : '<span class="pill p-gray">אין דרישה</span>')}</td></tr>`).join('')}</tbody></table></div><div class="mut small" style="margin-top:6px">נדרש = סך מכסות היחידות בחיל. זמינים = מועמדים עם המלצה שאינה שלילית (בסוגריים: שינוי מול הנתונים שהועלו). עמודת הכותרת עם שם הנתונים = כמה היו אז.</div>`;
-  // threshold coverage per unit (recommendation ignored – thresholds only)
-  const okThr = (x, u) => fitOf(k, x, u).filter((e) => e.s !== 'המלצה').every((e) => e.ok);
-  const known = (x, u) => c.stats.filter((s) => u.th[s.k] != null).every((s) => x.stats[s.k] != null) && (!u.noMed || x.med != null); // a missing metric is unknown, not a failure
-  const cov = (arr, u) => { const kn = arr.filter((x) => known(x, u)); return { p: pc(kn.filter((x) => okThr(x, u)).length, kn.length), n: kn.length }; };
-  const unitRows = units.map((u) => { const a = cov(cur, u), b2 = cov(prev, u); return { label: u.name, now: a.p, pre: b2.p, nNow: a.n, nPre: b2.n }; });
-  // insights
-  const notes = [];
-  gapRows.filter((g) => g.gap > 0).sort((a, b) => b.gap - a.gap).slice(0, 2).forEach((g) => notes.push(`חוסר בתפקיד ${g.r}: נדרשים ${g.demand}, זמינים ${g.supply} (ב${L} היו ${g.before}).`));
-  const best = statRows.filter((r) => r.d != null).sort((a, b) => b.rel - a.rel)[0];
-  if (best && best.rel > 0.02) notes.push(`השינוי הגדול ביותר במדדים: ${best.s.l} (${best.v[1].replace(/^[▲▼＝] /, '')}, ${fmtVal(best.s, best.a)} מול ${fmtVal(best.s, best.b)} ${best.s.u}).`);
-  const drop = unitRows.filter((u) => u.now != null && u.pre != null).map((u) => ({ u, d: u.now - u.pre })).sort((a, b) => a.d - b.d)[0];
-  if (drop && drop.d < -5) notes.push(`הירידה הגדולה ביותר בכיסוי תנאי הסף: ${drop.u.label} (${pf(drop.u.now)} מול ${pf(drop.u.pre)}).`);
-  const nc = kp[3]; if (nc.now != null && nc.pre != null && Math.abs(nc.now - nc.pre) >= 5) notes.push(`שיעור הלא מעוניינים בתפקיד קרבי ${nc.now > nc.pre ? 'עלה' : 'ירד'} מ־${pf(nc.pre)} ל־${pf(nc.now)}.`);
-  return `<div class="row spread"><div><b>השוואה מול: ${esc(L)}</b> <span class="mut small">· ${base.rows.length} שורות · הועלה ע״י ${esc(base.by)} · ${new Date(base.uploadedAt).toLocaleDateString('he-IL')}</span></div>${R().pages.includes('import') ? '<a class="btn sec sm" href="#/import" style="text-decoration:none">החלפת נתוני ייחוס</a>' : ''}</div>
-   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">${kpis}</div>
-   <div class="card"><h2>נקודות בולטות</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.9">${notes.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>אין פערים בולטים בין הנתונים.</li>'}</ul><div class="mut small" style="margin-top:8px">ההשוואה היא בין שתי אוכלוסיות שונות, נוצרה מכללים שקופים ואינה הערכה של אדם או יחידה.</div></div>
-   <div class="grid g2"><div class="card"><h2>מדדים – עכשיו מול ${esc(L)}</h2>${statTable}</div><div class="card"><h2>פערים מול צורכי היחידות</h2>${gapTable}</div></div>
-   <div class="grid g2"><div class="card"><h2>מועמדים לפי תפקיד</h2>${key2}${grouped(roleRows, Math.max(1, ...roleRows.map((r) => Math.max(r.now, r.pre))), (v) => String(Math.round(v)))}</div>
-    <div class="card"><h2>עמידה בתנאי הסף – לפי יחידה</h2><div class="mut small" style="margin-bottom:6px">אחוז העומדים בכל תנאי הסף של היחידה (כולל מגבלה רפואית, ללא המלצת המגבש) – מחושב רק על מועמדים שיש להם נתון לכל תנאי הסף</div>${key2}${grouped(unitRows, 100, (v) => Math.round(v) + '%')}</div></div>`;
-}
-
-// ---------------- command overview ----------------
-function unitProgress(k, u) { const q = Object.keys(u.quota).reduce((a, r) => a + u.quota[r], 0), g = Object.keys(u.quota).reduce((a, r) => a + Math.min(u.quota[r], countRole(k, u.name, r)), 0); return { q, g }; }
-function dilemmas(k) {
-  const c = cf(k), d = draftInfo(k), free = cs(k).cands.filter((x) => !d.takenBy[x.id]), pts = [];
-  const contested = free.map((x) => ({ x, us: c.units.filter((u) => (u.quota[x.role] || 0) > countRole(k, u.name, x.role) && !fitBad(k, x, unitOf(k, u.name)).length) })).filter((o) => o.us.length > 1);
-  contested.sort((a, b) => b.us.length - a.us.length).slice(0, 4).forEach((o) => pts.push(`${o.x.name} (${o.x.role}) מתאים/ה לצורך פתוח ב־${o.us.length} יחידות: ${o.us.map((u) => u.name).join(', ')}.`));
-  c.roles.forEach((r) => {
-    const need = c.units.reduce((a, u) => a + Math.max(0, (u.quota[r] || 0) - countRole(k, u.name, r)), 0), avail = free.filter((x) => x.role === r && x.rec !== 'לא מומלץ').length;
-    if (need > avail) pts.push(`חוסר בתפקיד ${r}: נדרשים עוד ${need}, פנויים עם המלצה לא שלילית ${avail}.`);
-  });
-  const miss = cs(k).cands.filter((x) => missingOf(k, x).length).length; if (miss) pts.push(`${miss} תיקים עם נתונים חסרים – כדאי להשלים מול המגבשים לפני הבחירה.`);
-  const bad = free.filter((x) => x.rec === 'לא מומלץ').length; if (bad) pts.push(`${bad} מועמדים פנויים עם המלצה שלילית – נדרשת החלטה מי מהיחידות מוכנה לקלוט.`);
-  const hp = c.units.filter((u) => u.prio === 0).reduce((a, u) => a + Object.keys(u.quota).reduce((x, r) => x + Math.max(0, u.quota[r] - countRole(k, u.name, r)), 0), 0);
-  const wr = (p) => wishRank(candOf(k, p.id), p.unit), wp = d.picks.filter((p) => wr(p) > 0).length, w1 = d.picks.filter((p) => wr(p) === 1).length;
-  if (d.picks.length) pts.push(`התאמה להעדפות: ${wp} מתוך ${d.picks.length} שובצו ליחידה שביקשו (${w1} בבחירה הראשונה). ההעדפה היא שיקול משני – השיבוץ נקבע לפי צורכי היחידות.`);
-  const diffRole = free.filter((x) => x.wish && x.wish.role && x.wish.role !== x.role).length; if (diffRole) pts.push(`${diffRole} מועמדים פנויים ביקשו תפקיד שונה מהתפקיד שהמגבש המליץ עליו.`);
-  const noNeed = free.filter((x) => x.wish && x.wish.units.length && x.wish.units.every((u) => !((unitOf(k, u).quota[x.role] || 0) > countRole(k, u, x.role)))).length; if (noNeed) pts.push(`${noNeed} מועמדים פנויים ביקשו רק יחידות שאין להן כרגע צורך פתוח בתפקידם – סביר שהשיבוץ לא יהיה לפי ההעדפה.`);
-  return { pts, contested, hp, miss, wp, wtot: d.picks.length };
-}
-SCREENS.command = (k) => {
-  const c = cf(k), d = draftInfo(k), tab = A.ui.tab || 'units';
-  const tot = c.units.reduce((a, u) => { const p = unitProgress(k, u); return { q: a.q + p.q, g: a.g + p.g }; }, { q: 0, g: 0 });
-  const done = c.units.filter((u) => { const p = unitProgress(k, u); return p.g >= p.q; }).length;
-  const gapR = tot.q - tot.g;
-  const tabs = [['units', 'יחידות'], ['dist', 'פילוג אנשים'], ['cmp', 'השוואה למחזור קודם'], ['pres', 'מצגת לפיקוד'], ['forum', 'דילמות'], ['report', 'דוח']];
-  const matrix = `<div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>קדימות</th>${c.roles.map((r) => `<th>${esc(r)}</th>`).join('')}<th>התקדמות</th></tr></thead><tbody>${c.units.map((u) => { const p = unitProgress(k, u); return `<tr><td><b>${esc(u.name)}</b><div class="mut small">${esc(u.desc)}</div></td><td>${['גבוהה', 'רגילה', 'נמוכה'][u.prio]}</td>${c.roles.map((r) => { const q = u.quota[r]; if (!q) return '<td class="mut">·</td>'; const h = countRole(k, u.name, r); return `<td><span class="pill ${h >= q ? 'p-green' : h > 0 ? 'p-orange' : 'p-gray'}">${h}/${q}</span></td>`; }).join('')}<td style="min-width:140px"><div class="row"><div class="bar"><i style="width:${p.q ? p.g / p.q * 100 : 0}%"></i></div><b>${p.g}/${p.q}</b></div></td></tr>`; }).join('')}</tbody></table></div>`;
-  const corpsProg = Object.keys(A.cfg.corps).filter((x) => !A.me.corps || x === A.me.corps).map((x) => { const t = draftInfo(x); return `<div class="row" style="margin:8px 0"><span style="min-width:130px">${esc(cf(x).corps)}</span><div class="bar"><i style="width:${t.picks.length / t.order.length * 100}%;background:var(--blue)"></i></div><b>${t.picks.length}/${t.order.length}</b></div>`; }).join('');
-  let body = '';
-  if (tab === 'units') body = `<div class="card"><h2>מכסות לפי יחידה ותפקיד</h2><div class="mut small" style="margin-bottom:8px">שובצו / נדרשו · ירוק: הושלם · כתום: חלקי · אפור: טרם שובץ</div>${matrix}</div>
-    <div class="grid g2"><div class="card"><h2>התקדמות לפי חיל</h2>${corpsProg}<div class="mut small">לכל חיל דראפט נפרד: יחידות לוחמה לא מתחרות על אותם מועמדים עם מודיעין או קשר.</div></div>
-    <div class="card"><h2>בחירות אחרונות</h2>${d.picks.slice(-7).reverse().map((p) => `<div class="row" style="padding:4px 0"><b>#${p.n}</b><span>${esc(p.unit)} · ${candLink(k, p.id, candOf(k, p.id).name)} ${esc(candOf(k, p.id).role)}</span></div>`).join('') || '<span class="mut">אין בחירות</span>'}</div></div>`;
-  if (tab === 'units') body += ugSummaryCard(k);
-  if (tab === 'dist') body = distView(k);
-  if (tab === 'cmp') body = cmpView(k);
-  if (tab === 'pres') {
-    const colors = ['#3F5530', '#2F5A8A', '#C2741F', '#8A5A9A', '#5A6472'];
-    const counts = c.units.map((u) => d.picks.filter((p) => p.unit === u.name).length), sum = counts.reduce((a, b) => a + b, 0) || 1;
-    let off = 0; const segs = counts.map((n, i) => { const len = n / sum * 339.3, s = `<circle cx="70" cy="70" r="54" fill="none" stroke="${colors[i % 5]}" stroke-width="18" stroke-dasharray="${len} ${339.3 - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`; off += len; return s; }).join('');
-    body = `<div class="grid g2"><div class="card"><h2>מגויסים לכל יחידה</h2><div class="row"><svg viewBox="0 0 140 140" width="170" role="img" aria-label="תרשים טבעת"><circle cx="70" cy="70" r="54" fill="none" stroke="var(--line2)" stroke-width="18"/>${segs}<text x="70" y="68" text-anchor="middle" font-size="22" font-weight="800" class="svgt">${d.picks.length}</text><text x="70" y="86" text-anchor="middle" font-size="10" class="svgm">בחירות</text></svg>
-     <div>${c.units.map((u, i) => `<div class="row" style="gap:8px"><span class="mark" style="background:${colors[i % 5]}"></span>${esc(u.name)} <b>${counts[i]}</b></div>`).join('')}</div></div></div>
-     <div class="card"><h2>מה כל יחידה מחפשת</h2>${c.units.map((u) => `<div style="padding:6px 0;border-bottom:1px solid var(--line2)"><b>${esc(u.name)}</b> <span class="mut small">${esc(u.why)}</span><div class="small">${Object.keys(u.quota).map((r) => `${esc(r)} ×${u.quota[r]}`).join(' · ')}</div></div>`).join('')}</div></div>`;
-  }
-  if (tab === 'forum') {
-    const dl = dilemmas(k), full = cs(k).cands.length - dl.miss;
-    body = `<div class="grid g3"><div class="kpi"><b>${full}/${cs(k).cands.length}</b><span>תיקים מלאים</span></div><div class="kpi"><b>${dl.contested.length}</b><span>מועמדים במחלוקת</span></div><div class="kpi"><b>${dl.hp}</b><span>צרכי קדימות גבוהה פתוחים</span></div><div class="kpi"><b>${dl.wp}/${dl.wtot}</b><span>שובצו ליחידה שביקשו</span></div></div>
-     <div class="card"><h2>נקודות לדיון</h2><ul style="margin:0;padding:0 20px 0 0;line-height:1.8">${dl.pts.map((p) => `<li>${esc(p)}</li>`).join('') || '<li>אין נקודות חריגות כרגע.</li>'}</ul><div class="mut small" style="margin-top:8px">נוצר מכללים שקופים על הנתונים: תחרות, חוסרים וחריגות. אין כאן המלצה על אדם או יחידה.</div></div>`;
-  }
-  if (tab === 'report') {
-    body = `<div class="card"><div class="row spread"><h2 style="font-size:24px;margin:0">דוח מצב דראפט כוח אדם – ${esc(c.corps)}</h2><span class="mut small">${new Date().toLocaleDateString('he-IL')}</span></div>
-     <p>שובצו ${d.picks.length} מתוך ${d.order.length} בחירות · מכסות שמולאו ${tot.g}/${tot.q} · יחידות שהושלמו ${done}/${c.units.length}.</p>${matrix}
-     <h3 style="margin:14px 0 6px">שיבוצים</h3><table><thead><tr><th>#</th><th>יחידה</th><th>מועמד/ת</th><th>תפקיד</th><th>המלצה</th><th>העדפת החייל</th></tr></thead><tbody>${d.picks.map((p) => `<tr><td>${p.n}</td><td>${esc(p.unit)}</td><td>${esc(candOf(k, p.id).name)}</td><td>${esc(candOf(k, p.id).role)}</td><td>${esc(candOf(k, p.id).rec || '—')}</td><td>${wishRank(candOf(k, p.id), p.unit) ? 'בחירה ' + wishRank(candOf(k, p.id), p.unit) : 'לא ביקש/ה'}</td></tr>`).join('')}</tbody></table>
-     <div class="mut small" style="margin-top:10px">הדוח נוצר מכללים שקופים ואינו המלצה על אדם או יחידה.</div>
-     <div class="row no-print" style="margin-top:10px"><button class="btn" data-act="print">הדפסה / שמירה כ־PDF</button><button class="btn sec" data-act="exportPicks">ייצוא שיבוצים CSV</button></div></div>`;
-  }
-  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תמונת מצב – ${esc(c.corps)}</h1><div class="mut small">להצגה לראשי מטה, לקצינות שלישות ולמפקדי הכשרות</div></div>
-   <div class="row no-print">${can('factory', k) ? '<button class="btn sec sm" data-act="factory">איפוס מערכת</button>' : ''}${can('advance', k) ? `<span class="mut small">מצב הדראפט להדגמה:</span><select data-chg="demoState"><option value="">בחירה…</option><option value="1">אחרי סבב 1</option><option value="2">אחרי סבב 2</option><option value="3">אחרי סבב 3</option><option value="4">הדראפט הסתיים</option></select>` : ''}</div></div>
-   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))"><div class="kpi"><b>${d.picks.length} / ${cs(k).cands.length}</b><span>שובצו · מועמדים ב${esc(c.label)}</span></div><div class="kpi"><b>${tot.q ? Math.round(tot.g / tot.q * 100) : 0}%</b><span>מכסות שמולאו (${tot.g} מתוך ${tot.q})</span></div><div class="kpi"><b>${gapR}</b><span>פערים פתוחים</span></div><div class="kpi"><b>${done} / ${c.units.length}</b><span>יחידות שהושלמו</span></div></div>
-   <div class="tabs no-print">${tabs.map((t) => `<button class="${tab === t[0] ? 'on' : ''}" data-act="tab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>${body}`;
-};
-Object.assign(ACTIONS, {
-  tab: (d) => { A.ui.tab = d.t; rerender(); },
-  distScope: (d) => { A.ui.dist = d.s; rerender(); },
-  factory: async () => { if (confirm('לאפס את כל הנתונים בכל החילות?')) { await api('factory-reset', {}); toast('המערכת אופסה'); } },
-  print: () => window.print(),
-  demoState: async (d, t) => { if (!t.value) return; await api('advance', { corps: corpsKey(), rounds: +t.value }); t.value = ''; toast('מצב הדראפט עודכן'); },
-  exportPicks: () => { const k = corpsKey(), d = draftInfo(k); csvDownload('draft-' + k + '.csv', [['#', 'יחידה', 'מועמד', 'מס׳', 'תפקיד', 'המלצה']].concat(d.picks.map((p) => [p.n, p.unit, candOf(k, p.id).name, p.id, candOf(k, p.id).role, candOf(k, p.id).rec || '']))); },
-});
-
-// ---------------- import ----------------
-const SYN = { id: ['מס׳', 'מס', 'מספר', 'id'], name: ['שם', 'שם מלא', 'name'], role: ['תפקיד', 'role'], rec: ['המלצת מגבש', 'המלצה'], med: ['מגבלות רפואיות', 'מגבלות', 'רפואי'], profile: ['פרופיל'], motivation: ['מוטיבציה'], combat: ['נכונות', 'קרבי'], unit: ['יחידה', 'שובץ'] };
 function importFields(k) { return [['id', 'מס׳ (לזיהוי בעדכון)'], ['name', 'שם'], ['role', 'תפקיד'], ['rec', 'המלצת מגבש'], ['med', 'מגבלות רפואיות'], ['profile', 'פרופיל'], ['motivation', 'מוטיבציה (1–5)'], ['combat', 'נכונות לתפקיד קרבי']].concat(cf(k).stats.map((s) => ['s:' + s.k, s.l + ' (' + s.u + ')'])); }
-function baseFields(k) { return importFields(k).filter(([key]) => key !== 'id' && key !== 'name').concat([['unit', 'יחידה משובצת']]); }
 function autoMapFields(k, fields, headers) {
   const m = {};
   fields.forEach(([key, label]) => {
@@ -410,62 +231,25 @@ function buildRows(k) {
     return Object.assign(row, { n: n + 2, errs });
   });
 }
-function buildBaseRows(k) {
-  const b = A.ui.base; if (!b) return [];
-  return b.data.map((r, n) => {
-    const row = parseRow(k, r, b.map), errs = row.statErrs.slice();
-    if (!cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
-    if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
-    if (row.med && !A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
-    return Object.assign(row, { n: n + 2, errs });
-  });
-}
-const baseHeaders = (k) => ['תפקיד', 'המלצת מגבש', 'מגבלות רפואיות', 'פרופיל'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')'), ['מוטיבציה (1–5)', 'נכונות לתפקיד קרבי', 'יחידה משובצת']);
-function sampleBaseAoa(k) { // demo previous cycle: slightly weaker results, more "not interested in combat"
-  const c = cf(k); let seed = 5; const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
-  const aoa = [baseHeaders(k)];
-  for (let i = 0; i < 26; i++) {
-    const role = c.roles[(i * 2 + (i % 3)) % c.roles.length], t = Math.min(1, Math.max(0, 0.28 + rnd() * 0.5));
-    aoa.push([role, A.cfg.RECS[t > 0.62 ? 0 : (t > 0.4 ? 1 : 2)], i % 7 === 3 ? A.cfg.MEDS[1] : A.cfg.MEDS[0], 90].concat(c.stats.map((s) => { if (rnd() < 0.06) return ''; const raw = s.low ? s.max - (s.max - s.min) * t : s.min + (s.max - s.min) * t; return cellVal(s, +raw.toFixed(s.d)); }), [Math.max(1, Math.min(5, Math.round(1.8 + t * 3 + (rnd() - 0.5)))), rnd() < 0.34 ? 'לא מעוניין' : (rnd() < 0.5 ? 'פתוח' : 'מעוניין'), '']));
-  }
-  return aoa;
-}
-function baselineCard(k, canImp) {
-  const c = cf(k), base = cs(k).baseline, b = A.ui.base, rows = b ? buildBaseRows(k) : [], ok = rows.filter((r) => !r.errs.length);
-  const when = base ? new Date(base.uploadedAt).toLocaleDateString('he-IL') : '';
-  return `<div class="card"><h2>נתוני ייחוס – מחזור קודם או נתונים קיימים</h2>
-   <p class="mut small">העלו אקסל של נתונים קיימים (למשל מחזור קודם): שורה לכל חייל, עם תפקיד, המלצה, מדדים, מוטיבציה ונכונות לתפקיד קרבי. המערכת קוראת ומנתחת אותם ומשווה למחזור הנוכחי בלשונית ״השוואה למחזור קודם״ בתמונת המצב. <b>שמות לא נשמרים</b> – רק נתוני הניתוח.</p>
-   ${base ? `<div class="row spread" style="background:var(--bg2);border-radius:12px;padding:10px 14px;margin-bottom:10px"><div><b>${esc(base.label)}</b> · ${base.rows.length} שורות<div class="mut small">הועלה ע״י ${esc(base.by)} · ${when}</div></div><div class="row"><a class="btn sm" href="#/command" data-act="goCmp" style="text-decoration:none">צפייה בהשוואה ←</a>${canImp ? '<button class="btn sec sm" data-act="bdelete">מחיקה</button>' : ''}</div></div>` : ''}
-   <div class="drop"><div class="row" style="justify-content:center"><label class="small mut">שם הנתונים<br><input type="text" id="blabel" data-inp="blabel" value="${esc((b && b.label) || 'מחזור קודם')}" style="width:170px"></label></div>
-    <input type="file" id="bfile" accept=".xlsx,.xls,.csv" data-chg="bfile" ${canImp ? '' : 'disabled'} style="margin-top:8px"><div class="row" style="justify-content:center;margin-top:10px"><button class="btn sec sm" data-act="bsample" ${canImp ? '' : 'disabled'}>טעינת נתוני ייחוס לדוגמה</button><button class="btn sec sm" data-act="btemplate">הורדת תבנית</button></div></div>
-   ${b ? `<div style="margin-top:12px"><b>התאמת עמודות</b><div class="row" style="margin-top:6px">${baseFields(k).map(([key, label]) => `<label class="small mut">${esc(label)}<br><select data-chg="bmap" data-f="${esc(key)}" style="min-width:140px"><option value="-1">— לא ממופה —</option>${b.headers.map((h, i) => `<option value="${i}" ${b.map[key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div>
-    <p style="margin:10px 0 4px">${rows.length} שורות · <b style="color:var(--green)">${ok.length} תקינות</b> · <b style="color:var(--red)">${rows.length - ok.length} עם בעיות (ידולגו)</b>${rows.length - ok.length ? ' – ' + esc(Array.from(new Set(rows.flatMap((r) => r.errs))).join(', ')) : ''}</p>
-    <div class="row"><button class="btn" data-act="bsave" ${canImp && ok.length ? '' : 'disabled'}>שמירה כנתוני ייחוס (${ok.length} שורות)</button><button class="btn sec" data-act="bcancel">ביטול</button></div></div>` : ''}</div>`;
-}
 SCREENS.import = (k) => {
-  const c = cf(k), im = A.ui.imp, canImp = can('import', k), started = cs(k).picks.length > 0;
+  const c = cf(k), im = A.ui.imp, canImp = can('import', k);
   const rows = im ? buildRows(k) : [], ok = rows.filter((r) => !r.errs.length);
   const miss = cs(k).cands.filter((x) => missingOf(k, x).length).length;
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הזנה וייבוא</h1><div class="mut small">קליטת מועמדים, עדכון נתונים קיימים ונתוני ייחוס – מקובץ אקסל או CSV, לפי חיל</div></div></div>
    <div class="grid g3"><div class="kpi"><b>${cs(k).cands.length}</b><span>מועמדים במאגר</span></div><div class="kpi"><b>${A.ui.imported || 0}</b><span>יובאו בטעינה זו</span></div><div class="kpi"><b>${miss}</b><span>תיקים עם נתונים חסרים</span></div></div>
    <div class="card"><h2>1. בחירת קובץ</h2><div class="seg" style="margin-bottom:10px">${[['add', 'הוספת מועמדים חדשים'], ['update', 'עדכון מועמדים קיימים']].map((m) => `<button type="button" class="${(A.ui.impMode || 'add') === m[0] ? 'on' : ''}" data-act="impmode" data-m="${m[0]}">${m[1]}</button>`).join('')}</div>
     ${(A.ui.impMode || 'add') === 'update' ? '<p class="mut small">העמודות: מס׳ <b>או</b> שם (לזיהוי המועמד במאגר) ועוד כל שדה שרוצים לעדכן. שדות ריקים לא ידרסו נתונים קיימים.</p>' : ''}<p class="mut small" ${(A.ui.impMode || 'add') === 'update' ? 'hidden' : ''}>עמודות נדרשות: שם, תפקיד, המלצת מגבש, מגבלות רפואיות, פרופיל, ${c.stats.map((s) => esc(s.l + ' (' + s.u + ')')).join(', ')}. שורה אחת לכל מועמד/ת.</p>
-    ${!canImp ? '<div class="demo-note">ייבוא זמין לשלישות החיל בלבד.</div>' : ''}${started ? '<div class="demo-note">הדראפט כבר התחיל – מועמדים חדשים יצטרפו למאגר הפנויים.</div>' : ''}
+    ${!canImp ? '<div class="demo-note">ייבוא זמין לשלישות החיל בלבד.</div>' : ''}
     <div class="drop"><input type="file" id="file" accept=".xlsx,.xls,.csv" data-chg="file" ${canImp ? '' : 'disabled'}><div class="row" style="justify-content:center;margin-top:10px"><button class="btn sec sm" data-act="sample" ${canImp ? '' : 'disabled'}>טעינת קובץ לדוגמה</button><button class="btn sec sm" data-act="template">הורדת תבנית אקסל</button></div><div class="mut small" style="margin-top:6px">הקובץ נקרא בדפדפן ונשלח לשרת רק בלחיצה על ״ייבוא״. אין להעלות נתוני אמת באב־טיפוס.</div></div></div>
    ${im ? `<div class="card"><h2>2. התאמת עמודות</h2><div class="row">${importFields(k).map(([key, label]) => `<label class="small mut">${esc(label)}<br><select data-chg="map" data-f="${esc(key)}" style="min-width:150px"><option value="-1">— לא ממופה —</option>${im.headers.map((h, i) => `<option value="${i}" ${im.map[key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div></div>
    <div class="card"><h2>3. בדיקה וייבוא</h2><p>${rows.length} שורות · <b style="color:var(--green)">${ok.length} תקינות</b> · <b style="color:var(--red)">${rows.length - ok.length} עם בעיות (ידולגו)</b></p>
     <div style="overflow:auto;max-height:320px"><table><thead><tr><th>שורה</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>מדדים חסרים</th><th>בדיקה</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.n}</td><td>${esc(r.name || r.id)}</td><td>${esc(r.role)}</td><td>${esc(r.rec || '—')}</td><td>${c.stats.filter((s) => r.stats[s.k] === '' || r.stats[s.k] == null).map((s) => esc(s.l)).join(', ') || '—'}</td><td>${r.errs.length ? `<span class="pill p-red">${esc(r.errs.join(', '))}</span>` : '<span class="pill p-green">תקין</span>'}</td></tr>`).join('')}</tbody></table></div>
     <div class="row" style="margin-top:10px"><button class="btn" data-act="doImport" ${canImp && ok.length ? '' : 'disabled'}>${(A.ui.impMode || 'add') === 'update' ? 'עדכון' : 'ייבוא'} ${ok.length} מועמדים</button><button class="btn sec" data-act="impClear">ביטול</button></div></div>` : ''}
    ${photosCard(k, canImp, rows)}
-   ${baselineCard(k, canImp)}
    <div class="card"><div class="row spread"><h2 style="margin:0">המאגר הנוכחי – ${esc(c.corps)}</h2><div class="row"><button class="btn sec sm" data-act="exportX">ייצוא לאקסל</button><button class="btn sec sm" data-act="exportC">ייצוא CSV</button></div></div>
     <div style="overflow:auto;max-height:420px;margin-top:8px"><table><thead><tr><th>מס׳</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>חסר בתיק</th><th>מקור</th></tr></thead><tbody>${cs(k).cands.map((x) => `<tr><td>${x.id}</td><td>${candLink(corpsKey(), x.id, x.name)}</td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${esc(missingOf(k, x).join(', ') || 'מלא')}</td><td>${esc(x.source || 'מאגר קיים')}</td></tr>`).join('')}</tbody></table></div>
     <div class="mut small" style="margin-top:8px">הנתונים נשמרים בשרת (data/state.json).</div></div>`;
 };
-function setBase(k, aoa) {
-  const headers = (aoa[0] || []).map((h) => String(h)), data = aoa.slice(1).filter((r) => r.some((v) => String(v).trim() !== ''));
-  A.ui.base = { headers, data, map: autoMapFields(k, baseFields(k), headers), label: A.ui.baseLabel || 'מחזור קודם' }; rerender();
-}
 function setImport(k, aoa) {
   const headers = (aoa[0] || []).map((h) => String(h)), data = aoa.slice(1).filter((r) => r.some((v) => String(v).trim() !== ''));
   A.ui.imp = { headers, data, map: autoMap(k, headers) }; rerender();
@@ -483,19 +267,6 @@ Object.assign(ACTIONS, {
   },
   template: () => downloadX('mil-draft-template.xlsx', sheetRows(corpsKey()).concat([['דוגמה ד.', cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => cellVal(s, s.min)))])),
   impmode: (d) => { A.ui.impMode = d.m; rerender(); },
-  bfile: async (d, t) => { const f = t.files[0]; if (!f) return; const k = corpsKey(), wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); setBase(k, XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })); },
-  bmap: (d, t) => { A.ui.base.map[d.f] = +t.value; rerender(); },
-  blabel: (d, t) => { if (A.ui.base) A.ui.base.label = t.value; else A.ui.baseLabel = t.value; },
-  bsample: () => setBase(corpsKey(), sampleBaseAoa(corpsKey())),
-  btemplate: () => downloadX('mil-draft-baseline-template.xlsx', [baseHeaders(corpsKey()), [cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => cellVal(s, s.min)), [4, 'פתוח', ''])]),
-  bcancel: () => { A.ui.base = null; rerender(); },
-  bsave: async () => {
-    const k = corpsKey(), rows = buildBaseRows(k).filter((r) => !r.errs.length), label = (A.ui.base && A.ui.base.label) || 'מחזור קודם';
-    const r = await api('baseline', { corps: k, label, rows: rows.map((x) => ({ role: x.role, rec: x.rec, med: x.med, profile: x.profile, stats: x.stats, motivation: x.motivation, combat: x.combat, unit: x.unit })) });
-    A.ui.base = null; A.ui.tab = 'cmp'; rerender(); toast(`נטענו ${r.count} שורות כנתוני ייחוס`);
-  },
-  bdelete: async () => { if (confirm('למחוק את נתוני הייחוס?')) { await api('baseline-clear', { corps: corpsKey() }); toast('נתוני הייחוס נמחקו'); } },
-  goCmp: () => { A.ui.tab = 'cmp'; },
   impClear: () => { A.ui.imp = null; rerender(); },
   doImport: async () => {
     const k = corpsKey(), rows = buildRows(k).filter((r) => !r.errs.length).map((r) => Object.assign(r, { photo: photoFor(k, r) }));
@@ -508,18 +279,6 @@ Object.assign(ACTIONS, {
 
 // ================= results + audit log =================
 const fmtTs = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-function assignRows(k) {
-  const c = cf(k), d = draftInfo(k);
-  return d.picks.map((p) => { const x = candOf(k, p.id); return [p.n, orderOf(k)[p.n - 1] ? orderOf(k)[p.n - 1].r : '', p.unit, x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))).concat([p.auto ? 'אוטומטי' : 'ידני', ugText(k, p)]); });
-}
-const assignHead = (k) => ['#', 'סבב', 'יחידה', 'מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')')).concat(['אופן בחירה', 'גיבוש יח״טיות']);
-function unitRows(k) {
-  const c = cf(k); return [['יחידה', 'תפקיד', 'נדרשו', 'שובצו', 'פער']].concat(c.units.flatMap((u) => Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => { const h = countRole(k, u.name, r); return [u.name, r, u.quota[r], h, Math.max(0, u.quota[r] - h)]; })));
-}
-function unassignedRows(k) {
-  const d = draftInfo(k), c = cf(k);
-  return [['מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(c.stats.map((s) => s.l))].concat(cs(k).cands.filter((x) => !d.takenBy[x.id]).map((x) => [x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k])))));
-}
 const logRows = (k) => [['זמן', 'חיל', 'פעולה']].concat((A.S.log || []).filter((l) => !k || l.corps === k).slice().reverse().map((l) => [fmtTs(l.ts), A.cfg.corps[l.corps] ? cf(l.corps).corps : l.corps, l.text]));
 function downloadBook(name, sheets) { const wb = XLSX.utils.book_new(); sheets.forEach(([n, aoa]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), n)); wb.Workbook = { Views: [{ RTL: true }] }; XLSX.writeFile(wb, name); }
 function downloadCsv(name, aoa) {
@@ -528,44 +287,6 @@ function downloadCsv(name, aoa) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 const tbl = (rows, nameCol, idCol, k) => `<div style="overflow:auto"><table><thead><tr>${rows[0].map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((v, i) => `<td>${i === nameCol ? candLink(k, r[idCol], v) : esc(v)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${rows[0].length}" class="mut">אין נתונים</td></tr>`}</tbody></table></div>`;
-
-SCREENS.results = (k) => {
-  const c = cf(k), d = draftInfo(k), tab = A.ui.rtab || 'assign';
-  const tabs = [['assign', 'שיבוצים'], ['units', 'לפי יחידה'], ['free', 'ללא שיבוץ'], ['log', 'יומן פעילות']];
-  const free = cs(k).cands.length - d.picks.length, gap = unitRows(k).slice(1).reduce((a, r) => a + r[4], 0);
-  const body = tab === 'assign' ? tbl([assignHead(k)].concat(assignRows(k)), 3, 4, k) : tab === 'units' ? tbl(unitRows(k)) : tab === 'free' ? tbl(unassignedRows(k), 0, 1, k) : tbl(logRows(k));
-  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תוצאות ויומן – ${esc(c.label)}</h1><div class="mut small">${d.finished ? 'הדראפט הסתיים' : 'הדראפט בעיצומו – התוצאות חלקיות'}</div></div>
-    <div class="row no-print"><button class="btn" data-act="expXlsx">ייצוא Excel</button><button class="btn sec" data-act="expCsv">CSV (${esc(tabs.find((t) => t[0] === tab)[1])})</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
-   <div class="grid g3"><div class="kpi"><span>שובצו</span><b>${d.picks.length} מתוך ${d.order.length}</b></div><div class="kpi"><span>ללא שיבוץ</span><b>${free}</b></div><div class="kpi"><span>פער מכסות</span><b>${gap}</b></div></div>
-   <div class="card"><div class="tabs no-print" style="margin-bottom:12px">${tabs.map(([i, n]) => `<button class="${tab === i ? 'on' : ''}" data-act="rtab" data-t="${i}">${n}</button>`).join('')}</div>${body}</div>`;
-};
-Object.assign(ACTIONS, {
-  rtab: (d) => { A.ui.rtab = d.t; rerender(); },
-  expXlsx: () => { const k = corpsKey(); auditEvent('export', 'results xlsx'); downloadBook('mil-draft-' + k + '.xlsx', [['שיבוצים', [assignHead(k)].concat(assignRows(k))], ['לפי יחידה', unitRows(k)], ['ללא שיבוץ', unassignedRows(k)], ['יומן פעילות', logRows(k)]]); toast('הקובץ הורד'); },
-  expCsv: () => { const k = corpsKey(), t = A.ui.rtab || 'assign'; auditEvent('export', 'results csv/' + t); downloadCsv('mil-draft-' + k + '-' + t + '.csv', t === 'assign' ? [assignHead(k)].concat(assignRows(k)) : t === 'units' ? unitRows(k) : t === 'free' ? unassignedRows(k) : logRows(k)); toast('הקובץ הורד'); },
-  expPrint: () => { auditEvent('export', 'results print'); window.print(); },
-});
-
-// ================= draft settings (admin) =================
-SCREENS.settings = (k) => {
-  const c = cf(k), S = stg(k), started = cs(k).picks.some((p) => !p.auto), ui = A.ui.stg && A.ui.stg.k === k ? A.ui.stg : (A.ui.stg = Object.assign({ k }, S)), lock = started ? 'disabled' : '';
-  const tog = (f, l, h) => `<label class="row" style="align-items:flex-start;gap:10px"><input type="checkbox" data-chg="stgSet" data-f="${f}" ${ui[f] ? 'checked' : ''}><span><b>${l}</b><div class="mut small">${h}</div></span></label>`;
-  return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הגדרות דראפט – ${esc(c.label)}</h1><div class="mut small">הגדרות נפרדות לכל חיל. זמינות למנהל/ת מערכת בלבד.</div></div>
-   <div class="card"><h2>מבנה הדראפט</h2>${started ? '<div class="demo-note">יחידה כבר בחרה ידנית – אי אפשר לשנות מספר סבבים וסדר. כדי לשנות, אפסו את הדראפט. (שינוי המבנה לפני בחירה ידנית מחשב את הבחירות האוטומטיות מחדש.)</div>' : ''}
-    <div class="row" style="gap:24px;flex-wrap:wrap"><label>מספר סבבים<select data-chg="stgSet" data-f="rounds" ${lock}>${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${+ui.rounds === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-    <label>סדר בחירה<select data-chg="stgSet" data-f="order" ${lock}><option value="snake" ${ui.order === 'snake' ? 'selected' : ''}>מתחלף (נחש) – הסדר מתהפך בכל סבב</option><option value="linear" ${ui.order === 'linear' ? 'selected' : ''}>רגיל – אותו סדר בכל סבב</option></select></label></div>
-    <div class="mut small">סך הכול ${ui.rounds * c.units.length} בחירות (${ui.rounds} סבבים × ${c.units.length} יחידות)</div></div>
-   <div class="card"><h2>כללי שיבוץ</h2><div class="mut small" style="margin-bottom:8px">חל על בחירות ידניות של שלישות בלבד. בחירה אוטומטית של יחידות הבוט ממשיכה לפעול לפי שיקול רך.</div>
-    <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית. חל רק על יחידות שדורשות גיבוש לפני השיבוץ (כיום: הצנחנים)')}</div>
-    <div class="row" style="margin-top:14px"><button class="btn" data-act="stgSave">שמירת הגדרות</button></div></div>
-   <div class="card"><h2>יחידות ומכסות</h2><div class="mut small" style="margin-bottom:8px">עריכת מכסות ותנאי סף של כל יחידה בשם השלישות.</div>
-    <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.auth ? secCards() : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.tempPw ? tempPwModal() : ''}`;
-};
-SCREENS.settings.after = () => { if (A.auth && !A.ui.adm) ACTIONS.admLoad(); };
-Object.assign(ACTIONS, {
-  stgSet: (d, t) => { const u = A.ui.stg || (A.ui.stg = { k: corpsKey() }); u[d.f] = t.type === 'checkbox' ? t.checked : (d.f === 'rounds' ? +t.value : t.value); rerender(); },
-  stgSave: async () => { const k = corpsKey(), u = A.ui.stg; if (!u) return; const b = { corps: k, order: u.order, strictThresholds: !!u.strictThresholds, strictQuotas: !!u.strictQuotas, blockNotRecommended: !!u.blockNotRecommended }; if (!cs(k).picks.some((p) => !p.auto)) b.rounds = +u.rounds; try { await api('settings', b); A.ui.stg = null; toast('ההגדרות נשמרו'); rerender(); } catch (x) { /* toast shown */ } },
-});
 
 // ================= candidate photos (uploaded together with the data) =================
 const normKey = (v) => String(v == null ? '' : v).replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -633,48 +354,3 @@ Object.assign(ACTIONS, {
   tempClose: () => { A.ui.tempPw = null; rerender(); },
 });
 
-// ================= unit-level gibush (יח״טיות) after arrival =================
-// Units with gibushBefore:false have no gibush before the assignment. After the soldier arrives, the unit tracks who is invited, who is in gibush and who passed.
-const ugOf = (k, id) => (cs(k).ug && cs(k).ug[id]) || { status: 'לא הוזמן', sub: '' };
-const ugUnits = (k) => cf(k).units.filter((u) => !needsGibush(u));
-const ugText = (k, p) => (needsGibush(unitOf(k, p.unit)) ? 'נערך לפני השיבוץ' : ugOf(k, p.id).status + (ugOf(k, p.id).sub ? ' · ' + ugOf(k, p.id).sub : ''));
-const UG_CLS = { 'לא הוזמן': 'p-gray', 'הוזמן': 'p-blue', 'בגיבוש': 'p-orange', 'עבר': 'p-green', 'לא עבר': 'p-red' };
-const ugCounts = (k, unitName) => { const c = {}; A.cfg.UG.statuses.forEach((x) => { c[x] = 0; }); cs(k).picks.filter((p) => p.unit === unitName).forEach((p) => { c[ugOf(k, p.id).status]++; }); return c; };
-function ugSummaryCard(k) {
-  const us = ugUnits(k); if (!us.length) return '';
-  const st = A.cfg.UG.statuses;
-  return `<div class="card"><h2>גיבוש יח״טיות – אחרי ההגעה ליחידה</h2><div class="mut small" style="margin-bottom:8px">ביחידות האלה אין גיבוש לפני השיבוץ. הלוחמים שובצו לפי נתוני גיוס והעדפות, וגיבוש היח״טיות נערך אחרי ההגעה.</div>
-   <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>שובצו</th>${st.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${us.map((u) => { const c = ugCounts(k, u.name), n = cs(k).picks.filter((p) => p.unit === u.name).length; return `<tr><td><b>${esc(u.name)}</b></td><td>${n}</td>${st.map((x) => `<td>${c[x] ? `<span class="pill ${UG_CLS[x]}">${c[x]}</span>` : '<span class="mut">·</span>'}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
-}
-SCREENS.ugibush = (k) => {
-  const c = cf(k), us = ugUnits(k), st = A.cfg.UG.statuses, subs = A.cfg.UG.subUnits, mine = A.me.role === 'שלישות';
-  const head = `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">גיבוש יח״טיות – ${esc(c.label)}</h1><div class="mut small">מעקב אחרי לוחמים שהגיעו ליחידה: הוזמנו, בגיבוש, עברו</div></div>`;
-  if (!us.length) return head + '<div class="card"><h2>אין גיבוש יח״טיות בחיל זה</h2><p class="mut">ביחידות של החיל הזה הגיבוש נערך לפני השיבוץ, ולכן אין שלב גיבוש אחרי ההגעה.</p></div>';
-  if (mine && needsGibush(unitOf(k, A.me.unit))) return head + `<div class="card"><h2>ביחידה שלכם הגיבוש נערך לפני השיבוץ</h2><p class="mut">${esc(A.me.unit)} משבצת לפי המלצת המגבש מהגיבוש לפני השיבוץ, ולכן אין שלב גיבוש יח״טיות אחרי ההגעה. המסך הזה רלוונטי ליחידות ללא גיבוש מקדים: ${esc(us.map((u) => u.name).join(', '))}.</p></div>`;
-  const sel = mine ? A.me.unit : (us.find((u) => u.name === A.ui.ugUnit) || us[0]).name;
-  const rows = cs(k).picks.filter((p) => p.unit === sel), canEdit = can('ugibush', k) && (!mine || A.me.unit === sel), counts = ugCounts(k, sel);
-  const todo = rows.filter((p) => ugOf(k, p.id).status === 'לא הוזמן').length;
-  return head + `<div class="row spread">${mine ? `<span class="chip navy">${esc(sel)}</span>` : `<div class="tabs">${us.map((u) => `<button class="${u.name === sel ? 'on' : ''}" data-act="ugUnit" data-u="${esc(u.name)}">${esc(u.name)}</button>`).join('')}</div>`}
-    ${canEdit && todo ? `<button class="btn sec" data-act="ugBulk">סימון ${todo} שטרם הוזמנו כמוזמנים</button>` : ''}</div>
-   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="kpi"><b>${rows.length}</b><span>לוחמים ביחידה</span></div>${st.map((x) => `<div class="kpi"><b>${counts[x]}</b><span>${esc(x)}</span></div>`).join('')}</div>
-   <div class="card"><div class="mut small" style="margin-bottom:8px">ב${esc(sel)} לא נערך גיבוש לפני השיבוץ. כל סטטוס נשמר ביומן הפעילות.${canEdit ? '' : ' צפייה בלבד.'}</div>
-   <div style="overflow:auto"><table><thead><tr><th>לוחם/ת</th><th>תפקיד</th><th>סבב</th><th>סטטוס</th><th>תת-יחידה</th><th>עודכן</th></tr></thead><tbody>${rows.map((p) => { const x = candOf(k, p.id), g = ugOf(k, p.id);
-     return `<tr><td>${avatar(x, 32)} <b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small">${esc(x.id)}</bdi></td><td>${esc(x.role)}</td><td>${p.round || ''}</td>
-      <td>${canEdit ? `<select data-chg="ugSet" data-f="status" data-id="${esc(x.id)}" aria-label="סטטוס">${st.map((o) => `<option ${o === g.status ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : `<span class="pill ${UG_CLS[g.status]}">${esc(g.status)}</span>`}</td>
-      <td>${canEdit ? `<select data-chg="ugSet" data-f="sub" data-id="${esc(x.id)}" aria-label="תת-יחידה" ${g.status === 'לא הוזמן' ? 'disabled' : ''}><option value="">—</option>${subs.map((o) => `<option ${o === g.sub ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : esc(g.sub || '—')}</td>
-      <td class="mut small">${g.ts ? esc(g.by || '') + ' · ' + fmtTs(g.ts) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">עדיין לא שובצו לוחמים ליחידה הזו</td></tr>'}</tbody></table></div></div>`;
-};
-Object.assign(ACTIONS, {
-  ugUnit: (d) => { A.ui.ugUnit = d.u; rerender(); },
-  ugSet: async (d, t) => {
-    const k = corpsKey(), g = ugOf(k, d.id), body = { corps: k, id: d.id, status: g.status, sub: g.sub };
-    if (d.f === 'status') body.status = t.value; else body.sub = t.value;
-    try { await api('ugibush', body); } catch (x) { /* toast shown */ } rerender();
-  },
-  ugBulk: async () => {
-    const k = corpsKey(), sel = A.me.role === 'שלישות' ? A.me.unit : (ugUnits(k).find((u) => u.name === A.ui.ugUnit) || ugUnits(k)[0]).name;
-    const ids = cs(k).picks.filter((p) => p.unit === sel && ugOf(k, p.id).status === 'לא הוזמן').map((p) => p.id); if (!ids.length) return;
-    if (!confirm('לסמן ' + ids.length + ' לוחמים ב' + sel + ' כמוזמנים לגיבוש יח״טיות?')) return;
-    try { await api('ugibush', { corps: k, ids, status: 'הוזמן' }); toast(ids.length + ' לוחמים סומנו כמוזמנים'); } catch (x) { /* toast shown */ }
-  },
-});

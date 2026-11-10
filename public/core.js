@@ -115,7 +115,7 @@ const R = () => A.cfg.roles[A.me.role];
 const favList = (k) => (cs(k).favs && A.me && cs(k).favs[A.me.id]) || [];
 const isFav = (k, id) => favList(k).includes(id);
 const heartIcon = (on, s) => `<svg class="ic" width="${s || 18}" height="${s || 18}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.heart}</svg>`;
-const favBtn = (k, id, cls) => { const on = isFav(k, id), t = on ? 'הסר מהמועדפים' : 'הוסף למועדפים'; return `<button class="favbtn ${on ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" data-tip="${t}" aria-pressed="${on}" aria-label="${t}">${heartIcon(on)}</button>`; };
+const favBtn = (k, id, cls) => { const on = isFav(k, id), t = on ? 'הסר מהמעקב האישי' : 'הוסף למעקב אישי'; return `<button class="favbtn ${on ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" data-tip="${t}" aria-pressed="${on}" aria-label="${t}">${heartIcon(on)}</button>`; };
 // a candidate's name as a link to the candidate card (plain text for roles that cannot open candidate files)
 const candLink = (k, id, name) => (canFile() ? `<a href="#/room" class="clink" data-act="openCand" data-id="${esc(id)}" data-k="${esc(k)}" title="פתיחת תיק החייל/ת">${esc(name)}</a>` : esc(name));
 const roleOf = (name) => A.cfg.roles[name];
@@ -124,7 +124,7 @@ const homeFor = () => R().home;
 // can the current user run `action` on corps k (mirrors the server's canDo)
 const can = (action, k) => !!A.me && R().can.includes(action) && (R().scope === 'all' || A.me.corps === k);
 const canFile = () => !!A.me && (R().pages.includes('roster') || R().pages.includes('daily')); // may open candidate files
-const SCOPE_TXT = { all: 'כל החילות', corps: 'החיל שלו/ה', group: 'הצוות שלו/ה' };
+const SCOPE_TXT = { all: 'כל המסלולים', corps: 'החיל שלו/ה', group: 'הצוות שלו/ה' };
 function route() { return (location.hash.replace('#/', '') || '').split('?')[0]; }
 function go(r) { location.hash = '#/' + r; }
 
@@ -135,7 +135,7 @@ function corpsKey() {
 }
 function corpsSwitcher() {
   if (A.me.corps) return `<span class="chip navy">${esc(cf(A.me.corps).corps)}</span>`;
-  return `<div class="row"><span class="mut small">חיל:</span><div class="tabs">${A.cfg.corps && Object.keys(A.cfg.corps).map((k) => `<button class="${corpsKey() === k ? 'on' : ''}" data-act="corps" data-k="${k}">${esc(cf(k).corps)}</button>`).join('')}</div></div>`;
+  return `<div class="row"><span class="mut small">מסלול:</span><div class="tabs">${A.cfg.corps && Object.keys(A.cfg.corps).map((k) => `<button class="${corpsKey() === k ? 'on' : ''}" data-act="corps" data-k="${k}">${esc(cf(k).corps)}</button>`).join('')}</div></div>`;
 }
 const LPILL = ['', 'p-dark', 'p-blue', 'p-violet', 'p-green', 'p-orange', 'p-gray'];
 function roleStyle(role) { const l = roleOf(role).layer; return [`background:var(--l${l});color:#fff`, LPILL[l]]; }
@@ -150,7 +150,7 @@ function shell(inner) {
   const page = PAGES.find((p) => p.id === route());
   const dark = document.documentElement.dataset.theme === 'dark';
   const k = A.me.corps || A.ui.corps;
-  const scope = A.me.corps ? cf(A.me.corps).corps : 'כל החילות';
+  const scope = A.me.corps ? cf(A.me.corps).corps : 'כל המסלולים';
   return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>MIL-DRAFT</span></div><nav class="nav">${nav}</nav>
     <div class="side-foot"><div class="meta">אב־טיפוס לדמו · כל הנתונים פיקטיביים</div>
     <div class="usercard"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span class="uc-t"><b>${esc(A.me.title)}</b><small>${esc(A.me.unit)}</small></span></div>
