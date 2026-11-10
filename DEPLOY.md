@@ -24,3 +24,7 @@
 ## הרצה מקומית
     npm start       # http://localhost:3000
     ACCESS_CODE=1234 npm start   # עם קוד גישה
+
+
+## הפעלה עם סיסמאות (מומלץ לכל שימוש מעבר לדמו)
+הגדירו בשרת: `AUTH=1`, `ADMIN_PASSWORD` (סיסמה ראשונית לאדמין `a1`), ואם יש proxy/Render: `TRUST_PROXY=1`. ב-Render אפשר להוסיף את המשתנים ב-Environment (ל-`ADMIN_PASSWORD` סמנו "secret"). שימו לב: ב-Render החינמי הדיסק זמני, ולכן `data/auth.json` יימחק בהפעלה מחדש – יש לחבר Disk קבוע (`DATA_DIR`) אחרת כל הסיסמאות יאופסו. הגרסה העצמאית (`index.html` ב-GitHub Pages) היא דמו בלבד וללא הגנה.

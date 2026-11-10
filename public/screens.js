@@ -557,8 +557,9 @@ SCREENS.settings = (k) => {
     <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית')}</div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="stgSave">שמירת הגדרות</button></div></div>
    <div class="card"><h2>יחידות ומכסות</h2><div class="mut small" style="margin-bottom:8px">עריכת מכסות ותנאי סף של כל יחידה בשם השלישות.</div>
-    <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.ui.editTh ? thModal(k) : ''}`;
+    <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.auth ? secCards() : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.tempPw ? tempPwModal() : ''}`;
 };
+SCREENS.settings.after = () => { if (A.auth && !A.ui.adm) ACTIONS.admLoad(); };
 Object.assign(ACTIONS, {
   stgSet: (d, t) => { const u = A.ui.stg || (A.ui.stg = { k: corpsKey() }); u[d.f] = t.type === 'checkbox' ? t.checked : (d.f === 'rounds' ? +t.value : t.value); rerender(); },
   stgSave: async () => { const k = corpsKey(), u = A.ui.stg; if (!u) return; const b = { corps: k, order: u.order, strictThresholds: !!u.strictThresholds, strictQuotas: !!u.strictQuotas, blockNotRecommended: !!u.blockNotRecommended }; if (!cs(k).picks.some((p) => !p.auto)) b.rounds = +u.rounds; try { await api('settings', b); A.ui.stg = null; toast('ההגדרות נשמרו'); rerender(); } catch (x) { /* toast shown */ } },
@@ -603,4 +604,29 @@ Object.assign(ACTIONS, {
     if (!rows.length) return;
     const r = await api('import', { corps: k, rows, mode: 'update' }); A.ui.photos = null; rerender(); toast(`עודכנו ${r.updated} תמונות`);
   },
+});
+
+// ================= users, passwords and security log (admin, AUTH=1) =================
+const fmtTs2 = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const EV = { login: 'כניסה', logout: 'יציאה', 'change-password': 'שינוי סיסמה', 'admin-reset-password': 'איפוס סיסמה ע״י מנהל' };
+function secCards() {
+  const a = A.ui.adm; if (!a) return '<div class="card"><h2>משתמשים וסיסמאות</h2><span class="mut">טוען…</span></div>';
+  const q = (A.ui.uq || '').trim().toLowerCase(), us = a.users.filter((u) => !q || (u.title + ' ' + u.id + ' ' + u.role + ' ' + u.unit).toLowerCase().includes(q));
+  const st = (u) => u.locked ? '<span class="pill p-red">נעול</span>' : !u.hasPassword ? '<span class="pill p-gray">אין סיסמה</span>' : u.mustChange ? '<span class="pill p-orange">סיסמה זמנית</span>' : '<span class="pill p-green">פעיל</span>';
+  return `<div class="card"><div class="row spread"><h2 style="margin:0">משתמשים וסיסמאות</h2><input type="search" data-inp="uq" placeholder="חיפוש משתמש" value="${esc(A.ui.uq || '')}" style="min-width:200px"></div>
+   <div class="mut small" style="margin:8px 0">הנפקת סיסמה זמנית מוצגת פעם אחת בלבד. המשתמש/ת חייב/ת להחליף אותה בכניסה הראשונה. הסיסמאות נשמרות מוצפנות (scrypt) ואי אפשר לשחזר אותן.</div>
+   <div style="overflow:auto;max-height:380px"><table><thead><tr><th>משתמש</th><th>תפקיד</th><th>יחידה</th><th>מצב</th><th></th></tr></thead><tbody>${us.slice(0, 80).map((u) => `<tr><td><b>${esc(u.title)}</b> <bdi class="mut small">${esc(u.id)}</bdi></td><td>${esc(u.role)}</td><td>${esc(u.unit)}</td><td>${st(u)}</td><td><button class="btn sec sm" data-act="admReset" data-id="${esc(u.id)}">${u.hasPassword ? 'איפוס סיסמה' : 'הנפקת סיסמה'}</button></td></tr>`).join('') || '<tr><td colspan="5" class="mut">לא נמצאו משתמשים</td></tr>'}</tbody></table></div>${us.length > 80 ? '<div class="mut small">מוצגים 80 הראשונים – צמצמו בחיפוש</div>' : ''}</div>
+   <div class="card"><div class="row spread"><h2 style="margin:0">יומן אבטחה</h2><button class="btn sec sm" data-act="admLoad">רענון</button></div><div style="overflow:auto;max-height:320px;margin-top:8px"><table><thead><tr><th>זמן</th><th>אירוע</th><th>משתמש</th><th>כתובת</th><th>תוצאה</th><th>פירוט</th></tr></thead><tbody>${a.audit.map((e) => `<tr><td>${fmtTs2(e.ts)}</td><td>${esc(EV[e.ev] || e.ev)}</td><td><bdi>${esc(e.user || '—')}</bdi></td><td><bdi>${esc(e.ip)}</bdi></td><td><span class="pill ${e.ok ? 'p-green' : 'p-red'}">${e.ok ? 'הצלחה' : 'נכשל'}</span></td><td class="mut small">${esc(e.detail || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="mut">אין אירועים</td></tr>'}</tbody></table></div></div>`;
+}
+function tempPwModal() {
+  const t = A.ui.tempPw;
+  return `<div class="drawer-bg" style="align-items:center" data-act="tempClose"><div class="modal"><h2 style="margin:0">סיסמה זמנית – ${esc(t.title)}</h2><p class="mut small" style="margin:0">מוצגת פעם אחת. מסרו אותה למשתמש/ת בערוץ מאובטח. בכניסה הראשונה תידרש החלפה.</p><div style="font:700 24px monospace;direction:ltr;text-align:center;padding:14px;background:var(--bg2);border-radius:12px;user-select:all">${esc(t.pw)}</div><div class="row"><button class="btn" data-act="tempClose">סגירה</button></div></div></div>`;
+}
+Object.assign(ACTIONS, {
+  uq: (d, t) => { A.ui.uq = t.value; rerender(); },
+  admLoad: async () => {
+    try { const [u, a] = await Promise.all([fetch('/api/admin/users', { headers: HDR() }), fetch('/api/admin/audit', { headers: HDR() })]); if (!u.ok || !a.ok) return; A.ui.adm = { users: (await u.json()).users, audit: (await a.json()).events }; rerender(); } catch (e) { /* offline */ }
+  },
+  admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!confirm('להנפיק סיסמה זמנית חדשה ל' + u.title + '? הסיסמה הקיימת (אם יש) תבוטל והמשתמש/ת ינותק/תנותק.')) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
+  tempClose: () => { A.ui.tempPw = null; rerender(); },
 });

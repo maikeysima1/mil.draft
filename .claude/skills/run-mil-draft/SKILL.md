@@ -69,6 +69,8 @@ There is no unit-test suite; the test is `node $D smoke` against a fresh server 
 
 ## Gotchas
 
+- **Auth mode** (`AUTH=1 ADMIN_PASSWORD=... DATA_DIR=<tmp>`): `X-User` is ignored, so the driver's `shot/flow/smoke` (which log in by clicking a user) do not work there. Use `node scripts/auth-test.cjs http://localhost:PORT <adminPassword>` instead; `bash scripts/ci.sh` runs both modes.
+
 - **Draft settings** (admin, `#/settings`): rounds 1-8, snake/linear and 3 optional hard rules for manual picks. Rounds/order can only change while every pick so far is automatic (the bot picks are then recomputed).
 
 - **State is persistent.** `data/state.json` survives restarts, so a previous run's picks/favorites leak into the next. Reset with `rm -f data/state.json` before starting, or `POST /api/factory-reset` as `a1`.

@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const C = require('./config');
 
 const PORT = process.env.PORT || 3000;
@@ -319,17 +320,91 @@ function json(res, code, obj) { res.writeHead(code, { 'Content-Type': 'applicati
 function body(req) { return new Promise((ok, no) => { let b = ''; req.on('data', (d) => { b += d; if (b.length > 5e6) req.destroy(); }); req.on('end', () => { try { ok(b ? JSON.parse(b) : {}); } catch (e) { no(e); } }); }); }
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 
+// ---------- authentication (AUTH=1): scrypt passwords, signed HttpOnly session cookie, lockout, rate limit, audit ----------
+// Without AUTH=1 the server stays in open demo mode (identity = X-User header). With AUTH=1 that header is ignored completely.
+const AUTH = /^(1|true)$/i.test(process.env.AUTH || '');
+const AUTH_FILE = path.join(DATA_DIR, 'auth.json'), AUDIT_FILE = path.join(DATA_DIR, 'audit.log');
+const SESSION_HOURS = +process.env.SESSION_HOURS || 8, MAX_FAILS = 5, LOCK_MIN = 15, TRUST_PROXY = /^(1|true)$/i.test(process.env.TRUST_PROXY || '');
+let authData = { secret: crypto.randomBytes(32).toString('hex'), users: {} };
+try { authData = Object.assign(authData, JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8'))); } catch (e) { /* first run */ }
+function saveAuth() { const t = AUTH_FILE + '.tmp'; fs.writeFileSync(t, JSON.stringify(authData), { mode: 0o600 }); fs.renameSync(t, AUTH_FILE); }
+const hashPw = (pw, salt) => crypto.scryptSync(String(pw), salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex');
+function setPassword(id, pw, mustChange) {
+  const salt = crypto.randomBytes(16).toString('hex'), old = authData.users[id] || {};
+  authData.users[id] = { salt, hash: hashPw(pw, salt), mustChange: !!mustChange, ver: (old.ver || 0) + 1, fails: 0, lockedUntil: 0 }; saveAuth();
+}
+function checkPw(rec, pw) { // constant-time; unknown users cost the same as known ones
+  const salt = rec ? rec.salt : 'x'.repeat(32), h = Buffer.from(hashPw(pw, salt), 'hex'), r = rec ? Buffer.from(rec.hash, 'hex') : Buffer.alloc(64);
+  return crypto.timingSafeEqual(h, r) && !!rec;
+}
+function pwProblem(pw, id) {
+  pw = String(pw || '');
+  if (pw.length < 10) return 'הסיסמה חייבת להכיל לפחות 10 תווים';
+  if (!/[A-Za-zא-ת]/.test(pw) || !/\d/.test(pw)) return 'הסיסמה חייבת להכיל אותיות וגם ספרות';
+  if (pw.toLowerCase().includes(String(id).toLowerCase())) return 'הסיסמה לא יכולה להכיל את שם המשתמש';
+  return null;
+}
+const tempPw = () => crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, 'x') + '7';
+function audit(ev, user, req, ok, detail) {
+  try { fs.appendFileSync(AUDIT_FILE, JSON.stringify({ ts: Date.now(), ev, user: user || null, ip: ipOf(req), ok: ok !== false, detail: detail || '' }) + '\n', { mode: 0o600 }); } catch (e) { /* never block on logging */ }
+}
+function ipOf(req) { return (TRUST_PROXY && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || (req.socket && req.socket.remoteAddress) || '?'; }
+const b64u = (b) => Buffer.from(b).toString('base64url');
+function signToken(id) {
+  const rec = authData.users[id], pl = b64u(JSON.stringify({ u: id, v: rec.ver, e: Date.now() + SESSION_HOURS * 3600e3 }));
+  return pl + '.' + crypto.createHmac('sha256', authData.secret).update(pl).digest('base64url');
+}
+function cookieOf(req, name) { const m = String(req.headers.cookie || '').split(/;\s*/).find((c) => c.startsWith(name + '=')); return m ? m.slice(name.length + 1) : ''; }
+function sessionUser(req) {
+  const t = cookieOf(req, 'mil_session'), i = t.indexOf('.'); if (i < 1) return null;
+  const pl = t.slice(0, i), sig = Buffer.from(t.slice(i + 1)), ok = Buffer.from(crypto.createHmac('sha256', authData.secret).update(pl).digest('base64url'));
+  if (sig.length !== ok.length || !crypto.timingSafeEqual(sig, ok)) return null;
+  let d; try { d = JSON.parse(Buffer.from(pl, 'base64url').toString()); } catch (e) { return null; }
+  const rec = authData.users[d.u], u = userById(d.u);
+  if (!rec || !u || d.e < Date.now() || d.v !== rec.ver) return null;
+  return Object.assign({}, u, { _mustChange: !!rec.mustChange });
+}
+const isHttps = (req) => !!(req.socket && req.socket.encrypted) || String(req.headers['x-forwarded-proto'] || '') === 'https';
+function setSession(req, res, id) { res.setHeader('Set-Cookie', `mil_session=${signToken(id)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_HOURS * 3600}${isHttps(req) ? '; Secure' : ''}`); }
+const clearSession = (res) => res.setHeader('Set-Cookie', 'mil_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+const loginHits = new Map(); // ip -> timestamps of recent login attempts
+function tooMany(req) { const ip = ipOf(req), now = Date.now(), a = (loginHits.get(ip) || []).filter((t) => now - t < 600e3); a.push(now); loginHits.set(ip, a); if (loginHits.size > 5000) loginHits.clear(); return a.length > 20; }
+const reqUser = (req) => (AUTH ? sessionUser(req) : userById(req.headers['x-user']));
+const isAdminUser = (u) => !!u && C.ROLES[u.role].can.includes('settings');
+if (AUTH && !authData.users.a1) { // bootstrap the admin account
+  const env = process.env.ADMIN_PASSWORD, ok = env && !pwProblem(env, 'a1'), pw = ok ? env : tempPw();
+  setPassword('a1', pw, !ok);
+  if (!ok) console.log('\n*** AUTH: initial admin password for user a1 (shown once, must be changed at first login): ' + pw + ' ***\n');
+}
+
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+  res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY'); res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()'); res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+  if (isHttps(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  if (p.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   try {
     if (p === '/healthz') return json(res, 200, { ok: true });
-    if (p === '/api/ping') return json(res, 200, { needCode: !!ACCESS_CODE });
+    if (p === '/api/ping') return json(res, 200, { needCode: !!ACCESS_CODE, auth: AUTH });
     if (ACCESS_CODE && p.startsWith('/api/') && (req.headers['x-code'] || url.searchParams.get('code')) !== ACCESS_CODE) return json(res, 401, { error: 'קוד גישה שגוי' });
+    const gate = () => { const u = reqUser(req); if (AUTH && !u) { json(res, 401, { error: 'לא מחובר' }); return null; } if (AUTH && u._mustChange) { json(res, 403, { error: 'נדרש שינוי סיסמה', mustChange: true }); return null; } return u || true; };
+    if (AUTH && p === '/api/me') { const u = sessionUser(req); return u ? json(res, 200, { id: u.id, mustChange: u._mustChange }) : json(res, 401, { error: 'לא מחובר' }); }
+    if (AUTH && p === '/api/admin/users') {
+      const u = sessionUser(req); if (!isAdminUser(u) || u._mustChange) return json(res, 403, { error: 'אין הרשאה' });
+      return json(res, 200, { users: USERS.map((x) => { const r = authData.users[x.id]; return { id: x.id, title: x.title, role: x.role, unit: x.unit, hasPassword: !!r, mustChange: !!(r && r.mustChange), locked: !!(r && r.lockedUntil > Date.now()) }; }) });
+    }
+    if (AUTH && p === '/api/admin/audit') {
+      const u = sessionUser(req); if (!isAdminUser(u) || u._mustChange) return json(res, 403, { error: 'אין הרשאה' });
+      let lines = []; try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-150); } catch (e) { /* none yet */ }
+      return json(res, 200, { events: lines.map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean).reverse() });
+    }
     if (p === '/api/config') return json(res, 200, { orgs: C.ORGS, roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
-    if (p === '/api/state') return json(res, 200, snapshot(req.headers['x-user']));
+    if (p === '/api/state') { const gu = gate(); if (!gu) return; return json(res, 200, snapshot(AUTH ? gu.id : req.headers['x-user'])); }
     if (p === '/api/events') {
-      const user = userById(url.searchParams.get('user'));
+      const gu = gate(); if (!gu) return;
+      const user = AUTH ? gu : userById(url.searchParams.get('user'));
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
       res.write('retry: 2000\n\n');
       const c = { res, user }; clients.add(c);
@@ -337,9 +412,36 @@ http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'POST' && p.startsWith('/api/')) {
+      if (AUTH && req.headers['x-requested-with'] !== 'mil-draft') return json(res, 403, { error: 'בקשה לא תקינה' });
       const b = await body(req);
-      const user = userById(req.headers['x-user']);
+      if (AUTH && p === '/api/login') {
+        if (tooMany(req)) { audit('login', b.id, req, false, 'rate-limit'); return json(res, 429, { error: 'יותר מדי ניסיונות – נסו שוב בעוד מספר דקות' }); }
+        const u = userById(b.id), rec = u ? authData.users[u.id] : null, now = Date.now();
+        if (rec && rec.lockedUntil > now) { audit('login', u.id, req, false, 'locked'); return json(res, 423, { error: 'החשבון נעול זמנית עקב ניסיונות כושלים – נסו שוב מאוחר יותר או פנו למנהל/ת המערכת' }); }
+        if (!u || !rec || !checkPw(rec, b.password)) {
+          if (rec) { rec.fails = (rec.fails || 0) + 1; if (rec.fails >= MAX_FAILS) { rec.lockedUntil = now + LOCK_MIN * 60e3; rec.fails = 0; } saveAuth(); }
+          audit('login', b.id, req, false, rec ? (rec.lockedUntil > now ? 'locked-now' : 'bad-password') : 'no-credentials');
+          return json(res, 401, { error: 'פרטי הכניסה שגויים' });
+        }
+        rec.fails = 0; rec.lockedUntil = 0; saveAuth(); setSession(req, res, u.id); audit('login', u.id, req, true);
+        return json(res, 200, { ok: true, id: u.id, mustChange: !!rec.mustChange });
+      }
+      if (AUTH && p === '/api/logout') { const u = sessionUser(req); if (u) audit('logout', u.id, req, true); clearSession(res); return json(res, 200, { ok: true }); }
+      const user = reqUser(req);
       if (!user) return json(res, 401, { error: 'לא מחובר' });
+      if (AUTH && p === '/api/change-password') {
+        const rec = authData.users[user.id];
+        if (!checkPw(rec, b.old)) { audit('change-password', user.id, req, false, 'bad-old'); return json(res, 400, { error: 'הסיסמה הנוכחית שגויה' }); }
+        const bad = pwProblem(b.next, user.id); if (bad) return json(res, 400, { error: bad });
+        if (b.next === b.old) return json(res, 400, { error: 'הסיסמה החדשה זהה לנוכחית' });
+        setPassword(user.id, b.next, false); setSession(req, res, user.id); audit('change-password', user.id, req, true); return json(res, 200, { ok: true });
+      }
+      if (AUTH && user._mustChange) return json(res, 403, { error: 'נדרש שינוי סיסמה', mustChange: true });
+      if (AUTH && p === '/api/admin/reset-password') {
+        if (!isAdminUser(user)) return json(res, 403, { error: 'אין הרשאה' });
+        const t = userById(b.id); if (!t) return json(res, 400, { error: 'משתמש לא מוכר' });
+        const pw = tempPw(); setPassword(t.id, pw, true); audit('admin-reset-password', user.id, req, true, t.id); return json(res, 200, { ok: true, password: pw });
+      }
       const k = b.corps;
       const needCorps = () => { if (!C.corps[k]) throw new Error('חיל לא מוכר'); };
       const canView = () => { if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('אין הרשאה לחיל זה'); };

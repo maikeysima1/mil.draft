@@ -884,15 +884,27 @@ function toast(msg, err) {
   const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ''; }, 3200);
 }
+const HDR = () => Object.assign({ 'X-Code': codeVal(), 'X-Requested-With': 'mil-draft' }, A.auth ? {} : { 'X-User': A.me ? A.me.id : '' });
+function sessionLost(j) { // auth mode: cookie expired / revoked, or a forced password change is pending
+  if (j && j.mustChange) { if (A.me) A.me.mustChange = true; rerender(); return true; }
+  if (A.auth && A.me) { A.me = null; A.ui = {}; if (A.es) A.es.close(); toast('ההתחברות פגה – יש להיכנס מחדש', true); rerender(); return true; }
+  return false;
+}
 async function api(path, body) {
-  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-User': A.me ? A.me.id : '', 'X-Code': codeVal() }, body: JSON.stringify(body || {}) });
+  const r = await fetch('/api/' + path, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, HDR()), body: JSON.stringify(body || {}) });
   const j = await r.json().catch(() => ({}));
   if (r.status === 401 && j.error === 'קוד גישה שגוי') { localStorage.removeItem('mil-code'); location.reload(); }
+  if ((r.status === 401 || (r.status === 403 && j.mustChange)) && path !== 'login' && sessionLost(j)) throw new Error(j.error);
   if (!r.ok) { toast(j.error || 'שגיאה', true); throw new Error(j.error); }
   return j;
 }
 const codeVal = () => localStorage.getItem('mil-code') || '';
-async function refresh() { const r = await fetch('/api/state', { headers: { 'X-Code': codeVal(), 'X-User': A.me ? A.me.id : '' } }); if (r.status === 401) { localStorage.removeItem('mil-code'); location.reload(); return; } A.S = await r.json(); A.skew = A.S.serverNow - Date.now(); }
+async function refresh() {
+  const r = await fetch('/api/state', { headers: HDR() });
+  if (r.status === 401) { const j = await r.json().catch(() => ({})); if (j.error === 'קוד גישה שגוי') { localStorage.removeItem('mil-code'); location.reload(); return; } if (A.auth) { sessionLost(j); return; } }
+  if (r.status === 403) { const j = await r.json().catch(() => ({})); if (j.mustChange) { sessionLost(j); return; } }
+  if (!r.ok) return; A.S = await r.json(); A.skew = A.S.serverNow - Date.now();
+}
 const nowS = () => Date.now() + A.skew;
 
 // ---- domain helpers ----
@@ -969,6 +981,7 @@ const ICONS = {
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2M16 7l3 3M14 9l2 2"/>',
   scale: '<path d="M12 3v18M5 7h14"/><path d="m5 7-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
@@ -1034,8 +1047,8 @@ function shell(inner) {
     <div class="usercard"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span class="uc-t"><b>${esc(A.me.title)}</b><small>${esc(A.me.unit)}</small></span></div>
     <div class="row" style="gap:6px"><span class="lbadge">שכבה ${R().layer} · ${esc(A.me.role)}</span></div></div></aside>
    <div class="content"><header class="tbar"><div class="bar-t"><span class="bar-page">${page ? page.name : ''}</span><span class="bar-sub">${esc(scope)}</span></div>
-    <div class="bar-r">${installBox(true)}<span class="live"><i></i>חי</span><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="החלפת ערכת נושא">${icon(dark ? 'sun' : 'moon', 18)}</button><button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header>
-    <main>${inner}</main></div></div>`;
+    <div class="bar-r">${installBox(true)}<span class="live"><i></i>חי</span><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="החלפת ערכת נושא">${icon(dark ? 'sun' : 'moon', 18)}</button>${A.auth ? `<button class="iconbtn" data-act="pwOpen" title="שינוי סיסמה" aria-label="שינוי סיסמה">${icon('key', 18)}</button>` : ''}<button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header>
+    <main>${inner}</main></div>${A.ui.pw ? pwView(false) : ''}</div>`;
 }
 
 // ---- login ----
@@ -1074,7 +1087,7 @@ function loginView() {
    <p>מגבשים מזינים התרשמות מקצועית, יחידות בוחרות בחדר בחירה משותף לפי מערך, ומפקדי ההכשרה מקבלים את התמונה המלאה.</p>
    <div class="chips"><span>דראפט חי</span><span>6 שכבות סיווג</span><span>5 חילות</span></div>
    ${layerMatrix(u ? u.role : null)}
-   <div class="demo-note">אב־טיפוס לדמו – המשתמשים פיקטיביים. במערכת אמיתית הכניסה תהיה בהזדהות מאובטחת.</div></section>
+   <div class="demo-note">${A.auth ? 'הכניסה מוגנת בסיסמה אישית. ניסיונות כושלים חוסמים את החשבון זמנית, וכל כניסה נרשמת ביומן אבטחה.' : 'אב־טיפוס לדמו – המשתמשים פיקטיביים. הפעלת <b>AUTH=1</b> בשרת מחליפה את הבחירה החופשית בכניסה עם סיסמה אישית.'}</div></section>
    <section class="picker"><div class="row spread"><h2>כניסה למערכת</h2><button class="iconbtn" data-act="theme" aria-label="החלפת ערכת נושא">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 18)}</button></div>
    <p class="mut" style="margin:0">בחרו חיל, יחידה ותפקיד. ההרשאות נקבעות לפי שכבת הסיווג של התפקיד.</p>
    ${installBox()}
@@ -1082,7 +1095,16 @@ function loginView() {
    ${step(2, 'יחידה', !!unit, `<div class="choices">${s2}</div>`)}
    ${step(3, 'תפקיד', !!u, `<div class="roles">${s3}</div>`)}
    ${u ? `<div class="card sel-info"><div class="row spread"><b>שכבה ${o.layer} · ${esc(u.role)}</b><span class="pill ${LPILL[o.layer]}">${SCOPE_TXT[o.scope]}</span></div><p class="mut small" style="margin:6px 0 0">${esc(o.desc)}</p></div>` : ''}
+   ${u && A.auth ? '<label style="margin-top:6px">סיסמה<input type="password" id="pw" autocomplete="current-password" placeholder="הקלידו סיסמה" data-inp="pwEnter"></label>' : ''}
    <div class="enter"><button class="btn lg" data-act="login" ${u ? '' : 'disabled'}>${u ? 'כניסה כ' + esc(u.title) + ' ←' : 'בחרו חיל, יחידה ותפקיד'}</button>${u ? `<span class="mut small">ייפתח: ${target}</span>` : ''}</div></section></div>`;
+}
+
+// ---- password change (forced at first login / after an admin reset, or from the header) ----
+function pwView(forced) {
+  const f = `<h2 style="margin:0">${forced ? 'יש לבחור סיסמה חדשה' : 'שינוי סיסמה'}</h2><p class="mut small" style="margin:0">${forced ? 'הסיסמה הנוכחית היא זמנית. ' : ''}לפחות 10 תווים, אותיות וספרות.</p>
+   <label>סיסמה נוכחית<input type="password" id="pw-old" autocomplete="current-password"></label><label>סיסמה חדשה<input type="password" id="pw-new" autocomplete="new-password"></label><label>אימות סיסמה חדשה<input type="password" id="pw-new2" autocomplete="new-password"></label>
+   <div class="row"><button class="btn" data-act="pwSave">שמירה</button>${forced ? '<button class="btn sec" data-act="logout">יציאה</button>' : '<button class="btn sec" data-act="pwClose">ביטול</button>'}</div>`;
+  return forced ? `<div style="max-width:420px;margin:10vh auto;display:flex;flex-direction:column;gap:12px;padding:20px">${f}</div>` : `<div class="drawer-bg" style="align-items:center" data-act="pwClose"><div class="modal" role="dialog">${f}</div></div>`;
 }
 
 // ---- render loop ----
@@ -1092,6 +1114,7 @@ function render() {
   const app = $('#app');
   if (!A.cfg || !A.S) { app.innerHTML = '<p style="padding:40px">טוען…</p>'; return; }
   if (!A.me) { app.innerHTML = loginView(); return; }
+  if (A.auth && A.me.mustChange) { app.innerHTML = pwView(true); return; }
   let r = route();
   const page = PAGES.find((p) => p.id === r);
   if (!page || !allowed(page)) { go(homeFor()); return; }
@@ -1117,11 +1140,31 @@ const ACTIONS = {
   lorg: (d) => { A.ui.lorg = d.v; A.ui.lunit = null; A.ui.sel = null; rerender(); },
   lunit: (d) => { A.ui.lunit = d.v; A.ui.sel = null; rerender(); },
   sel: (d) => { A.ui.sel = d.id; rerender(); },
-  login: async () => { A.me = A.ui.sel ? A.cfg.users.find((x) => x.id === A.ui.sel) : null; if (!A.me) return; localStorage.setItem('mil-user', A.me.id); connectSSE(); await refresh(); go(homeFor()); render(); },
+  login: async () => {
+    const u = A.ui.sel ? A.cfg.users.find((x) => x.id === A.ui.sel) : null; if (!u) return;
+    if (A.auth) {
+      const pw = $('#pw') ? $('#pw').value : ''; if (!pw) { toast('הקלידו סיסמה', true); return; }
+      let r; try { r = await api('login', { id: u.id, password: pw }); } catch (x) { return; }
+      A.me = Object.assign({}, u, { mustChange: r.mustChange }); if (r.mustChange) { rerender(); return; }
+    } else { A.me = u; localStorage.setItem('mil-user', A.me.id); }
+    connectSSE(); await refresh(); go(homeFor()); render();
+  },
+  reload: () => location.reload(),
   theme: () => { localStorage.setItem('mil-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); rerender(); },
-  logout: () => { localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
+  logout: async () => { if (A.auth) { try { await api('logout', {}); } catch (x) { /* already out */ } } localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
   corps: (d) => { A.ui.corps = d.k; A.ui.cand = null; rerender(); },
 };
+Object.assign(ACTIONS, {
+  pwEnter: (d, t, e) => { if (e.key === 'Enter') ACTIONS.login(); },
+  pwOpen: () => { A.ui.pw = true; rerender(); }, pwClose: () => { A.ui.pw = false; rerender(); },
+  pwSave: async () => {
+    const o = $('#pw-old').value, n = $('#pw-new').value; if (n !== $('#pw-new2').value) { toast('האימות לא תואם לסיסמה החדשה', true); return; }
+    try { await api('change-password', { old: o, next: n }); } catch (x) { return; }
+    const forced = A.me.mustChange; A.me.mustChange = false; A.ui.pw = false; toast('הסיסמה עודכנה');
+    if (forced) { connectSSE(); await refresh(); go(homeFor()); } render();
+  },
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target && e.target.id === 'pw') ACTIONS.login(); });
 document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-act]'); if (!t) return;
   if (t.classList.contains('drawer-bg') && e.target !== t) return; // click inside the dialog, not on the backdrop
@@ -2007,8 +2050,9 @@ SCREENS.settings = (k) => {
     <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית')}</div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="stgSave">שמירת הגדרות</button></div></div>
    <div class="card"><h2>יחידות ומכסות</h2><div class="mut small" style="margin-bottom:8px">עריכת מכסות ותנאי סף של כל יחידה בשם השלישות.</div>
-    <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.ui.editTh ? thModal(k) : ''}`;
+    <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.auth ? secCards() : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.tempPw ? tempPwModal() : ''}`;
 };
+SCREENS.settings.after = () => { if (A.auth && !A.ui.adm) ACTIONS.admLoad(); };
 Object.assign(ACTIONS, {
   stgSet: (d, t) => { const u = A.ui.stg || (A.ui.stg = { k: corpsKey() }); u[d.f] = t.type === 'checkbox' ? t.checked : (d.f === 'rounds' ? +t.value : t.value); rerender(); },
   stgSave: async () => { const k = corpsKey(), u = A.ui.stg; if (!u) return; const b = { corps: k, order: u.order, strictThresholds: !!u.strictThresholds, strictQuotas: !!u.strictQuotas, blockNotRecommended: !!u.blockNotRecommended }; if (!cs(k).picks.some((p) => !p.auto)) b.rounds = +u.rounds; try { await api('settings', b); A.ui.stg = null; toast('ההגדרות נשמרו'); rerender(); } catch (x) { /* toast shown */ } },
@@ -2053,6 +2097,31 @@ Object.assign(ACTIONS, {
     if (!rows.length) return;
     const r = await api('import', { corps: k, rows, mode: 'update' }); A.ui.photos = null; rerender(); toast(`עודכנו ${r.updated} תמונות`);
   },
+});
+
+// ================= users, passwords and security log (admin, AUTH=1) =================
+const fmtTs2 = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const EV = { login: 'כניסה', logout: 'יציאה', 'change-password': 'שינוי סיסמה', 'admin-reset-password': 'איפוס סיסמה ע״י מנהל' };
+function secCards() {
+  const a = A.ui.adm; if (!a) return '<div class="card"><h2>משתמשים וסיסמאות</h2><span class="mut">טוען…</span></div>';
+  const q = (A.ui.uq || '').trim().toLowerCase(), us = a.users.filter((u) => !q || (u.title + ' ' + u.id + ' ' + u.role + ' ' + u.unit).toLowerCase().includes(q));
+  const st = (u) => u.locked ? '<span class="pill p-red">נעול</span>' : !u.hasPassword ? '<span class="pill p-gray">אין סיסמה</span>' : u.mustChange ? '<span class="pill p-orange">סיסמה זמנית</span>' : '<span class="pill p-green">פעיל</span>';
+  return `<div class="card"><div class="row spread"><h2 style="margin:0">משתמשים וסיסמאות</h2><input type="search" data-inp="uq" placeholder="חיפוש משתמש" value="${esc(A.ui.uq || '')}" style="min-width:200px"></div>
+   <div class="mut small" style="margin:8px 0">הנפקת סיסמה זמנית מוצגת פעם אחת בלבד. המשתמש/ת חייב/ת להחליף אותה בכניסה הראשונה. הסיסמאות נשמרות מוצפנות (scrypt) ואי אפשר לשחזר אותן.</div>
+   <div style="overflow:auto;max-height:380px"><table><thead><tr><th>משתמש</th><th>תפקיד</th><th>יחידה</th><th>מצב</th><th></th></tr></thead><tbody>${us.slice(0, 80).map((u) => `<tr><td><b>${esc(u.title)}</b> <bdi class="mut small">${esc(u.id)}</bdi></td><td>${esc(u.role)}</td><td>${esc(u.unit)}</td><td>${st(u)}</td><td><button class="btn sec sm" data-act="admReset" data-id="${esc(u.id)}">${u.hasPassword ? 'איפוס סיסמה' : 'הנפקת סיסמה'}</button></td></tr>`).join('') || '<tr><td colspan="5" class="mut">לא נמצאו משתמשים</td></tr>'}</tbody></table></div>${us.length > 80 ? '<div class="mut small">מוצגים 80 הראשונים – צמצמו בחיפוש</div>' : ''}</div>
+   <div class="card"><div class="row spread"><h2 style="margin:0">יומן אבטחה</h2><button class="btn sec sm" data-act="admLoad">רענון</button></div><div style="overflow:auto;max-height:320px;margin-top:8px"><table><thead><tr><th>זמן</th><th>אירוע</th><th>משתמש</th><th>כתובת</th><th>תוצאה</th><th>פירוט</th></tr></thead><tbody>${a.audit.map((e) => `<tr><td>${fmtTs2(e.ts)}</td><td>${esc(EV[e.ev] || e.ev)}</td><td><bdi>${esc(e.user || '—')}</bdi></td><td><bdi>${esc(e.ip)}</bdi></td><td><span class="pill ${e.ok ? 'p-green' : 'p-red'}">${e.ok ? 'הצלחה' : 'נכשל'}</span></td><td class="mut small">${esc(e.detail || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="mut">אין אירועים</td></tr>'}</tbody></table></div></div>`;
+}
+function tempPwModal() {
+  const t = A.ui.tempPw;
+  return `<div class="drawer-bg" style="align-items:center" data-act="tempClose"><div class="modal"><h2 style="margin:0">סיסמה זמנית – ${esc(t.title)}</h2><p class="mut small" style="margin:0">מוצגת פעם אחת. מסרו אותה למשתמש/ת בערוץ מאובטח. בכניסה הראשונה תידרש החלפה.</p><div style="font:700 24px monospace;direction:ltr;text-align:center;padding:14px;background:var(--bg2);border-radius:12px;user-select:all">${esc(t.pw)}</div><div class="row"><button class="btn" data-act="tempClose">סגירה</button></div></div></div>`;
+}
+Object.assign(ACTIONS, {
+  uq: (d, t) => { A.ui.uq = t.value; rerender(); },
+  admLoad: async () => {
+    try { const [u, a] = await Promise.all([fetch('/api/admin/users', { headers: HDR() }), fetch('/api/admin/audit', { headers: HDR() })]); if (!u.ok || !a.ok) return; A.ui.adm = { users: (await u.json()).users, audit: (await a.json()).events }; rerender(); } catch (e) { /* offline */ }
+  },
+  admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!confirm('להנפיק סיסמה זמנית חדשה ל' + u.title + '? הסיסמה הקיימת (אם יש) תבוטל והמשתמש/ת ינותק/תנותק.')) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
+  tempClose: () => { A.ui.tempPw = null; rerender(); },
 });
 </script>
 <script>// Standalone glue: route api()/refresh()/SSE to the in-browser LocalServer
