@@ -82,7 +82,7 @@ SCREENS.room = (k) => {
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
    <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
-   ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${metricChips(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
+   ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap">${avatar(x, 40)}<span><b>${esc(x.name)}</b> <bdi class="mut small" style="white-space:nowrap;display:block">${x.id}</bdi></span></span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${metricChips(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
      <td><span class="row" style="gap:6px;flex-wrap:nowrap">${cmpBtn(x.id)}${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
    <div class="card"><h2>יומן בחירות</h2>${log}</div>
@@ -122,7 +122,7 @@ function drawer(k, id) {
   const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit && !tk;
   const miss = missingOf(k, c);
   return `<div class="drawer-bg" data-act="closeCand"><aside class="drawer" role="dialog" aria-label="תיק מועמד">
-   <div class="row spread" style="flex-wrap:nowrap;align-items:flex-start">${can('fav', k) ? favBtn(k, id, 'lg') : ''}<div style="flex:1"><div class="small" style="color:var(--orange);font-weight:600">תיק מועמד · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small">${c.id} · ${esc(c.role)} · אזור ${esc(c.area)} · צוות ${c.group}</div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
+   <div class="row spread" style="flex-wrap:nowrap;align-items:flex-start">${can('fav', k) ? favBtn(k, id, 'lg') : ''}<div class="row" style="flex:1;flex-wrap:nowrap;gap:14px;align-items:center">${avatar(c, 72)}<div style="flex:1"><div class="small" style="color:var(--orange);font-weight:600">תיק מועמד · ${esc(cf(k).corps)}</div><h2 style="margin:0;font-size:24px">${esc(c.name)}</h2><div class="mut small">${c.id} · ${esc(c.role)} · אזור ${esc(c.area)} · צוות ${c.group}</div></div></div><button class="btn sec sm" data-act="closeCand">סגירה ✕</button></div>
    ${navBar(id)}
    <div class="row">${recPill(c.rec)}<span class="pill p-gray">פרופיל ${c.profile} · ${esc(c.med)}</span>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : ''}${miss.length ? `<span class="pill p-orange">חסר בתיק: ${esc(miss.join(', '))}</span>` : ''}</div>
    <div class="card" style="padding:12px">${statBars(k, c)}<div class="mut small">הסימון הכתום: ממוצע המאגר. תיאור בלבד, לא דירוג.</div></div>
@@ -156,7 +156,7 @@ function cmpModal(k) {
   return `<div class="drawer-bg" style="align-items:center" data-act="cmpClose"><div class="modal cmpmodal" role="dialog" aria-label="השוואת מועמדים">
    <div class="row spread"><h2 style="margin:0">השוואת מועמדים</h2><button class="btn sec sm" data-act="cmpClose">סגירה</button></div>
    <div class="mut small">✓ ירוק = עומד בתנאי הסף של ${esc(unit.name)} · מסגרת = הערך הטוב ביותר בין המושווים. זו הצגה בלבד – אין ציון מסכם והבחירה נשארת שלכם.</div>
-   <div style="overflow:auto"><table class="cmptbl"><thead><tr><th></th>${xs.map((x) => `<th><b>${esc(x.name)}</b><div class="mut small">${x.id}</div></th>`).join('')}</tr></thead><tbody>
+   <div style="overflow:auto"><table class="cmptbl"><thead><tr><th></th>${xs.map((x) => `<th>${avatar(x, 56)}<div><b>${esc(x.name)}</b></div><div class="mut small">${x.id}</div></th>`).join('')}</tr></thead><tbody>
    ${row('תפקיד מומלץ', (x) => esc(x.role))}${row('המלצת מגבש', (x) => recPill(x.rec))}${row('רפואי', (x) => esc(x.med || '—'))}
    ${c.stats.map(stat).join('')}
    ${row('חוזקות בולטות', (x) => strengthChips(k, x) || '<span class="mut">—</span>')}

@@ -116,6 +116,17 @@ const ICONS = {
   heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
 };
 const icon = (n, s) => `<svg class="ic" width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+// generic, fictitious avatar: deterministic cartoon face drawn from the candidate id (illustration only, not a real photo)
+function avatar(x, size) {
+  let h = 0; const id = String((x && x.id) || x || ''); for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const pick = (a, n) => a[(h >>> n) % a.length];
+  const skin = pick(['#F6D3B3', '#E8B98F', '#D39B6E', '#B97B4F', '#8D5A3A', '#6B4128'], 0), hair = pick(['#1B1B1E', '#3A2A1E', '#5B3A21', '#8A5A2B', '#B9892F', '#6E6E73'], 3);
+  const bg = pick(['#DCE7F7', '#E3F1E8', '#FBEBD3', '#EADCF5', '#F7DDE0', '#D9EFF2'], 5), style = pick([0, 1, 2, 3], 8), mouth = pick([0, 1, 2], 10), brow = pick([0, 1], 12);
+  const hairBack = style === 3 ? `<path d="M30 46q-2-26 20-26t20 26v18q-6 8-8 4V44H38v24q-2 4-8-4z" fill="${hair}"/>` : '';
+  const hairTop = ['<path d="M31 42q1-20 19-20t19 20q-8-9-19-9t-19 9z"/>', '<path d="M30 46q-3-26 20-26t20 26q-4-12-12-15-12 6-28 15z"/>', '<path d="M33 40q2-18 17-18t17 18q-10-5-17-5t-17 5z"/>', '<path d="M31 44q0-23 19-23t19 23q-8-10-19-10t-19 10z"/>'][style];
+  const m = ['<path d="M44 66q6 5 12 0" fill="none" stroke="#7A3B2E" stroke-width="2.2" stroke-linecap="round"/>', '<path d="M45 66h10" stroke="#7A3B2E" stroke-width="2.2" stroke-linecap="round"/>', '<path d="M44 65q6 8 12 0z" fill="#fff" stroke="#7A3B2E" stroke-width="1.6" stroke-linejoin="round"/>'][mouth];
+  return `<svg class="avatar-img" width="${size || 40}" height="${size || 40}" viewBox="0 0 100 100" role="img" aria-label="תמונה להמחשה בלבד" style="border-radius:50%;flex:none"><rect width="100" height="100" fill="${bg}"/>${hairBack}<path d="M14 100q2-22 36-22t36 22z" fill="#4A5D3A"/><rect x="43" y="66" width="14" height="14" rx="5" fill="${skin}"/><ellipse cx="50" cy="52" rx="19" ry="22" fill="${skin}"/><ellipse cx="31" cy="54" rx="3.5" ry="5" fill="${skin}"/><ellipse cx="69" cy="54" rx="3.5" ry="5" fill="${skin}"/><g fill="${hair}">${hairTop}</g><circle cx="43" cy="53" r="2.4" fill="#222"/><circle cx="57" cy="53" r="2.4" fill="#222"/><path d="M39 ${brow ? 46 : 47}h8M53 ${brow ? 46 : 47}h8" stroke="${hair}" stroke-width="2.2" stroke-linecap="round"/>${m}</svg>`;
+}
 const R = () => A.cfg.roles[A.me.role];
 // favorites (private, per user): ♥ marks candidates a unit/commander wants to keep an eye on
 const favList = (k) => (cs(k).favs && A.me && cs(k).favs[A.me.id]) || [];
