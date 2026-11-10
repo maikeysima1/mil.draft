@@ -516,9 +516,12 @@ function cleanBaseline(cf, rows) {
   });
   return out;
 }
+// candidate photo: small JPEG data URL produced by the browser (resized before upload); anything else is ignored
+const cleanPhoto = (v) => (typeof v === 'string' && v.length <= 60000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v) ? v : null);
 // apply uploaded values onto a candidate (only fields that were provided)
 function applyUpdate(cf, c, r) {
   let n = 0;
+  if (cleanPhoto(r.photo)) { c.photo = r.photo; n++; }
   if (cf.roles.includes(r.role) && r.role !== c.role) { c.role = r.role; c.skills = cf.skills[r.role] || c.skills; n++; }
   if (C.RECS.includes(r.rec)) { c.rec = r.rec; n++; }
   if (C.MEDS.includes(r.med)) { c.med = r.med; n++; }
@@ -820,7 +823,7 @@ L.handle = function (p, userId, b) {
       const stats = {}; cf.stats.forEach((s) => { stats[s.k] = num((r.stats || {})[s.k]); });
       const med = C.MEDS.includes(r.med) ? r.med : C.MEDS[0];
       cst.cands.push({ id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats, rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72), area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא' });
-      applyUpdate(cf, cst.cands[cst.cands.length - 1], { motivation: r.motivation, combat: r.combat });
+      applyUpdate(cf, cst.cands[cst.cands.length - 1], { motivation: r.motivation, combat: r.combat, photo: r.photo });
       added++;
     });
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ייבאה ' + added + ' מועמדים' });
@@ -977,6 +980,7 @@ const ICONS = {
 const icon = (n, s) => `<svg class="ic" width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 // generic, fictitious avatar: deterministic cartoon face drawn from the candidate id (illustration only, not a real photo)
 function avatar(x, size) {
+  if (x && x.photo) return `<img class="avatar-img" src="${x.photo}" width="${size || 40}" height="${size || 40}" alt="${esc(x.name || '')}" style="border-radius:50%;flex:none;object-fit:cover">`;
   let h = 0; const id = String((x && x.id) || x || ''); for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   const pick = (a, n) => a[(h >>> n) % a.length];
   const skin = pick(['#F6D3B3', '#E8B98F', '#D39B6E', '#B97B4F', '#8D5A3A', '#6B4128'], 0), hair = pick(['#1B1B1E', '#3A2A1E', '#5B3A21', '#8A5A2B', '#B9892F', '#6E6E73'], 3);
@@ -1092,7 +1096,7 @@ function render() {
   const page = PAGES.find((p) => p.id === r);
   if (!page || !allowed(page)) { go(homeFor()); return; }
   const keep = captureFocus();
-  app.innerHTML = shell(SCREENS[r](corpsKey())).replace(/(\d+)\s?\/\s?(\d+)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
+  app.innerHTML = shell(SCREENS[r](corpsKey())).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
   restoreFocus(keep);
   if (SCREENS[r].after) SCREENS[r].after();
 }
@@ -1900,6 +1904,7 @@ SCREENS.import = (k) => {
    <div class="card"><h2>3. בדיקה וייבוא</h2><p>${rows.length} שורות · <b style="color:var(--green)">${ok.length} תקינות</b> · <b style="color:var(--red)">${rows.length - ok.length} עם בעיות (ידולגו)</b></p>
     <div style="overflow:auto;max-height:320px"><table><thead><tr><th>שורה</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>מדדים חסרים</th><th>בדיקה</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.n}</td><td>${esc(r.name || r.id)}</td><td>${esc(r.role)}</td><td>${esc(r.rec || '—')}</td><td>${c.stats.filter((s) => r.stats[s.k] === '' || r.stats[s.k] == null).map((s) => esc(s.l)).join(', ') || '—'}</td><td>${r.errs.length ? `<span class="pill p-red">${esc(r.errs.join(', '))}</span>` : '<span class="pill p-green">תקין</span>'}</td></tr>`).join('')}</tbody></table></div>
     <div class="row" style="margin-top:10px"><button class="btn" data-act="doImport" ${canImp && ok.length ? '' : 'disabled'}>${(A.ui.impMode || 'add') === 'update' ? 'עדכון' : 'ייבוא'} ${ok.length} מועמדים</button><button class="btn sec" data-act="impClear">ביטול</button></div></div>` : ''}
+   ${photosCard(k, canImp, rows)}
    ${baselineCard(k, canImp)}
    <div class="card"><div class="row spread"><h2 style="margin:0">המאגר הנוכחי – ${esc(c.corps)}</h2><div class="row"><button class="btn sec sm" data-act="exportX">ייצוא לאקסל</button><button class="btn sec sm" data-act="exportC">ייצוא CSV</button></div></div>
     <div style="overflow:auto;max-height:420px;margin-top:8px"><table><thead><tr><th>מס׳</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>חסר בתיק</th><th>מקור</th></tr></thead><tbody>${cs(k).cands.map((x) => `<tr><td>${x.id}</td><td>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${esc(missingOf(k, x).join(', ') || 'מלא')}</td><td>${esc(x.source || 'מאגר קיים')}</td></tr>`).join('')}</tbody></table></div>
@@ -1941,8 +1946,8 @@ Object.assign(ACTIONS, {
   goCmp: () => { A.ui.tab = 'cmp'; },
   impClear: () => { A.ui.imp = null; rerender(); },
   doImport: async () => {
-    const k = corpsKey(), rows = buildRows(k).filter((r) => !r.errs.length);
-    const mode = A.ui.impMode || 'add', r = await api('import', { corps: k, rows, mode }); A.ui.imp = null; rerender();
+    const k = corpsKey(), rows = buildRows(k).filter((r) => !r.errs.length).map((r) => Object.assign(r, { photo: photoFor(k, r) }));
+    const mode = A.ui.impMode || 'add', r = await api('import', { corps: k, rows, mode }); A.ui.imp = null; A.ui.photos = null; rerender();
     if (mode === 'update') toast(`עודכנו ${r.updated} מועמדים${r.notFound ? ' · לא נמצאו ' + r.notFound : ''}${r.skipped ? ' · ללא שינוי ' + r.skipped : ''}`); else { A.ui.imported = r.added; toast(`יובאו ${r.added} מועמדים${r.skipped ? ' · דולגו ' + r.skipped : ''}`); }
   },
   exportX: () => downloadX('pool-' + corpsKey() + '.xlsx', poolRows(corpsKey())),
@@ -2007,6 +2012,47 @@ SCREENS.settings = (k) => {
 Object.assign(ACTIONS, {
   stgSet: (d, t) => { const u = A.ui.stg || (A.ui.stg = { k: corpsKey() }); u[d.f] = t.type === 'checkbox' ? t.checked : (d.f === 'rounds' ? +t.value : t.value); rerender(); },
   stgSave: async () => { const k = corpsKey(), u = A.ui.stg; if (!u) return; const b = { corps: k, order: u.order, strictThresholds: !!u.strictThresholds, strictQuotas: !!u.strictQuotas, blockNotRecommended: !!u.blockNotRecommended }; if (!cs(k).picks.some((p) => !p.auto)) b.rounds = +u.rounds; try { await api('settings', b); A.ui.stg = null; toast('ההגדרות נשמרו'); rerender(); } catch (x) { /* toast shown */ } },
+});
+
+// ================= candidate photos (uploaded together with the data) =================
+const normKey = (v) => String(v == null ? '' : v).replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+// photo for an import row / candidate: file name (without extension) equals the candidate's id or full name
+function photoFor(k, r) {
+  const ph = A.ui.photos; if (!ph || !ph.length) return undefined;
+  const keys = [r.id, r.name].map(normKey).filter(Boolean), hit = ph.find((p) => keys.includes(p.key));
+  return hit ? hit.url : undefined;
+}
+function resizeImage(file, px) {
+  return new Promise((ok, no) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = px; const g = c.getContext('2d'), m = Math.min(img.width, img.height); g.fillStyle = '#fff'; g.fillRect(0, 0, px, px); g.drawImage(img, (img.width - m) / 2, (img.height - m) / 3, m, m, 0, 0, px, px); URL.revokeObjectURL(u); ok(c.toDataURL('image/jpeg', 0.72)); };
+    img.onerror = () => { URL.revokeObjectURL(u); no(new Error('bad image')); }; img.src = u;
+  });
+}
+function photosCard(k, canImp, rows) {
+  const ph = A.ui.photos || [], pool = cs(k).cands, rowKeys = new Set((rows || []).flatMap((r) => [normKey(r.id), normKey(r.name)]).filter(Boolean));
+  const inPool = (p) => pool.find((c) => normKey(c.id) === p.key || normKey(c.name) === p.key), inFile = (p) => rowKeys.has(p.key);
+  const matched = ph.filter((p) => inPool(p) || inFile(p)), lost = ph.length - matched.length;
+  return `<div class="card"><h2>תמונות מועמדים <span class="mut small">(אופציונלי)</span></h2>
+   <p class="mut small">מעלים יחד עם הנתונים. שם כל קובץ תמונה הוא <b>מספר המועמד</b> (למשל <bdi>C-2101.jpg</bdi>) או <b>שמו המלא</b> (למשל <bdi>איתמר ל..jpg</bdi>). התמונות מוקטנות אוטומטית. כשהן נטענות לצד קובץ הנתונים, הן נשמרות יחד איתו בלחיצה על "ייבוא" / "עדכון". אפשר גם להעלות תמונות בלבד.</p>
+   <div class="drop"><input type="file" id="photos" accept="image/*" multiple data-chg="photoFiles" ${canImp ? '' : 'disabled'}></div>
+   ${ph.length ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin:12px 0">${ph.map((p) => `<span class="row" style="gap:6px;border:1px solid var(--line);border-radius:12px;padding:4px 8px 4px 10px"><img src="${p.url}" width="36" height="36" style="border-radius:50%;object-fit:cover" alt=""><span class="small">${esc(p.file)}</span><span class="pill ${inPool(p) || inFile(p) ? 'p-green' : 'p-orange'}">${inPool(p) ? esc(inPool(p).name) : inFile(p) ? 'שורה בקובץ' : 'לא נמצא מועמד'}</span></span>`).join('')}</div>
+   <div class="mut small">${matched.length} תמונות מותאמות${lost ? ` · <b style="color:var(--orange)">${lost} ללא התאמה (ידולגו)</b>` : ''}</div>
+   <div class="row" style="margin-top:10px"><button class="btn" data-act="photosOnly" ${canImp && ph.some(inPool) ? '' : 'disabled'}>העלאת תמונות בלבד (${ph.filter(inPool).length})</button><button class="btn sec" data-act="photosClear">נקה</button></div>` : ''}</div>`;
+}
+Object.assign(ACTIONS, {
+  photoFiles: async (d, t) => {
+    const out = A.ui.photos || [];
+    for (const f of Array.from(t.files)) { try { const url = await resizeImage(f, 128), key = normKey(f.name); const i = out.findIndex((p) => p.key === key); const rec = { file: f.name, key, url }; if (i >= 0) out[i] = rec; else out.push(rec); } catch (e) { toast('הקובץ ' + f.name + ' אינו תמונה תקינה', true); } }
+    A.ui.photos = out; rerender();
+  },
+  photosClear: () => { A.ui.photos = null; rerender(); },
+  photosOnly: async () => {
+    const k = corpsKey(), rows = [];
+    (A.ui.photos || []).forEach((p) => { const c = cs(k).cands.find((x) => normKey(x.id) === p.key || normKey(x.name) === p.key); if (c) rows.push({ id: c.id, photo: p.url }); });
+    if (!rows.length) return;
+    const r = await api('import', { corps: k, rows, mode: 'update' }); A.ui.photos = null; rerender(); toast(`עודכנו ${r.updated} תמונות`);
+  },
 });
 </script>
 <script>// Standalone glue: route api()/refresh()/SSE to the in-browser LocalServer

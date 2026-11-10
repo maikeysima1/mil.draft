@@ -118,6 +118,7 @@ const ICONS = {
 const icon = (n, s) => `<svg class="ic" width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 // generic, fictitious avatar: deterministic cartoon face drawn from the candidate id (illustration only, not a real photo)
 function avatar(x, size) {
+  if (x && x.photo) return `<img class="avatar-img" src="${x.photo}" width="${size || 40}" height="${size || 40}" alt="${esc(x.name || '')}" style="border-radius:50%;flex:none;object-fit:cover">`;
   let h = 0; const id = String((x && x.id) || x || ''); for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   const pick = (a, n) => a[(h >>> n) % a.length];
   const skin = pick(['#F6D3B3', '#E8B98F', '#D39B6E', '#B97B4F', '#8D5A3A', '#6B4128'], 0), hair = pick(['#1B1B1E', '#3A2A1E', '#5B3A21', '#8A5A2B', '#B9892F', '#6E6E73'], 3);
@@ -233,7 +234,7 @@ function render() {
   const page = PAGES.find((p) => p.id === r);
   if (!page || !allowed(page)) { go(homeFor()); return; }
   const keep = captureFocus();
-  app.innerHTML = shell(SCREENS[r](corpsKey())).replace(/(\d+)\s?\/\s?(\d+)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
+  app.innerHTML = shell(SCREENS[r](corpsKey())).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
   restoreFocus(keep);
   if (SCREENS[r].after) SCREENS[r].after();
 }

@@ -58,9 +58,12 @@ function cleanBaseline(cf, rows) {
   });
   return out;
 }
+// candidate photo: small JPEG data URL produced by the browser (resized before upload); anything else is ignored
+const cleanPhoto = (v) => (typeof v === 'string' && v.length <= 60000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v) ? v : null);
 // apply uploaded values onto a candidate (only fields that were provided)
 function applyUpdate(cf, c, r) {
   let n = 0;
+  if (cleanPhoto(r.photo)) { c.photo = r.photo; n++; }
   if (cf.roles.includes(r.role) && r.role !== c.role) { c.role = r.role; c.skills = cf.skills[r.role] || c.skills; n++; }
   if (C.RECS.includes(r.rec)) { c.rec = r.rec; n++; }
   if (C.MEDS.includes(r.med)) { c.med = r.med; n++; }
@@ -417,7 +420,7 @@ http.createServer(async (req, res) => {
             rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72),
             area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא',
           });
-          applyUpdate(cf, cs.cands[cs.cands.length - 1], { motivation: r.motivation, combat: r.combat });
+          applyUpdate(cf, cs.cands[cs.cands.length - 1], { motivation: r.motivation, combat: r.combat, photo: r.photo });
           added++;
         });
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} ייבאה ${added} מועמדים` });

@@ -119,7 +119,7 @@ L.handle = function (p, userId, b) {
       const stats = {}; cf.stats.forEach((s) => { stats[s.k] = num((r.stats || {})[s.k]); });
       const med = C.MEDS.includes(r.med) ? r.med : C.MEDS[0];
       cst.cands.push({ id: cf.prefix + max, name, role: r.role, lv: cf.traits.map(() => 1), stats, rec: C.RECS.includes(r.rec) ? r.rec : null, med, profile: num(r.profile) || (med === C.MEDS[0] ? 97 : 72), area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group: 1 + (max % 4), skills: cf.skills[r.role] || [], obs: '', summary: '', evaluated: false, source: 'ייבוא' });
-      applyUpdate(cf, cst.cands[cst.cands.length - 1], { motivation: r.motivation, combat: r.combat });
+      applyUpdate(cf, cst.cands[cst.cands.length - 1], { motivation: r.motivation, combat: r.combat, photo: r.photo });
       added++;
     });
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' ייבאה ' + added + ' מועמדים' });
