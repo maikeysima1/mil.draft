@@ -149,6 +149,7 @@ L.handle = function (p, userId, b) {
     while (cst.picks.length < target) { const slot = order[cst.picks.length]; const c = chooseFor(k, slot.u); if (!c) break; doPick(k, slot.u, c.id, true); }
     cst.turnStartedAt = Date.now(); save(); return { ok: true };
   }
+  if (p === 'audit-event') { return { ok: true }; }
   if (p === 'factory-reset') { if (!canDo(user, 'factory', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לאפס את המערכת'); L.factoryReset(); return { ok: true }; }
   throw new Error('פעולה לא מוכרת');
 };

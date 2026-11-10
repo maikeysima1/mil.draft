@@ -500,8 +500,8 @@ Object.assign(ACTIONS, {
     const mode = A.ui.impMode || 'add', r = await api('import', { corps: k, rows, mode }); A.ui.imp = null; A.ui.photos = null; rerender();
     if (mode === 'update') toast(`עודכנו ${r.updated} מועמדים${r.notFound ? ' · לא נמצאו ' + r.notFound : ''}${r.skipped ? ' · ללא שינוי ' + r.skipped : ''}`); else { A.ui.imported = r.added; toast(`יובאו ${r.added} מועמדים${r.skipped ? ' · דולגו ' + r.skipped : ''}`); }
   },
-  exportX: () => downloadX('pool-' + corpsKey() + '.xlsx', poolRows(corpsKey())),
-  exportC: () => csvDownload('pool-' + corpsKey() + '.csv', poolRows(corpsKey())),
+  exportX: () => { auditEvent('export', 'pool xlsx'); downloadX('pool-' + corpsKey() + '.xlsx', poolRows(corpsKey())); },
+  exportC: () => { auditEvent('export', 'pool csv'); csvDownload('pool-' + corpsKey() + '.csv', poolRows(corpsKey())); },
 });
 
 // ================= results + audit log =================
@@ -539,9 +539,9 @@ SCREENS.results = (k) => {
 };
 Object.assign(ACTIONS, {
   rtab: (d) => { A.ui.rtab = d.t; rerender(); },
-  expXlsx: () => { const k = corpsKey(); downloadBook('mil-draft-' + k + '.xlsx', [['שיבוצים', [assignHead(k)].concat(assignRows(k))], ['לפי יחידה', unitRows(k)], ['ללא שיבוץ', unassignedRows(k)], ['יומן פעילות', logRows(k)]]); toast('הקובץ הורד'); },
-  expCsv: () => { const k = corpsKey(), t = A.ui.rtab || 'assign'; downloadCsv('mil-draft-' + k + '-' + t + '.csv', t === 'assign' ? [assignHead(k)].concat(assignRows(k)) : t === 'units' ? unitRows(k) : t === 'free' ? unassignedRows(k) : logRows(k)); toast('הקובץ הורד'); },
-  expPrint: () => window.print(),
+  expXlsx: () => { const k = corpsKey(); auditEvent('export', 'results xlsx'); downloadBook('mil-draft-' + k + '.xlsx', [['שיבוצים', [assignHead(k)].concat(assignRows(k))], ['לפי יחידה', unitRows(k)], ['ללא שיבוץ', unassignedRows(k)], ['יומן פעילות', logRows(k)]]); toast('הקובץ הורד'); },
+  expCsv: () => { const k = corpsKey(), t = A.ui.rtab || 'assign'; auditEvent('export', 'results csv/' + t); downloadCsv('mil-draft-' + k + '-' + t + '.csv', t === 'assign' ? [assignHead(k)].concat(assignRows(k)) : t === 'units' ? unitRows(k) : t === 'free' ? unassignedRows(k) : logRows(k)); toast('הקובץ הורד'); },
+  expPrint: () => { auditEvent('export', 'results print'); window.print(); },
 });
 
 // ================= draft settings (admin) =================
@@ -608,7 +608,7 @@ Object.assign(ACTIONS, {
 
 // ================= users, passwords and security log (admin, AUTH=1) =================
 const fmtTs2 = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-const EV = { login: 'כניסה', logout: 'יציאה', 'change-password': 'שינוי סיסמה', 'admin-reset-password': 'איפוס סיסמה ע״י מנהל' };
+const EV = { login: 'כניסה', logout: 'יציאה', 'change-password': 'שינוי סיסמה', 'admin-reset-password': 'איפוס סיסמה ע״י מנהל', 'view-candidate': 'צפייה בתיק מועמד', export: 'ייצוא נתונים' };
 function secCards() {
   const a = A.ui.adm; if (!a) return '<div class="card"><h2>משתמשים וסיסמאות</h2><span class="mut">טוען…</span></div>';
   const q = (A.ui.uq || '').trim().toLowerCase(), us = a.users.filter((u) => !q || (u.title + ' ' + u.id + ' ' + u.role + ' ' + u.unit).toLowerCase().includes(q));

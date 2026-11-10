@@ -9,6 +9,19 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) { /* ignore */ }
 const DATA_FILE = path.join(DATA_DIR, 'state.json');
+// optional encryption at rest (DATA_KEY=<passphrase>): state.json and auth.json are stored as AES-256-GCM. Without DATA_KEY files are plain JSON.
+const DATA_KEY = process.env.DATA_KEY ? crypto.scryptSync(process.env.DATA_KEY, 'mil-draft/data-at-rest/v1', 32) : null;
+function sealJson(obj) {
+  const txt = JSON.stringify(obj); if (!DATA_KEY) return txt;
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', DATA_KEY, iv), data = Buffer.concat([c.update(txt, 'utf8'), c.final()]);
+  return JSON.stringify({ enc: 'aes-256-gcm', iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') });
+}
+function openJson(txt) { // reads both plain and encrypted files (so enabling DATA_KEY later migrates on the next save)
+  const o = JSON.parse(txt); if (!o || o.enc !== 'aes-256-gcm') return o;
+  if (!DATA_KEY) throw new Error('the data file is encrypted but DATA_KEY is not set');
+  const d = crypto.createDecipheriv('aes-256-gcm', DATA_KEY, Buffer.from(o.iv, 'base64')); d.setAuthTag(Buffer.from(o.tag, 'base64'));
+  return JSON.parse(Buffer.concat([d.update(Buffer.from(o.data, 'base64')), d.final()]).toString('utf8'));
+}
 const ACCESS_CODE = process.env.ACCESS_CODE || '';
 const PUB = path.join(__dirname, 'public');
 const CLOCK_SECONDS = Number(process.env.CLOCK_SECONDS) || 0;   // 0 = no time pressure (default). Opt in with CLOCK_SECONDS=<seconds>: a human unit that does not pick in time is auto-picked
@@ -187,12 +200,12 @@ function freshState() {
 }
 
 let state;
-try { state = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 5) state = null; } catch (e) { state = null; }
+try { state = openJson(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== 5) state = null; } catch (e) { if (/DATA_KEY|authenticate/i.test(e.message)) { console.error('FATAL: cannot read ' + DATA_FILE + ' (' + e.message + ') - refusing to start with an empty state'); process.exit(1); } state = null; }
 let saveTimer = null;
 function save() {
   state.version++;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { try { fs.writeFileSync(DATA_FILE, JSON.stringify(state)); } catch (e) { console.error('save failed', e.message); } }, 200);
+  saveTimer = setTimeout(() => { try { fs.writeFileSync(DATA_FILE, sealJson(state), { mode: 0o600 }); } catch (e) { console.error('save failed', e.message); } }, 200);
   broadcast();
 }
 
@@ -326,8 +339,8 @@ const AUTH = /^(1|true)$/i.test(process.env.AUTH || '');
 const AUTH_FILE = path.join(DATA_DIR, 'auth.json'), AUDIT_FILE = path.join(DATA_DIR, 'audit.log');
 const SESSION_HOURS = +process.env.SESSION_HOURS || 8, MAX_FAILS = 5, LOCK_MIN = 15, TRUST_PROXY = /^(1|true)$/i.test(process.env.TRUST_PROXY || '');
 let authData = { secret: crypto.randomBytes(32).toString('hex'), users: {} };
-try { authData = Object.assign(authData, JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8'))); } catch (e) { /* first run */ }
-function saveAuth() { const t = AUTH_FILE + '.tmp'; fs.writeFileSync(t, JSON.stringify(authData), { mode: 0o600 }); fs.renameSync(t, AUTH_FILE); }
+try { authData = Object.assign(authData, openJson(fs.readFileSync(AUTH_FILE, 'utf8'))); } catch (e) { if (/DATA_KEY|authenticate/i.test(e.message)) { console.error('FATAL: cannot read ' + AUTH_FILE + ' (' + e.message + ')'); process.exit(1); } /* first run */ }
+function saveAuth() { const t = AUTH_FILE + '.tmp'; fs.writeFileSync(t, sealJson(authData), { mode: 0o600 }); fs.renameSync(t, AUTH_FILE); }
 const hashPw = (pw, salt) => crypto.scryptSync(String(pw), salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex');
 function setPassword(id, pw, mustChange) {
   const salt = crypto.randomBytes(16).toString('hex'), old = authData.users[id] || {};
@@ -371,6 +384,7 @@ const loginHits = new Map(); // ip -> timestamps of recent login attempts
 function tooMany(req) { const ip = ipOf(req), now = Date.now(), a = (loginHits.get(ip) || []).filter((t) => now - t < 600e3); a.push(now); loginHits.set(ip, a); if (loginHits.size > 5000) loginHits.clear(); return a.length > 20; }
 const reqUser = (req) => (AUTH ? sessionUser(req) : userById(req.headers['x-user']));
 const isAdminUser = (u) => !!u && C.ROLES[u.role].can.includes('settings');
+if (AUTH && !DATA_KEY) console.log('NOTE: DATA_KEY is not set - state.json and auth.json are stored unencrypted. Set DATA_KEY=<long passphrase> to encrypt them at rest.');
 if (AUTH && !authData.users.a1) { // bootstrap the admin account
   const env = process.env.ADMIN_PASSWORD, ok = env && !pwProblem(env, 'a1'), pw = ok ? env : tempPw();
   setPassword('a1', pw, !ok);
@@ -435,6 +449,12 @@ http.createServer(async (req, res) => {
         const bad = pwProblem(b.next, user.id); if (bad) return json(res, 400, { error: bad });
         if (b.next === b.old) return json(res, 400, { error: 'הסיסמה החדשה זהה לנוכחית' });
         setPassword(user.id, b.next, false); setSession(req, res, user.id); audit('change-password', user.id, req, true); return json(res, 200, { ok: true });
+      }
+      if (p === '/api/audit-event') { // sensitive reads/exports done in the browser are reported here (only whitelisted events; logged in AUTH mode)
+        const ev = ['view-candidate', 'export'].includes(b.ev) ? b.ev : null; if (!ev) return json(res, 400, { error: 'אירוע לא מוכר' });
+        const k0 = C.corps[b.corps] ? b.corps : '', scope = C.ROLES[user.role].scope;
+        if (AUTH && !(user._mustChange) && (scope === 'all' || user.corps === k0)) audit(ev, user.id, req, true, [k0, String(b.what || '').slice(0, 80)].filter(Boolean).join(' · '));
+        return json(res, 200, { ok: true });
       }
       if (AUTH && user._mustChange) return json(res, 403, { error: 'נדרש שינוי סיסמה', mustChange: true });
       if (AUTH && p === '/api/admin/reset-password') {

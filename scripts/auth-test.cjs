@@ -47,6 +47,10 @@ class Client {
   for (let i = 0; i < 5; i++) last = await lk.login('u2', 'wrong-pass-' + i + 'zz'); r = await lk.login('u2', t2);
   ok(r.status === 423, 'account locks after 5 failed attempts (even with the right password) -> ' + r.status);
   const au = (await adm.call('GET', '/api/admin/audit')).json.events; ok(au.some((e) => e.ev === 'login' && !e.ok) && au.some((e) => e.ev === 'login' && e.ok) && au.some((e) => e.ev === 'admin-reset-password'), 'security log records failed/successful logins and admin resets');
+  // sensitive reads / exports are written to the security log
+  await adm.login('a1', ADMIN_PW); await adm.call('POST', '/api/audit-event', { ev: 'view-candidate', corps: 'combat', what: 'C-2101' }); await adm.call('POST', '/api/audit-event', { ev: 'export', corps: 'combat', what: 'results xlsx' });
+  ok((await adm.call('POST', '/api/audit-event', { ev: 'delete-everything' })).status === 400, 'unknown audit events are refused');
+  const au2 = (await adm.call('GET', '/api/admin/audit')).json.events; ok(au2.some((e) => e.ev === 'view-candidate' && /C-2101/.test(e.detail)) && au2.some((e) => e.ev === 'export'), 'candidate views and exports are in the security log');
   // rate limit (last: it locks this IP out for 10 minutes)
   let st = 0; for (let i = 0; i < 25 && st !== 429; i++) st = (await new Client().login('u3', 'nope-nope-1234')).status; ok(st === 429, 'login rate limit per IP -> 429');
   console.log(bad ? `\n${bad} FAILED` : '\nALL AUTH TESTS PASSED'); process.exit(bad ? 1 : 0);

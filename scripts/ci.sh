@@ -21,3 +21,20 @@ lsof -ti:"$PORT" -sTCP:LISTEN | xargs -r kill; sleep 1
 AUTH=1 ADMIN_PASSWORD='Admin-Test-2024x' DATA_DIR="$DIR/auth" PORT="$PORT" node server.js >"$DIR/server-auth.log" 2>&1 &
 timeout 30 bash -c "until curl -sf http://localhost:$PORT/healthz >/dev/null; do sleep 0.3; done" || { cat "$DIR/server-auth.log"; exit 1; }
 node scripts/auth-test.cjs "http://localhost:$PORT" 'Admin-Test-2024x'
+
+# encryption at rest: files must not contain readable data, and a restart with the same key must keep working
+lsof -ti:"$PORT" -sTCP:LISTEN | xargs -r kill; sleep 1
+start_enc() { DATA_KEY="$1" AUTH=1 ADMIN_PASSWORD='Admin-Test-2024x' DATA_DIR="$DIR/enc" PORT="$PORT" node server.js >"$DIR/server-enc.log" 2>&1 & }
+start_enc 'correct horse battery staple'
+timeout 30 bash -c "until curl -sf http://localhost:$PORT/healthz >/dev/null; do sleep 0.3; done" || { cat "$DIR/server-enc.log"; exit 1; }
+curl -s -X POST "http://localhost:$PORT/api/login" -H 'Content-Type: application/json' -H 'X-Requested-With: mil-draft' -d '{"id":"a1","password":"Admin-Test-2024x"}' | grep -q '"ok":true'
+sleep 1; lsof -ti:"$PORT" -sTCP:LISTEN | xargs -r kill; sleep 1
+if grep -q "candidates\|\"cands\"\|\"salt\"\|\"hash\"" "$DIR/enc/state.json" "$DIR/enc/auth.json"; then echo "FAIL data files are readable"; exit 1; fi
+echo "PASS state.json and auth.json are encrypted at rest"
+start_enc 'correct horse battery staple'
+timeout 30 bash -c "until curl -sf http://localhost:$PORT/healthz >/dev/null; do sleep 0.3; done" || { cat "$DIR/server-enc.log"; exit 1; }
+curl -s -X POST "http://localhost:$PORT/api/login" -H 'Content-Type: application/json' -H 'X-Requested-With: mil-draft' -d '{"id":"a1","password":"Admin-Test-2024x"}' | grep -q '"ok":true' && echo "PASS restart with the same key keeps the accounts"
+lsof -ti:"$PORT" -sTCP:LISTEN | xargs -r kill; sleep 1
+start_enc 'a different key' ; sleep 2
+if curl -sf "http://localhost:$PORT/healthz" >/dev/null; then echo "FAIL server started with the wrong key"; exit 1; fi
+echo "PASS wrong key: server refuses to start"

@@ -245,6 +245,10 @@ function pwView(forced) {
   return forced ? `<div style="max-width:420px;margin:10vh auto;display:flex;flex-direction:column;gap:12px;padding:20px">${f}</div>` : `<div class="drawer-bg" style="align-items:center" data-act="pwClose"><div class="modal" role="dialog">${f}</div></div>`;
 }
 
+// ---- security log: reports sensitive reads (candidate file opened) and exports; the server records them when AUTH=1 ----
+function auditEvent(ev, what) { try { fetch('/api/audit-event', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, HDR()), body: JSON.stringify({ ev, corps: A.me ? corpsKey() : '', what }) }).catch(() => {}); } catch (e) { /* never block the UI */ } }
+function auditView() { const id = A.ui.cand; if (!id || !A.me || id === A._viewed) { if (!id) A._viewed = null; return; } A._viewed = id; auditEvent('view-candidate', id); }
+
 // ---- render loop ----
 const SCREENS = {}; // id -> fn(k) => html, registered by other files
 let renderQueued = false;
@@ -260,6 +264,7 @@ function render() {
   app.innerHTML = shell(SCREENS[r](corpsKey())).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
   restoreFocus(keep);
   if (SCREENS[r].after) SCREENS[r].after();
+  auditView();
 }
 function captureFocus() {
   const e = document.activeElement;
