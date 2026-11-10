@@ -94,6 +94,21 @@ async function main() {
       ok(((mine.json.corps.combat.favs || {}).u1 || []).length === 1, 'favorite stored for its owner');
       ok(Object.keys(other.json.corps.combat.favs || {}).length === 0, 'favorites are not sent to other users');
       ok(g.errs.length === 0, 'no page errors during pick/favorite');
+      // draft settings / results / compare / search
+      await deny('u1', 'settings', { corps: 'combat', rounds: 3 }, 'שלישות change draft settings');
+      const st = await api('settings', 'a1', { corps: 'combat', strictQuotas: true, order: 'snake' }); ok(st.status === 200 && st.json.settings.strictQuotas === true, 'admin can change draft settings');
+      await api('settings', 'a1', { corps: 'combat', strictQuotas: false });
+      const rp = await session(browser, 'u1'); await rp.page.goto(BASE + '#/results'); await rp.page.waitForTimeout(500);
+      ok(await rp.page.locator('[data-act=expXlsx]').count() === 1 && (await rp.page.locator('[data-act=rtab]').count()) === 4, 'results page: export button + 4 tabs');
+      await rp.page.click('[data-act=rtab][data-t=log]'); await rp.page.waitForTimeout(300); ok((await rp.page.locator('tbody tr').count()) >= 1, 'audit log lists activity');
+      await rp.page.goto(BASE + '#/settings'); await rp.page.waitForTimeout(400); ok(!/settings/.test(await rp.page.evaluate(() => location.hash)), 'settings page is not open to שלישות');
+      await rp.page.goto(BASE + '#/room'); await rp.page.waitForTimeout(500);
+      const n0 = await rp.page.locator('tr.clk').count(), id0 = (await rp.page.locator('tr.clk b').first().innerText()).trim();
+      await rp.page.fill('#f-q', id0); await rp.page.waitForTimeout(400); const n1 = await rp.page.locator('tr.clk').count(); ok(n1 >= 1 && n1 < n0, `search by name narrows ${n0} -> ${n1}`);
+      await rp.page.fill('#f-q', ''); await rp.page.waitForTimeout(300);
+      for (let i = 0; i < 3; i++) await rp.page.locator('[data-act=cmpTog]').nth(i).click();
+      await rp.page.click('[data-act=cmpOpen]'); await rp.page.waitForSelector('.cmptbl'); ok(await rp.page.locator('.cmptbl thead th').count() === 4, 'compare shows 3 candidates side by side');
+      ok(rp.errs.length === 0, 'no page errors on results/search/compare ' + rp.errs.join('|'));
       console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); process.exitCode = bad ? 1 : 0;
     } else { console.log('commands: users | shot <userId> <route> | flow | smoke   (see header comment)'); }
   } finally { await browser.close(); }

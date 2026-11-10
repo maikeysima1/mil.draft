@@ -350,6 +350,17 @@ input.invalid{border-color:var(--red);background:var(--red-l)}
 .choice{font-weight:600}
 .roles .user{margin-bottom:7px}
 .enter .btn:disabled{opacity:.45}
+
+/* compare + search */
+.cmpbtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1.5px solid var(--line);background:var(--card);color:var(--mut)}
+.cmpbtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.cmpbar{position:fixed;inset-inline:16px;bottom:16px;z-index:40;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px;border-radius:16px;background:var(--solid);color:#fff;box-shadow:0 16px 40px -12px rgba(0,0,0,.5)}
+.cmpbar .btn.sec{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+.cmpmodal{width:min(980px,96%);max-height:92vh;overflow:auto}
+.cmptbl th,.cmptbl td{padding:10px 12px;text-align:start;vertical-align:top}
+.cmptbl tbody th{font-weight:600;color:var(--mut);white-space:nowrap}
+.cmpv.ok{color:var(--green);font-weight:800}
+.cmpv.top{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px;padding:1px 6px}
 </style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 <script>try{localStorage.getItem('x')}catch(e){var _m={};Object.defineProperty(window,'localStorage',{value:{getItem:function(k){return k in _m?_m[k]:null},setItem:function(k,v){_m[k]=String(v)},removeItem:function(k){delete _m[k]}}})}</script>
@@ -436,11 +447,11 @@ const corps = {
 Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
-const ALL_PAGES = ['room', 'board', 'eval', 'command', 'import'];
+const ALL_PAGES = ['room', 'board', 'eval', 'command', 'results', 'import'];
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES, can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav', 'evalbulk'], desc: 'שליטה מלאה בכל החילות: ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'command', pages: ALL_PAGES.concat(['settings']), can: ['undo', 'reset', 'import', 'advance', 'factory', 'regroup', 'fav', 'evalbulk', 'settings'], desc: 'שליטה מלאה בכל החילות: הגדרות דראפט (סבבים, סדר וכללים), עריכת מכסות של כל יחידה, ייבוא, ביטול בחירות, איפוס דראפט ואיפוס מערכת. לא בוחר בשם יחידה.' },
   'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'room', pages: ALL_PAGES, can: ['undo', 'advance', 'fav'], desc: 'צפייה בכל המסכים והחילות, כולל דפי המגבש (צפייה בלבד, ללא עריכה), וביטול בחירה אחרונה. אינו בוחר ואינו מייבא.' },
-  'ראש מטה': { layer: 3, scope: 'all', home: 'command', pages: ['board', 'command'], can: [], desc: 'צפייה בלבד בלוח הדראפט ובתמונת המצב של כל החילות. אין גישה לתיקי מועמדים או לדפי מגבש.' },
+  'ראש מטה': { layer: 3, scope: 'all', home: 'command', pages: ['board', 'command', 'results'], can: [], desc: 'צפייה בלבד בלוח הדראפט ובתמונת המצב של כל החילות. אין גישה לתיקי מועמדים או לדפי מגבש.' },
   'שלישות': { layer: 4, scope: 'corps', home: 'room', pages: ALL_PAGES, can: ['pick', 'thresholds', 'import', 'reset', 'undo', 'advance', 'fav'], desc: 'בוחרת בשם היחידה, עורכת מכסות ותנאי סף, מייבאת מועמדים. רואה את דפי המגבש בצפייה בלבד (ללא עריכה), ורק את מועמדי החיל שלה.' },
   'מגבש/ת': { layer: 5, scope: 'group', home: 'eval', pages: ['eval'], can: ['eval', 'regroup', 'evalbulk'], desc: 'אחראי/ת על צוות אחד: הזנת התרשמות על מועמדי הצוות שלו/ה והעברת מועמד לצוות אחר. אין גישה לחדר הבחירה ולתוצאות הדראפט.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'board', pages: ['board'], can: [], desc: 'צפייה בלוח הדראפט החי בלבד (שמות ובחירות), ללא תיקים, מדדים או הרשאות פעולה.' },
@@ -623,6 +634,7 @@ function freshState() {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
       units: C.corps[k].units.map((u) => ({ name: u.name, th: Object.assign({}, u.th), noMed: u.noMed, quota: Object.assign({}, u.quota) })),
+      settings: Object.assign({ rounds: C.corps[k].rounds }, STG_DEFAULT),
     };
   });
   return st;
@@ -643,10 +655,13 @@ const unitCfg = (k, name) => {
   const ov = state.corps[k].units.find((u) => u.name === name);
   return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed, quota: ov.quota || base.quota } : {});
 };
+// draft settings per corps (admin-editable): rounds, order (snake = reversed every other round, linear = same order), and optional hard rules for manual picks
+const STG_DEFAULT = { order: 'snake', strictThresholds: false, strictQuotas: false, blockNotRecommended: false };
+const stg = (k) => Object.assign({ rounds: cfg(k).rounds }, STG_DEFAULT, state.corps[k].settings);
 function orderOf(k) {
-  const c = cfg(k), o = [];
-  for (let r = 0; r < c.rounds; r++) {
-    const us = r % 2 === 0 ? c.units : c.units.slice().reverse();
+  const c = cfg(k), S = stg(k), o = [];
+  for (let r = 0; r < S.rounds; r++) {
+    const us = S.order === 'snake' && r % 2 === 1 ? c.units.slice().reverse() : c.units;
     us.forEach((u) => o.push({ r: r + 1, u: u.name }));
   }
   return o;
@@ -688,10 +703,16 @@ function doPick(k, unitName, candId, auto) {
   const c = cs.cands.find((x) => x.id === candId);
   if (!c) throw new Error('מועמד לא נמצא');
   if (cs.picks.some((p) => p.id === candId)) throw new Error('המועמד כבר נבחר');
+  if (!auto) { // hard rules (set by the admin) apply to manual picks; automatic picks stay soft so the demo never gets stuck
+    const S = stg(k), u = unitCfg(k, unitName);
+    if (S.blockNotRecommended && c.rec === 'לא מומלץ') throw new Error('המועמד אינו מומלץ – הדראפט מוגדר ללא אפשרות לבחור מועמד כזה');
+    if (S.strictThresholds && fitOf(k, c, u).some((x) => !x.ok && x.s !== 'המלצה')) throw new Error('המועמד אינו עומד בתנאי הסף של היחידה – הדראפט מוגדר לדרוש עמידה בתנאי הסף');
+    if (S.strictQuotas) { const q = u.quota[c.role] || 0, have = cs.picks.filter((p) => p.unit === unitName && (cs.cands.find((x) => x.id === p.id) || {}).role === c.role).length; if (have >= q) throw new Error('המכסה של היחידה לתפקיד ' + c.role + ' כבר מולאה (או שלא נתבקש) – הדראפט מוגדר לדרוש עמידה במכסות'); }
+  }
   cs.picks.push({ id: candId, unit: unitName, auto: !!auto, round: slot.r, n: cs.picks.length + 1, ts: Date.now() });
   cs.turnStartedAt = Date.now();
   state.log.push({ ts: Date.now(), corps: k, text: `${unitName} בחרה את ${c.name} (${c.role})${auto ? ' · אוטומטי' : ''}` });
-  if (state.log.length > 300) state.log.shift();
+  if (state.log.length > 1000) state.log.shift();
   save();
 }
 
@@ -724,7 +745,7 @@ window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(
 
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 L.config = () => ({ orgs: C.ORGS, roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
-L.snapshot = () => { const uid = L.me && L.me.id, o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-60).reverse() }; Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: uid && f[uid] ? { [uid]: f[uid] } : {} }); }); return JSON.parse(JSON.stringify(o)); };
+L.snapshot = () => { const uid = L.me && L.me.id, o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-400).reverse() }; Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: uid && f[uid] ? { [uid]: f[uid] } : {} }); }); return JSON.parse(JSON.stringify(o)); };
 L.handle = function (p, userId, b) {
   const user = userById(userId); L.me = user;
   if (!user) throw new Error('לא מחובר');
@@ -762,9 +783,21 @@ L.handle = function (p, userId, b) {
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' העביר/ה את ' + c.name + ' מצוות ' + from + ' לצוות ' + g });
     save(); return { ok: true };
   }
+  if (p === 'settings') {
+    needCorps(); if (!canDo(user, 'settings', k)) throw new Error('רק מנהל/ת מערכת יכול/ה לשנות הגדרות דראפט');
+    const cst = state.corps[k], cur = stg(k), nw = Object.assign({}, cur);
+    if ('rounds' in b) nw.rounds = Math.max(1, Math.min(8, parseInt(b.rounds, 10) || cur.rounds));
+    if (b.order === 'snake' || b.order === 'linear') nw.order = b.order;
+    ['strictThresholds', 'strictQuotas', 'blockNotRecommended'].forEach((f) => { if (f in b) nw[f] = !!b[f]; });
+    const structural = nw.rounds !== cur.rounds || nw.order !== cur.order;
+    if (structural && cst.picks.some((p) => !p.auto)) throw new Error('אי אפשר לשנות מספר סבבים או סדר אחרי שיחידה בחרה ידנית – אפסו את הדראפט קודם');
+    if (structural) cst.picks = [];
+    cst.settings = nw; if (structural) playUntilMine(k); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' עדכן/ה הגדרות דראפט: ' + nw.rounds + ' סבבים, סדר ' + (nw.order === 'snake' ? 'מתחלף' : 'רגיל') });
+    save(); return { ok: true, settings: nw };
+  }
   if (p === 'thresholds') {
-    needCorps(); if (!canDo(user, 'thresholds', k)) throw new Error('אין הרשאה');
-    const ov = state.corps[k].units.find((u) => u.name === user.unit), th = {};
+    needCorps(); const own = canDo(user, 'thresholds', k); if (!own && !canDo(user, 'settings', k)) throw new Error('אין הרשאה');
+    const ov = state.corps[k].units.find((u) => u.name === (own ? user.unit : b.unit)), th = {}; if (!ov) throw new Error('יחידה לא נמצאה');
     cfg(k).stats.forEach((s) => { const v = num((b.th || {})[s.k]); if (v != null) th[s.k] = v; });
     ov.th = th; ov.noMed = !!b.noMed;
     if (b.quota) { const q = {}; cfg(k).roles.forEach((r) => { const n = Math.max(0, Math.min(9, parseInt((b.quota || {})[r], 10) || 0)); if (n) q[r] = n; }); ov.quota = q; }
@@ -869,9 +902,12 @@ function unitOf(k, name) {
   const ov = cs(k).units.find((u) => u.name === name);
   return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed, quota: ov.quota || base.quota } : {});
 }
+// draft settings (admin-configurable): rounds, order (snake / linear), optional hard rules for manual picks
+const STG_DEFAULT = { order: 'snake', strictThresholds: false, strictQuotas: false, blockNotRecommended: false };
+const stg = (k) => Object.assign({ rounds: cf(k).rounds }, STG_DEFAULT, cs(k).settings);
 function orderOf(k) {
-  const c = cf(k), o = [];
-  for (let r = 0; r < c.rounds; r++) { (r % 2 === 0 ? c.units : c.units.slice().reverse()).forEach((u) => o.push({ r: r + 1, u: u.name })); }
+  const c = cf(k), S = stg(k), o = [];
+  for (let r = 0; r < S.rounds; r++) { (S.order === 'snake' && r % 2 === 1 ? c.units.slice().reverse() : c.units).forEach((u) => o.push({ r: r + 1, u: u.name })); }
   return o;
 }
 function fitOf(k, c, u) {
@@ -918,7 +954,9 @@ const PAGES = [
   { id: 'board', name: 'לוח הדראפט', icon: 'grid' },
   { id: 'eval', name: 'דף מגבש', icon: 'clip' },
   { id: 'command', name: 'תמונת מצב', icon: 'chart' },
+  { id: 'results', name: 'תוצאות ויומן', icon: 'file' },
   { id: 'import', name: 'הזנה וייבוא', icon: 'upload' },
+  { id: 'settings', name: 'הגדרות דראפט', icon: 'gear' },
 ];
 const ICONS = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -926,6 +964,9 @@ const ICONS = {
   clip: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
   chart: '<path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-9"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  scale: '<path d="M12 3v18M5 7h14"/><path d="m5 7-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
@@ -1054,7 +1095,7 @@ function restoreFocus(k) {
   const e = document.getElementById(k.id); if (!e) return;
   e.focus(); try { e.setSelectionRange(k.s, k.e); } catch (x) { /* not text */ }
 }
-function rerender(live) { if (live && A.ui.editTh) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
+function rerender(live) { if (live && (A.ui.editTh || A.ui.cmpOpen)) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
 
 // ---- global actions ----
 const ACTIONS = {
@@ -1182,6 +1223,7 @@ function filtered(k) {
     if (f.wish && !wishRank(x, myUnitName(k))) return false;
     if (f.fav && !isFav(k, x.id)) return false;
     if (f.free && d.takenBy[x.id]) return false;
+    if (f.q && !(x.name + ' ' + x.id).toLowerCase().includes(String(f.q).trim().toLowerCase())) return false;
     return true;
   });
 }
@@ -1193,22 +1235,22 @@ SCREENS.room = (k) => {
   const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit;
   const sel = (id, label, opts, val) => `<label>${label}<select id="${id}" data-chg="flt" data-f="${id.slice(2)}">${opts.map((o) => `<option ${o === (val || 'הכול') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
   const log = d.picks.slice().reverse().slice(0, 12).map((p) => `<div class="row" style="padding:5px 0;border-bottom:1px solid var(--line2)"><b>#${p.n}</b><span>${esc(p.unit)} בחרה את ${esc(candOf(k, p.id).name)} (${esc(candOf(k, p.id).role)})${p.auto ? ' <span class="mut small">· אוטומטי</span>' : ''}</span></div>`).join('') || '<span class="mut">עדיין לא בוצעו בחירות</span>';
-  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר בחירה – ${esc(c.label)}</h1><div class="mut small">דראפט נפרד לכל חיל · סדר בחירה מתחלף בכל סבב</div></div>
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר בחירה – ${esc(c.label)}</h1><div class="mut small">דראפט נפרד לכל חיל · ${stg(k).order === 'snake' ? 'סדר בחירה מתחלף בכל סבב' : 'אותו סדר בכל סבב'}</div></div>
     ${can('undo', k) || can('reset', k) ? `<div class="row">${can('undo', k) ? `<button class="btn sec" data-act="undo" ${d.picks.length ? '' : 'disabled'}>ביטול הבחירה האחרונה</button>` : ''}${can('reset', k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>` : ''}</div>
-   <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? c.rounds : d.slot.r} מתוך ${c.rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
+   <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? stg(k).rounds : d.slot.r} מתוך ${stg(k).rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
    ${unitChips(k)}${clockCard(k)}
    ${isHumanMine(k) ? needsCard(k) : '<div class="demo-note">צפייה בלבד – רק שלישות היחידה בוחרת. היחידות האחרות בוחרות אוטומטית כשאין משתמש מחובר.</div>'}
    <div class="card"><div class="row spread" style="margin-bottom:4px"><h2 style="margin:0">מאגר מועמדים – ${esc(c.corps)} (${cs(k).cands.length})</h2>${can('fav', k) ? favToggle(k, !!f.fav, 'roomFav') : ''}</div><div class="mut small" style="margin-bottom:10px">רק מועמדים שסווגו ל${esc(c.label)} · העדפת החייל מוצגת כמידע בלבד – השיבוץ נקבע לפי צורכי היחידות</div>
-   <div class="filters">${sel('f-role', 'סינון לפי תפקיד', ['הכול'].concat(c.roles), f.role)}${sel('f-trait', 'חוזקה נדרשת', ['הכול'].concat(c.traits), f.trait)}${sel('f-rec', 'המלצת מגבש', ['הכול'].concat(A.cfg.RECS), f.rec)}
+   <div class="filters"><label>חיפוש לפי שם / מספר<input type="search" id="f-q" data-inp="fq" placeholder="לדוגמה: כהן או C-2101" value="${esc(f.q || '')}" autocomplete="off" style="min-width:200px"></label>${sel('f-role', 'סינון לפי תפקיד', ['הכול'].concat(c.roles), f.role)}${sel('f-trait', 'חוזקה נדרשת', ['הכול'].concat(c.traits), f.trait)}${sel('f-rec', 'המלצת מגבש', ['הכול'].concat(A.cfg.RECS), f.rec)}
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
    <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
    ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${metricChips(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
-     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
+     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${cmpBtn(x.id)}${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
    <div class="card"><h2>יומן בחירות</h2>${log}</div>
-   ${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}`;
+   ${cmpBar()}${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.cmpOpen ? cmpModal(k) : ''}`;
 };
 
 function radar(k, c) {
@@ -1261,8 +1303,36 @@ function drawer(k, id) {
    ${R().pages.includes('eval') && A.me.role !== 'מגבש/ת' ? `<a href="#/eval" class="small" data-act="goEval" data-id="${id}">תיק מועמד מלא ודף מגבש ←</a>` : ''}</aside></div>`;
 }
 
+// ---- compare 2-3 candidates side by side ----
+const cmpIds = () => A.ui.cmpIds || (A.ui.cmpIds = []);
+const cmpBtn = (id) => { const on = cmpIds().includes(id); return `<button class="cmpbtn ${on ? 'on' : ''}" data-act="cmpTog" data-id="${id}" data-tip="${on ? 'הסר מההשוואה' : 'הוסף להשוואה (עד 3)'}" aria-pressed="${on}" aria-label="השוואה">${icon('scale', 18)}</button>`; };
+function cmpBar() {
+  const ids = cmpIds(); if (!ids.length || route() !== 'room') return '';
+  const k = corpsKey();
+  return `<div class="cmpbar no-print"><span>${icon('scale', 18)} להשוואה: <b>${ids.map((i) => esc((candOf(k, i) || {}).name || i)).join(' · ')}</b></span><span class="row" style="gap:8px"><button class="btn sm" data-act="cmpOpen" ${ids.length < 2 ? 'disabled' : ''}>${ids.length < 2 ? 'בחרו עוד מועמד/ת' : 'השוואה (' + ids.length + ')'}</button><button class="btn sec sm" data-act="cmpClear">נקה</button></span></div>`;
+}
+function cmpModal(k) {
+  const c = cf(k), d = draftInfo(k), unit = unitOf(k, myUnitName(k)), xs = cmpIds().map((i) => candOf(k, i)).filter(Boolean);
+  const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit;
+  const best = (s) => { const vs = xs.map((x) => x.stats[s.k]).filter((v) => v != null); return vs.length > 1 ? (s.low ? Math.min(...vs) : Math.max(...vs)) : null; };
+  const row = (label, f) => `<tr><th>${label}</th>${xs.map((x) => `<td>${f(x)}</td>`).join('')}</tr>`;
+  const stat = (s) => { const b = best(s); return row(esc(s.l) + ' <span class="mut small">(' + (s.low ? 'נמוך עדיף' : 'גבוה עדיף') + ')</span>', (x) => { const v = x.stats[s.k], p = statPass(s, v, unit); return v == null ? '<span class="mut">חסר נתון</span>' : `<span class="cmpv ${p ? 'ok' : ''} ${b != null && v === b ? 'top' : ''}"><bdi>${fmtVal(s, v)}</bdi> <span class="mut small">${esc(s.u)}</span>${p ? ' ✓' : ''}</span>`; }); };
+  return `<div class="drawer-bg" style="align-items:center" data-act="cmpClose"><div class="modal cmpmodal" role="dialog" aria-label="השוואת מועמדים">
+   <div class="row spread"><h2 style="margin:0">השוואת מועמדים</h2><button class="btn sec sm" data-act="cmpClose">סגירה</button></div>
+   <div class="mut small">✓ ירוק = עומד בתנאי הסף של ${esc(unit.name)} · מסגרת = הערך הטוב ביותר בין המושווים. זו הצגה בלבד – אין ציון מסכם והבחירה נשארת שלכם.</div>
+   <div style="overflow:auto"><table class="cmptbl"><thead><tr><th></th>${xs.map((x) => `<th><b>${esc(x.name)}</b><div class="mut small">${x.id}</div></th>`).join('')}</tr></thead><tbody>
+   ${row('תפקיד מומלץ', (x) => esc(x.role))}${row('המלצת מגבש', (x) => recPill(x.rec))}${row('רפואי', (x) => esc(x.med || '—'))}
+   ${c.stats.map(stat).join('')}
+   ${row('חוזקות בולטות', (x) => strengthChips(k, x) || '<span class="mut">—</span>')}
+   ${row('העדפת החייל', (x) => wishCell(k, x))}
+   ${row('התאמה לתנאי הסף', (x) => { const bad = fitBad(k, x, unit); return bad.length ? `<span class="pill p-orange">חסר: ${esc(bad.map((e) => e.s).join(', '))}</span>` : '<span class="pill p-blue">עומד/ת בתנאי הסף</span>'; })}
+   ${row('סטטוס', (x) => { const tk = d.takenBy[x.id]; return tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'; })}
+   ${myTurn ? row('', (x) => d.takenBy[x.id] ? '' : `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>`) : ''}
+   </tbody></table></div></div></div>`;
+}
+
 function thModal(k) {
-  const u = unitOf(k, A.me.unit);
+  const u = unitOf(k, typeof A.ui.editTh === 'string' ? A.ui.editTh : A.me.unit);
   return `<div class="drawer-bg" style="align-items:center" data-act="closeTh"><div class="modal" role="dialog" aria-label="עריכת תנאי סף">
    <h2 style="margin:0">עריכת צרכים – ${esc(u.name)}</h2>
    <div><b>מכסות לפי תפקיד</b><div class="mut small">כמה מועמדים נדרשים לכל תפקיד (0 = לא נדרש). אפשר להוריד מתחת למה שכבר נבחר.</div>
@@ -1274,6 +1344,11 @@ function thModal(k) {
 }
 
 Object.assign(ACTIONS, {
+  fq: (d, t) => { A.ui.f = Object.assign({}, A.ui.f, { q: t.value }); rerender(); },
+  cmpTog: (d, t, e) => { e.stopPropagation(); const a = cmpIds(), i = a.indexOf(d.id); if (i >= 0) a.splice(i, 1); else if (a.length >= 3) { toast('אפשר להשוות עד 3 מועמדים', true); return; } else a.push(d.id); rerender(); },
+  cmpOpen: () => { A.ui.cmpOpen = true; rerender(); },
+  cmpClose: () => { A.ui.cmpOpen = false; rerender(); },
+  cmpClear: () => { A.ui.cmpIds = []; A.ui.cmpOpen = false; rerender(); },
   flt: (d, t) => { A.ui.f = Object.assign({}, A.ui.f, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); rerender(); },
   cand: (d) => { A.ui.nav = filtered(corpsKey()).map((x) => x.id); A.ui.cand = d.id; rerender(); },
   navPrev: () => navStep(-1),
@@ -1287,13 +1362,13 @@ Object.assign(ACTIONS, {
   },
   reset: async () => { if (confirm('לאפס את הדראפט של החיל? כל הבחירות יימחקו.')) { await api('reset', { corps: corpsKey() }); toast('הדראפט אופס'); } },
   undo: async () => { const k = corpsKey(), l = draftInfo(k).picks.slice(-1)[0]; if (!l) return; await api('undo', { corps: k }); toast('הבחירה האחרונה בוטלה'); },
-  editTh: () => { A.ui.editTh = true; rerender(); },
+  editTh: (d) => { A.ui.editTh = d && d.u ? d.u : true; rerender(); },
   closeTh: () => { A.ui.editTh = false; rerender(); },
   saveTh: async () => {
     const k = corpsKey(), th = {}; let bad = null; cf(k).stats.forEach((s) => { const raw = $('#th-' + s.k).value.trim(); if (raw === '') return; const v = parseStat(s, raw); if (v == null) bad = bad || s.l; else th[s.k] = v; });
     if (bad) { toast('ערך לא תקין ב' + bad + (cf(k).stats.some((s) => isTime(s)) ? ' (זמנים בפורמט 13:30)' : ''), true); return; }
     const quota = {}; cf(k).roles.forEach((r, i) => { quota[r] = $('#q-' + i).value; });
-    await api('thresholds', { corps: k, th, quota, noMed: $('#th-med').checked }); A.ui.editTh = false; toast('המכסות ותנאי הסף עודכנו'); rerender();
+    await api('thresholds', Object.assign({ corps: k, th, quota, noMed: $('#th-med').checked }, typeof A.ui.editTh === 'string' ? { unit: A.ui.editTh } : {})); A.ui.editTh = false; toast('המכסות ותנאי הסף עודכנו'); rerender();
   },
 });
 
@@ -1342,8 +1417,8 @@ SCREENS.board = (k) => {
    <div class="grid g2"><div class="card"><h2>${d.finished ? 'הדראפט הסתיים' : 'בחירה כעת · ' + esc(c.corps)}</h2>${d.finished ? '<p>כל הבחירות בוצעו.</p>' : `<div class="row spread"><div><h2 style="font-size:26px;margin:0">${esc(d.slot.u)}</h2><div class="mut small">סבב ${d.slot.r} · בחירה ${P.length + 1} מתוך ${d.order.length}</div><div class="mut small">מחפשת: ${Object.keys(unitOf(k, d.slot.u).quota).map((r) => r + ' ×' + (unitOf(k, d.slot.u).quota[r] - countRole(k, d.slot.u, r))).filter((s) => !/×0$|×-/.test(s)).join(', ') || '—'}</div></div>${A.S.clockSeconds ? `<div style="text-align:center"><div style="font-size:38px;font-weight:900" id="clk">${clockText()}</div><div class="mut small">זמן לבחירה</div></div>` : ''}</div>`}
    ${canFav ? '' : ''}${can('advance', k) ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
    <div class="card"><h2>הבחירה האחרונה</h2>${last ? `<div class="row spread"><div><b style="font-size:22px">${esc(candOf(k, last.id).name)}</b><div class="mut">${esc(candOf(k, last.id).role)} · נבחר/ה ע״י ${esc(last.unit)} · #${last.n}</div></div><div>${strengthChips(k, candOf(k, last.id))}</div></div>` : '<span class="mut">טרם נבחר איש</span>'}</div></div>
-   <div class="card board"><h2>לוח הדראפט – ${esc(c.label)}</h2><div class="mut small" style="margin-bottom:8px">${P.length} מתוך ${d.order.length} בחירות · סדר מתחלף בכל סבב</div>
-   <table><thead><tr><th></th>${unit.map((u) => `<th>${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${Array.from({ length: c.rounds }, (_, i) => `<tr><th>סבב ${i + 1}<div class="mut small">${i % 2 ? '← משמאל' : '→ מימין'}</div></th>${unit.map((u) => cellFor(i + 1, u.name)).join('')}</tr>`).join('')}</tbody></table></div>
+   <div class="card board"><h2>לוח הדראפט – ${esc(c.label)}</h2><div class="mut small" style="margin-bottom:8px">${P.length} מתוך ${d.order.length} בחירות · ${stg(k).order === 'snake' ? 'סדר מתחלף בכל סבב' : 'אותו סדר בכל סבב'}</div>
+   <table><thead><tr><th></th>${unit.map((u) => `<th>${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${Array.from({ length: stg(k).rounds }, (_, i) => `<tr><th>סבב ${i + 1}<div class="mut small">${stg(k).order === 'snake' ? (i % 2 ? '← משמאל' : '→ מימין') : '→ מימין'}</div></th>${unit.map((u) => cellFor(i + 1, u.name)).join('')}</tr>`).join('')}</tbody></table></div>
    <div class="grid g2">${canFile() ? `<div class="card"><h2>${favOnly ? 'המועדפים הפנויים שלי' : 'הפנויים הבולטים'}</h2><div class="mut small" style="margin-bottom:6px">${favOnly ? 'מועמדים שסימנתם ♥ ועדיין לא נבחרו' : 'לפי מספר החוזקות הבולטות מהגיבוש · לא ציון'}</div>${standout.length ? '' : '<div class="mut">אין מועדפים פנויים כרגע.</div>'}${standout.map((o, i) => `<div class="row spread clk" style="padding:7px 0;border-bottom:1px solid var(--line2);cursor:pointer" data-act="boardCand" data-id="${o.x.id}"><div><b>${i + 1}. ${esc(o.x.name)} · ${esc(o.x.role)}</b><div class="mut small">${esc(o.s.join(' · ') || '—')}</div></div><span class="pill p-blue">עומד/ת בתנאי הסף של ${o.fits} מתוך ${unit.length} יחידות</span></div>`).join('')}</div>` : ''}
    <div class="card"><h2>בחירות לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">נבחרו / מבוקשים בכל היחידות</div>${c.roles.map((r) => `<div class="row" style="margin:7px 0"><span style="min-width:110px">${esc(r)}</span><div class="bar"><i style="width:${wanted[r] ? got[r] / wanted[r] * 100 : 0}%"></i></div><b>${got[r] || 0} / ${wanted[r] || 0}</b></div>`).join('')}</div></div>
    ${A.ui.cand ? drawer(k, A.ui.cand) : ''}`;
@@ -1861,6 +1936,66 @@ Object.assign(ACTIONS, {
   },
   exportX: () => downloadX('pool-' + corpsKey() + '.xlsx', poolRows(corpsKey())),
   exportC: () => csvDownload('pool-' + corpsKey() + '.csv', poolRows(corpsKey())),
+});
+
+// ================= results + audit log =================
+const fmtTs = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function assignRows(k) {
+  const c = cf(k), d = draftInfo(k);
+  return d.picks.map((p) => { const x = candOf(k, p.id); return [p.n, orderOf(k)[p.n - 1] ? orderOf(k)[p.n - 1].r : '', p.unit, x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))).concat([p.auto ? 'אוטומטי' : 'ידני']); });
+}
+const assignHead = (k) => ['#', 'סבב', 'יחידה', 'מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')')).concat(['אופן בחירה']);
+function unitRows(k) {
+  const c = cf(k); return [['יחידה', 'תפקיד', 'נדרשו', 'שובצו', 'פער']].concat(c.units.flatMap((u) => Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => { const h = countRole(k, u.name, r); return [u.name, r, u.quota[r], h, Math.max(0, u.quota[r] - h)]; })));
+}
+function unassignedRows(k) {
+  const d = draftInfo(k), c = cf(k);
+  return [['מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(c.stats.map((s) => s.l))].concat(cs(k).cands.filter((x) => !d.takenBy[x.id]).map((x) => [x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k])))));
+}
+const logRows = (k) => [['זמן', 'חיל', 'פעולה']].concat((A.S.log || []).filter((l) => !k || l.corps === k).slice().reverse().map((l) => [fmtTs(l.ts), A.cfg.corps[l.corps] ? cf(l.corps).corps : l.corps, l.text]));
+function downloadBook(name, sheets) { const wb = XLSX.utils.book_new(); sheets.forEach(([n, aoa]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), n)); wb.Workbook = { Views: [{ RTL: true }] }; XLSX.writeFile(wb, name); }
+function downloadCsv(name, aoa) {
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const blob = new Blob(['﻿' + aoa.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const tbl = (rows) => `<div style="overflow:auto"><table><thead><tr>${rows[0].map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${rows[0].length}" class="mut">אין נתונים</td></tr>`}</tbody></table></div>`;
+
+SCREENS.results = (k) => {
+  const c = cf(k), d = draftInfo(k), tab = A.ui.rtab || 'assign';
+  const tabs = [['assign', 'שיבוצים'], ['units', 'לפי יחידה'], ['free', 'ללא שיבוץ'], ['log', 'יומן פעילות']];
+  const free = cs(k).cands.length - d.picks.length, gap = unitRows(k).slice(1).reduce((a, r) => a + r[4], 0);
+  const body = tab === 'assign' ? tbl([assignHead(k)].concat(assignRows(k))) : tab === 'units' ? tbl(unitRows(k)) : tab === 'free' ? tbl(unassignedRows(k)) : tbl(logRows(k));
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תוצאות ויומן – ${esc(c.label)}</h1><div class="mut small">${d.finished ? 'הדראפט הסתיים' : 'הדראפט בעיצומו – התוצאות חלקיות'}</div></div>
+    <div class="row no-print"><button class="btn" data-act="expXlsx">ייצוא Excel</button><button class="btn sec" data-act="expCsv">CSV (${esc(tabs.find((t) => t[0] === tab)[1])})</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
+   <div class="grid g3"><div class="kpi"><span>שובצו</span><b>${d.picks.length} מתוך ${d.order.length}</b></div><div class="kpi"><span>ללא שיבוץ</span><b>${free}</b></div><div class="kpi"><span>פער מכסות</span><b>${gap}</b></div></div>
+   <div class="card"><div class="tabs no-print" style="margin-bottom:12px">${tabs.map(([i, n]) => `<button class="${tab === i ? 'on' : ''}" data-act="rtab" data-t="${i}">${n}</button>`).join('')}</div>${body}</div>`;
+};
+Object.assign(ACTIONS, {
+  rtab: (d) => { A.ui.rtab = d.t; rerender(); },
+  expXlsx: () => { const k = corpsKey(); downloadBook('mil-draft-' + k + '.xlsx', [['שיבוצים', [assignHead(k)].concat(assignRows(k))], ['לפי יחידה', unitRows(k)], ['ללא שיבוץ', unassignedRows(k)], ['יומן פעילות', logRows(k)]]); toast('הקובץ הורד'); },
+  expCsv: () => { const k = corpsKey(), t = A.ui.rtab || 'assign'; downloadCsv('mil-draft-' + k + '-' + t + '.csv', t === 'assign' ? [assignHead(k)].concat(assignRows(k)) : t === 'units' ? unitRows(k) : t === 'free' ? unassignedRows(k) : logRows(k)); toast('הקובץ הורד'); },
+  expPrint: () => window.print(),
+});
+
+// ================= draft settings (admin) =================
+SCREENS.settings = (k) => {
+  const c = cf(k), S = stg(k), started = cs(k).picks.some((p) => !p.auto), ui = A.ui.stg && A.ui.stg.k === k ? A.ui.stg : (A.ui.stg = Object.assign({ k }, S)), lock = started ? 'disabled' : '';
+  const tog = (f, l, h) => `<label class="row" style="align-items:flex-start;gap:10px"><input type="checkbox" data-chg="stgSet" data-f="${f}" ${ui[f] ? 'checked' : ''}><span><b>${l}</b><div class="mut small">${h}</div></span></label>`;
+  return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הגדרות דראפט – ${esc(c.label)}</h1><div class="mut small">הגדרות נפרדות לכל חיל. זמינות למנהל/ת מערכת בלבד.</div></div>
+   <div class="card"><h2>מבנה הדראפט</h2>${started ? '<div class="demo-note">יחידה כבר בחרה ידנית – אי אפשר לשנות מספר סבבים וסדר. כדי לשנות, אפסו את הדראפט. (שינוי המבנה לפני בחירה ידנית מחשב את הבחירות האוטומטיות מחדש.)</div>' : ''}
+    <div class="row" style="gap:24px;flex-wrap:wrap"><label>מספר סבבים<select data-chg="stgSet" data-f="rounds" ${lock}>${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${+ui.rounds === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+    <label>סדר בחירה<select data-chg="stgSet" data-f="order" ${lock}><option value="snake" ${ui.order === 'snake' ? 'selected' : ''}>מתחלף (נחש) – הסדר מתהפך בכל סבב</option><option value="linear" ${ui.order === 'linear' ? 'selected' : ''}>רגיל – אותו סדר בכל סבב</option></select></label></div>
+    <div class="mut small">סך הכול ${ui.rounds * c.units.length} בחירות (${ui.rounds} סבבים × ${c.units.length} יחידות)</div></div>
+   <div class="card"><h2>כללי שיבוץ</h2><div class="mut small" style="margin-bottom:8px">חל על בחירות ידניות של שלישות בלבד. בחירה אוטומטית של יחידות הבוט ממשיכה לפעול לפי שיקול רך.</div>
+    <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית')}</div>
+    <div class="row" style="margin-top:14px"><button class="btn" data-act="stgSave">שמירת הגדרות</button></div></div>
+   <div class="card"><h2>יחידות ומכסות</h2><div class="mut small" style="margin-bottom:8px">עריכת מכסות ותנאי סף של כל יחידה בשם השלישות.</div>
+    <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.ui.editTh ? thModal(k) : ''}`;
+};
+Object.assign(ACTIONS, {
+  stgSet: (d, t) => { const u = A.ui.stg || (A.ui.stg = { k: corpsKey() }); u[d.f] = t.type === 'checkbox' ? t.checked : (d.f === 'rounds' ? +t.value : t.value); rerender(); },
+  stgSave: async () => { const k = corpsKey(), u = A.ui.stg; if (!u) return; const b = { corps: k, order: u.order, strictThresholds: !!u.strictThresholds, strictQuotas: !!u.strictQuotas, blockNotRecommended: !!u.blockNotRecommended }; if (!cs(k).picks.some((p) => !p.auto)) b.rounds = +u.rounds; try { await api('settings', b); A.ui.stg = null; toast('ההגדרות נשמרו'); rerender(); } catch (x) { /* toast shown */ } },
 });
 </script>
 <script>// Standalone glue: route api()/refresh()/SSE to the in-browser LocalServer

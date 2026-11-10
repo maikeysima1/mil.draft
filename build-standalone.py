@@ -44,7 +44,7 @@ window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(
 
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 L.config = () => ({ orgs: C.ORGS, roles: C.ROLES, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
-L.snapshot = () => { const uid = L.me && L.me.id, o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-60).reverse() }; Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: uid && f[uid] ? { [uid]: f[uid] } : {} }); }); return JSON.parse(JSON.stringify(o)); };
+L.snapshot = () => { const uid = L.me && L.me.id, o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-400).reverse() }; Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: uid && f[uid] ? { [uid]: f[uid] } : {} }); }); return JSON.parse(JSON.stringify(o)); };
 L.handle = function (p, userId, b) {
   const user = userById(userId); L.me = user;
   if (!user) throw new Error('לא מחובר');
@@ -82,9 +82,21 @@ L.handle = function (p, userId, b) {
     state.log.push({ ts: Date.now(), corps: k, text: user.title + ' העביר/ה את ' + c.name + ' מצוות ' + from + ' לצוות ' + g });
     save(); return { ok: true };
   }
+  if (p === 'settings') {
+    needCorps(); if (!canDo(user, 'settings', k)) throw new Error('רק מנהל/ת מערכת יכול/ה לשנות הגדרות דראפט');
+    const cst = state.corps[k], cur = stg(k), nw = Object.assign({}, cur);
+    if ('rounds' in b) nw.rounds = Math.max(1, Math.min(8, parseInt(b.rounds, 10) || cur.rounds));
+    if (b.order === 'snake' || b.order === 'linear') nw.order = b.order;
+    ['strictThresholds', 'strictQuotas', 'blockNotRecommended'].forEach((f) => { if (f in b) nw[f] = !!b[f]; });
+    const structural = nw.rounds !== cur.rounds || nw.order !== cur.order;
+    if (structural && cst.picks.some((p) => !p.auto)) throw new Error('אי אפשר לשנות מספר סבבים או סדר אחרי שיחידה בחרה ידנית – אפסו את הדראפט קודם');
+    if (structural) cst.picks = [];
+    cst.settings = nw; if (structural) playUntilMine(k); state.log.push({ ts: Date.now(), corps: k, text: user.title + ' עדכן/ה הגדרות דראפט: ' + nw.rounds + ' סבבים, סדר ' + (nw.order === 'snake' ? 'מתחלף' : 'רגיל') });
+    save(); return { ok: true, settings: nw };
+  }
   if (p === 'thresholds') {
-    needCorps(); if (!canDo(user, 'thresholds', k)) throw new Error('אין הרשאה');
-    const ov = state.corps[k].units.find((u) => u.name === user.unit), th = {};
+    needCorps(); const own = canDo(user, 'thresholds', k); if (!own && !canDo(user, 'settings', k)) throw new Error('אין הרשאה');
+    const ov = state.corps[k].units.find((u) => u.name === (own ? user.unit : b.unit)), th = {}; if (!ov) throw new Error('יחידה לא נמצאה');
     cfg(k).stats.forEach((s) => { const v = num((b.th || {})[s.k]); if (v != null) th[s.k] = v; });
     ov.th = th; ov.noMed = !!b.noMed;
     if (b.quota) { const q = {}; cfg(k).roles.forEach((r) => { const n = Math.max(0, Math.min(9, parseInt((b.quota || {})[r], 10) || 0)); if (n) q[r] = n; }); ov.quota = q; }

@@ -176,6 +176,7 @@ function freshState() {
     st.corps[k] = {
       cands: cands[k], picks: [], turnStartedAt: Date.now(),
       units: C.corps[k].units.map((u) => ({ name: u.name, th: Object.assign({}, u.th), noMed: u.noMed, quota: Object.assign({}, u.quota) })),
+      settings: Object.assign({ rounds: C.corps[k].rounds }, STG_DEFAULT),
     };
   });
   return st;
@@ -200,10 +201,13 @@ const unitCfg = (k, name) => {
   const ov = state.corps[k].units.find((u) => u.name === name);
   return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed, quota: ov.quota || base.quota } : {});
 };
+// draft settings per corps (admin-editable): rounds, order (snake = reversed every other round, linear = same order), and optional hard rules for manual picks
+const STG_DEFAULT = { order: 'snake', strictThresholds: false, strictQuotas: false, blockNotRecommended: false };
+const stg = (k) => Object.assign({ rounds: cfg(k).rounds }, STG_DEFAULT, state.corps[k].settings);
 function orderOf(k) {
-  const c = cfg(k), o = [];
-  for (let r = 0; r < c.rounds; r++) {
-    const us = r % 2 === 0 ? c.units : c.units.slice().reverse();
+  const c = cfg(k), S = stg(k), o = [];
+  for (let r = 0; r < S.rounds; r++) {
+    const us = S.order === 'snake' && r % 2 === 1 ? c.units.slice().reverse() : c.units;
     us.forEach((u) => o.push({ r: r + 1, u: u.name }));
   }
   return o;
@@ -245,10 +249,16 @@ function doPick(k, unitName, candId, auto) {
   const c = cs.cands.find((x) => x.id === candId);
   if (!c) throw new Error('מועמד לא נמצא');
   if (cs.picks.some((p) => p.id === candId)) throw new Error('המועמד כבר נבחר');
+  if (!auto) { // hard rules (set by the admin) apply to manual picks; automatic picks stay soft so the demo never gets stuck
+    const S = stg(k), u = unitCfg(k, unitName);
+    if (S.blockNotRecommended && c.rec === 'לא מומלץ') throw new Error('המועמד אינו מומלץ – הדראפט מוגדר ללא אפשרות לבחור מועמד כזה');
+    if (S.strictThresholds && fitOf(k, c, u).some((x) => !x.ok && x.s !== 'המלצה')) throw new Error('המועמד אינו עומד בתנאי הסף של היחידה – הדראפט מוגדר לדרוש עמידה בתנאי הסף');
+    if (S.strictQuotas) { const q = u.quota[c.role] || 0, have = cs.picks.filter((p) => p.unit === unitName && (cs.cands.find((x) => x.id === p.id) || {}).role === c.role).length; if (have >= q) throw new Error('המכסה של היחידה לתפקיד ' + c.role + ' כבר מולאה (או שלא נתבקש) – הדראפט מוגדר לדרוש עמידה במכסות'); }
+  }
   cs.picks.push({ id: candId, unit: unitName, auto: !!auto, round: slot.r, n: cs.picks.length + 1, ts: Date.now() });
   cs.turnStartedAt = Date.now();
   state.log.push({ ts: Date.now(), corps: k, text: `${unitName} בחרה את ${c.name} (${c.role})${auto ? ' · אוטומטי' : ''}` });
-  if (state.log.length > 300) state.log.shift();
+  if (state.log.length > 1000) state.log.shift();
   save();
 }
 
@@ -293,7 +303,7 @@ if (!state) { state = freshState(); Object.keys(C.corps).forEach(playUntilMine);
 // ---------- SSE ----------
 // favorites are private: every client only receives its own list
 function snapshot(userId) {
-  const o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-60).reverse() };
+  const o = { version: state.version, serverNow: Date.now(), clockSeconds: CLOCK_SECONDS, corps: {}, log: state.log.slice(-400).reverse() };
   Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: userId && f[userId] ? { [userId]: f[userId] } : {} }); });
   return o;
 }
@@ -365,9 +375,21 @@ http.createServer(async (req, res) => {
         state.log.push({ ts: Date.now(), corps: k, text: `${user.title} העביר/ה את ${c.name} מצוות ${from} לצוות ${g}` });
         save(); return json(res, 200, { ok: true });
       }
+      if (p === '/api/settings') {
+        needCorps(); if (!canDo(user, 'settings', k)) throw new Error('רק מנהל/ת מערכת יכול/ה לשנות הגדרות דראפט');
+        const cst = state.corps[k], cur = stg(k), nw = Object.assign({}, cur);
+        if ('rounds' in b) nw.rounds = Math.max(1, Math.min(8, parseInt(b.rounds, 10) || cur.rounds));
+        if (b.order === 'snake' || b.order === 'linear') nw.order = b.order;
+        ['strictThresholds', 'strictQuotas', 'blockNotRecommended'].forEach((f) => { if (f in b) nw[f] = !!b[f]; });
+        const structural = nw.rounds !== cur.rounds || nw.order !== cur.order;
+        if (structural && cst.picks.some((p) => !p.auto)) throw new Error('אי אפשר לשנות מספר סבבים או סדר אחרי שיחידה בחרה ידנית – אפסו את הדראפט קודם');
+        if (structural) cst.picks = [];
+        cst.settings = nw; if (structural) playUntilMine(k); state.log.push({ ts: Date.now(), corps: k, text: `${user.title} עדכן/ה הגדרות דראפט: ${nw.rounds} סבבים, סדר ${nw.order === 'snake' ? 'מתחלף' : 'רגיל'}` });
+        save(); return json(res, 200, { ok: true, settings: nw });
+      }
       if (p === '/api/thresholds') {
-        needCorps(); if (!canDo(user, 'thresholds', k)) throw new Error('אין הרשאה');
-        const ov = state.corps[k].units.find((u) => u.name === user.unit);
+        needCorps(); const own = canDo(user, 'thresholds', k); if (!own && !canDo(user, 'settings', k)) throw new Error('אין הרשאה');
+        const ov = state.corps[k].units.find((u) => u.name === (own ? user.unit : b.unit)); if (!ov) throw new Error('יחידה לא נמצאה');
         const th = {}; cfg(k).stats.forEach((s) => { const v = num((b.th || {})[s.k]); if (v != null) th[s.k] = v; });
         ov.th = th; ov.noMed = !!b.noMed;
         if (b.quota) { const q = {}; cfg(k).roles.forEach((r) => { const n = Math.max(0, Math.min(9, parseInt((b.quota || {})[r], 10) || 0)); if (n) q[r] = n; }); ov.quota = q; }

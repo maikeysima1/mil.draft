@@ -502,3 +502,63 @@ Object.assign(ACTIONS, {
   exportX: () => downloadX('pool-' + corpsKey() + '.xlsx', poolRows(corpsKey())),
   exportC: () => csvDownload('pool-' + corpsKey() + '.csv', poolRows(corpsKey())),
 });
+
+// ================= results + audit log =================
+const fmtTs = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function assignRows(k) {
+  const c = cf(k), d = draftInfo(k);
+  return d.picks.map((p) => { const x = candOf(k, p.id); return [p.n, orderOf(k)[p.n - 1] ? orderOf(k)[p.n - 1].r : '', p.unit, x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k]))).concat([p.auto ? 'אוטומטי' : 'ידני']); });
+}
+const assignHead = (k) => ['#', 'סבב', 'יחידה', 'מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(cf(k).stats.map((s) => s.l + ' (' + s.u + ')')).concat(['אופן בחירה']);
+function unitRows(k) {
+  const c = cf(k); return [['יחידה', 'תפקיד', 'נדרשו', 'שובצו', 'פער']].concat(c.units.flatMap((u) => Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => { const h = countRole(k, u.name, r); return [u.name, r, u.quota[r], h, Math.max(0, u.quota[r] - h)]; })));
+}
+function unassignedRows(k) {
+  const d = draftInfo(k), c = cf(k);
+  return [['מועמד/ת', 'מס׳', 'תפקיד', 'המלצת מגבש', 'רפואי'].concat(c.stats.map((s) => s.l))].concat(cs(k).cands.filter((x) => !d.takenBy[x.id]).map((x) => [x.name, x.id, x.role, x.rec || '', x.med].concat(c.stats.map((s) => cellVal(s, x.stats[s.k])))));
+}
+const logRows = (k) => [['זמן', 'חיל', 'פעולה']].concat((A.S.log || []).filter((l) => !k || l.corps === k).slice().reverse().map((l) => [fmtTs(l.ts), A.cfg.corps[l.corps] ? cf(l.corps).corps : l.corps, l.text]));
+function downloadBook(name, sheets) { const wb = XLSX.utils.book_new(); sheets.forEach(([n, aoa]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), n)); wb.Workbook = { Views: [{ RTL: true }] }; XLSX.writeFile(wb, name); }
+function downloadCsv(name, aoa) {
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const blob = new Blob(['﻿' + aoa.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const tbl = (rows) => `<div style="overflow:auto"><table><thead><tr>${rows[0].map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${rows[0].length}" class="mut">אין נתונים</td></tr>`}</tbody></table></div>`;
+
+SCREENS.results = (k) => {
+  const c = cf(k), d = draftInfo(k), tab = A.ui.rtab || 'assign';
+  const tabs = [['assign', 'שיבוצים'], ['units', 'לפי יחידה'], ['free', 'ללא שיבוץ'], ['log', 'יומן פעילות']];
+  const free = cs(k).cands.length - d.picks.length, gap = unitRows(k).slice(1).reduce((a, r) => a + r[4], 0);
+  const body = tab === 'assign' ? tbl([assignHead(k)].concat(assignRows(k))) : tab === 'units' ? tbl(unitRows(k)) : tab === 'free' ? tbl(unassignedRows(k)) : tbl(logRows(k));
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תוצאות ויומן – ${esc(c.label)}</h1><div class="mut small">${d.finished ? 'הדראפט הסתיים' : 'הדראפט בעיצומו – התוצאות חלקיות'}</div></div>
+    <div class="row no-print"><button class="btn" data-act="expXlsx">ייצוא Excel</button><button class="btn sec" data-act="expCsv">CSV (${esc(tabs.find((t) => t[0] === tab)[1])})</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
+   <div class="grid g3"><div class="kpi"><span>שובצו</span><b>${d.picks.length} מתוך ${d.order.length}</b></div><div class="kpi"><span>ללא שיבוץ</span><b>${free}</b></div><div class="kpi"><span>פער מכסות</span><b>${gap}</b></div></div>
+   <div class="card"><div class="tabs no-print" style="margin-bottom:12px">${tabs.map(([i, n]) => `<button class="${tab === i ? 'on' : ''}" data-act="rtab" data-t="${i}">${n}</button>`).join('')}</div>${body}</div>`;
+};
+Object.assign(ACTIONS, {
+  rtab: (d) => { A.ui.rtab = d.t; rerender(); },
+  expXlsx: () => { const k = corpsKey(); downloadBook('mil-draft-' + k + '.xlsx', [['שיבוצים', [assignHead(k)].concat(assignRows(k))], ['לפי יחידה', unitRows(k)], ['ללא שיבוץ', unassignedRows(k)], ['יומן פעילות', logRows(k)]]); toast('הקובץ הורד'); },
+  expCsv: () => { const k = corpsKey(), t = A.ui.rtab || 'assign'; downloadCsv('mil-draft-' + k + '-' + t + '.csv', t === 'assign' ? [assignHead(k)].concat(assignRows(k)) : t === 'units' ? unitRows(k) : t === 'free' ? unassignedRows(k) : logRows(k)); toast('הקובץ הורד'); },
+  expPrint: () => window.print(),
+});
+
+// ================= draft settings (admin) =================
+SCREENS.settings = (k) => {
+  const c = cf(k), S = stg(k), started = cs(k).picks.some((p) => !p.auto), ui = A.ui.stg && A.ui.stg.k === k ? A.ui.stg : (A.ui.stg = Object.assign({ k }, S)), lock = started ? 'disabled' : '';
+  const tog = (f, l, h) => `<label class="row" style="align-items:flex-start;gap:10px"><input type="checkbox" data-chg="stgSet" data-f="${f}" ${ui[f] ? 'checked' : ''}><span><b>${l}</b><div class="mut small">${h}</div></span></label>`;
+  return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הגדרות דראפט – ${esc(c.label)}</h1><div class="mut small">הגדרות נפרדות לכל חיל. זמינות למנהל/ת מערכת בלבד.</div></div>
+   <div class="card"><h2>מבנה הדראפט</h2>${started ? '<div class="demo-note">יחידה כבר בחרה ידנית – אי אפשר לשנות מספר סבבים וסדר. כדי לשנות, אפסו את הדראפט. (שינוי המבנה לפני בחירה ידנית מחשב את הבחירות האוטומטיות מחדש.)</div>' : ''}
+    <div class="row" style="gap:24px;flex-wrap:wrap"><label>מספר סבבים<select data-chg="stgSet" data-f="rounds" ${lock}>${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${+ui.rounds === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+    <label>סדר בחירה<select data-chg="stgSet" data-f="order" ${lock}><option value="snake" ${ui.order === 'snake' ? 'selected' : ''}>מתחלף (נחש) – הסדר מתהפך בכל סבב</option><option value="linear" ${ui.order === 'linear' ? 'selected' : ''}>רגיל – אותו סדר בכל סבב</option></select></label></div>
+    <div class="mut small">סך הכול ${ui.rounds * c.units.length} בחירות (${ui.rounds} סבבים × ${c.units.length} יחידות)</div></div>
+   <div class="card"><h2>כללי שיבוץ</h2><div class="mut small" style="margin-bottom:8px">חל על בחירות ידניות של שלישות בלבד. בחירה אוטומטית של יחידות הבוט ממשיכה לפעול לפי שיקול רך.</div>
+    <div class="col" style="display:flex;flex-direction:column;gap:12px">${tog('strictThresholds', 'לחסום מועמד שלא עומד בתנאי הסף', 'בחירה ידנית תידחה אם חסר נתון או שערך מתחת לסף של היחידה')}${tog('strictQuotas', 'לחסום מעבר למכסת התפקיד', 'אי אפשר לבחור תפקיד שהמכסה שלו מולאה או שלא התבקש')}${tog('blockNotRecommended', 'לחסום מועמד שהמגבש לא המליץ עליו', 'המלצה "לא מומלץ" חוסמת בחירה ידנית')}</div>
+    <div class="row" style="margin-top:14px"><button class="btn" data-act="stgSave">שמירת הגדרות</button></div></div>
+   <div class="card"><h2>יחידות ומכסות</h2><div class="mut small" style="margin-bottom:8px">עריכת מכסות ותנאי סף של כל יחידה בשם השלישות.</div>
+    <div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>מכסות</th><th></th></tr></thead><tbody>${c.units.map((u0) => { const u = unitOf(k, u0.name); return `<tr><td><b>${esc(u.name)}</b></td><td>${Object.keys(u.quota).filter((r) => u.quota[r]).map((r) => `<span class="pill p-gray">${esc(r)} ${u.quota[r]}</span>`).join(' ') || '<span class="mut">—</span>'}</td><td><button class="btn sec sm" data-act="editTh" data-u="${esc(u.name)}">עריכה</button></td></tr>`; }).join('')}</tbody></table></div></div>${A.ui.editTh ? thModal(k) : ''}`;
+};
+Object.assign(ACTIONS, {
+  stgSet: (d, t) => { const u = A.ui.stg || (A.ui.stg = { k: corpsKey() }); u[d.f] = t.type === 'checkbox' ? t.checked : (d.f === 'rounds' ? +t.value : t.value); rerender(); },
+  stgSave: async () => { const k = corpsKey(), u = A.ui.stg; if (!u) return; const b = { corps: k, order: u.order, strictThresholds: !!u.strictThresholds, strictQuotas: !!u.strictQuotas, blockNotRecommended: !!u.blockNotRecommended }; if (!cs(k).picks.some((p) => !p.auto)) b.rounds = +u.rounds; try { await api('settings', b); A.ui.stg = null; toast('ההגדרות נשמרו'); rerender(); } catch (x) { /* toast shown */ } },
+});

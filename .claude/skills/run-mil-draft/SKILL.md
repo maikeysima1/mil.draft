@@ -43,7 +43,7 @@ node $D smoke                                           # nav per role, login st
 lsof -ti:3000 -sTCP:LISTEN | xargs -r kill              # stop (never pkill -f: it can match your own shell)
 ```
 
-- Routes for `shot`: `room`, `board`, `eval`, `command`, `import`. Users are the ids printed by `users` (`u1` שלישות גבעתי, `u3` מפקד/ת הכשרה, `u4` מגבש צוות 3, `e-combat-1..4`, `h1` ראש מטה, `o1` צופה, `a1` מנהל). A route the role may not open redirects to its home page.
+- Routes for `shot`: `room`, `board`, `eval`, `command`, `results`, `import`, `settings` (admin only). Users are the ids printed by `users` (`u1` שלישות גבעתי, `u3` מפקד/ת הכשרה, `u4` מגבש צוות 3, `e-combat-1..4`, `h1` ראש מטה, `o1` צופה, `a1` מנהל). A route the role may not open redirects to its home page.
 - Flags: `--base <url>` (default `http://localhost:3000/`), `--out <dir>` (default `/tmp/mil-shots`), `--phone`, `--dark`, `--full`. The driver prints the screenshot path and any page errors; **open the PNG and look at it.**
 - Standalone build (no server): `node $D shot u1 board --base file://$PWD/dist/mil-draft.html` works. `flow` and `smoke` need the server (they call `/api`).
 - Server with an access code: `ACCESS_CODE=1234 PORT=3000 node server.js ...`, then run the driver with `MIL_CODE=1234`.
@@ -65,9 +65,11 @@ curl -s -X POST localhost:3000/api/factory-reset -H 'Content-Type: application/j
 
 ## Test
 
-There is no unit-test suite; the test is `node $D smoke` against a fresh server (expect `ALL PASSED`).
+There is no unit-test suite; the test is `node $D smoke` against a fresh server (expect `ALL PASSED`). `bash scripts/ci.sh` does everything CI does (checks `index.html` is current, starts a server on a temp data dir, runs smoke); GitHub Actions runs it on every push (`.github/workflows/test.yml`).
 
 ## Gotchas
+
+- **Draft settings** (admin, `#/settings`): rounds 1-8, snake/linear and 3 optional hard rules for manual picks. Rounds/order can only change while every pick so far is automatic (the bot picks are then recomputed).
 
 - **State is persistent.** `data/state.json` survives restarts, so a previous run's picks/favorites leak into the next. Reset with `rm -f data/state.json` before starting, or `POST /api/factory-reset` as `a1`.
 - **The draft only advances while a שלישות user of that corps is connected.** Other units auto-pick (every 1 s) only while someone from that corps is online over SSE; with nobody connected the draft stays frozen at its opening state (2 pre-played picks in combat). The driver's session counts as "connected".

@@ -346,3 +346,14 @@ input.invalid{border-color:var(--red);background:var(--red-l)}
 .choice{font-weight:600}
 .roles .user{margin-bottom:7px}
 .enter .btn:disabled{opacity:.45}
+
+/* compare + search */
+.cmpbtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1.5px solid var(--line);background:var(--card);color:var(--mut)}
+.cmpbtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.cmpbar{position:fixed;inset-inline:16px;bottom:16px;z-index:40;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px;border-radius:16px;background:var(--solid);color:#fff;box-shadow:0 16px 40px -12px rgba(0,0,0,.5)}
+.cmpbar .btn.sec{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+.cmpmodal{width:min(980px,96%);max-height:92vh;overflow:auto}
+.cmptbl th,.cmptbl td{padding:10px 12px;text-align:start;vertical-align:top}
+.cmptbl tbody th{font-weight:600;color:var(--mut);white-space:nowrap}
+.cmpv.ok{color:var(--green);font-weight:800}
+.cmpv.top{outline:2px solid var(--blue);outline-offset:3px;border-radius:6px;padding:1px 6px}

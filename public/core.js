@@ -43,9 +43,12 @@ function unitOf(k, name) {
   const ov = cs(k).units.find((u) => u.name === name);
   return Object.assign({}, base, ov ? { th: ov.th, noMed: ov.noMed, quota: ov.quota || base.quota } : {});
 }
+// draft settings (admin-configurable): rounds, order (snake / linear), optional hard rules for manual picks
+const STG_DEFAULT = { order: 'snake', strictThresholds: false, strictQuotas: false, blockNotRecommended: false };
+const stg = (k) => Object.assign({ rounds: cf(k).rounds }, STG_DEFAULT, cs(k).settings);
 function orderOf(k) {
-  const c = cf(k), o = [];
-  for (let r = 0; r < c.rounds; r++) { (r % 2 === 0 ? c.units : c.units.slice().reverse()).forEach((u) => o.push({ r: r + 1, u: u.name })); }
+  const c = cf(k), S = stg(k), o = [];
+  for (let r = 0; r < S.rounds; r++) { (S.order === 'snake' && r % 2 === 1 ? c.units.slice().reverse() : c.units).forEach((u) => o.push({ r: r + 1, u: u.name })); }
   return o;
 }
 function fitOf(k, c, u) {
@@ -92,7 +95,9 @@ const PAGES = [
   { id: 'board', name: 'לוח הדראפט', icon: 'grid' },
   { id: 'eval', name: 'דף מגבש', icon: 'clip' },
   { id: 'command', name: 'תמונת מצב', icon: 'chart' },
+  { id: 'results', name: 'תוצאות ויומן', icon: 'file' },
   { id: 'import', name: 'הזנה וייבוא', icon: 'upload' },
+  { id: 'settings', name: 'הגדרות דראפט', icon: 'gear' },
 ];
 const ICONS = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -100,6 +105,9 @@ const ICONS = {
   clip: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
   chart: '<path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-9"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  scale: '<path d="M12 3v18M5 7h14"/><path d="m5 7-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
@@ -228,7 +236,7 @@ function restoreFocus(k) {
   const e = document.getElementById(k.id); if (!e) return;
   e.focus(); try { e.setSelectionRange(k.s, k.e); } catch (x) { /* not text */ }
 }
-function rerender(live) { if (live && A.ui.editTh) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
+function rerender(live) { if (live && (A.ui.editTh || A.ui.cmpOpen)) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
 
 // ---- global actions ----
 const ACTIONS = {

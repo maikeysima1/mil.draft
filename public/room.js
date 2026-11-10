@@ -59,6 +59,7 @@ function filtered(k) {
     if (f.wish && !wishRank(x, myUnitName(k))) return false;
     if (f.fav && !isFav(k, x.id)) return false;
     if (f.free && d.takenBy[x.id]) return false;
+    if (f.q && !(x.name + ' ' + x.id).toLowerCase().includes(String(f.q).trim().toLowerCase())) return false;
     return true;
   });
 }
@@ -70,22 +71,22 @@ SCREENS.room = (k) => {
   const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit;
   const sel = (id, label, opts, val) => `<label>${label}<select id="${id}" data-chg="flt" data-f="${id.slice(2)}">${opts.map((o) => `<option ${o === (val || 'הכול') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
   const log = d.picks.slice().reverse().slice(0, 12).map((p) => `<div class="row" style="padding:5px 0;border-bottom:1px solid var(--line2)"><b>#${p.n}</b><span>${esc(p.unit)} בחרה את ${esc(candOf(k, p.id).name)} (${esc(candOf(k, p.id).role)})${p.auto ? ' <span class="mut small">· אוטומטי</span>' : ''}</span></div>`).join('') || '<span class="mut">עדיין לא בוצעו בחירות</span>';
-  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר בחירה – ${esc(c.label)}</h1><div class="mut small">דראפט נפרד לכל חיל · סדר בחירה מתחלף בכל סבב</div></div>
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר בחירה – ${esc(c.label)}</h1><div class="mut small">דראפט נפרד לכל חיל · ${stg(k).order === 'snake' ? 'סדר בחירה מתחלף בכל סבב' : 'אותו סדר בכל סבב'}</div></div>
     ${can('undo', k) || can('reset', k) ? `<div class="row">${can('undo', k) ? `<button class="btn sec" data-act="undo" ${d.picks.length ? '' : 'disabled'}>ביטול הבחירה האחרונה</button>` : ''}${can('reset', k) ? '<button class="btn sec" data-act="reset">איפוס הדראפט</button>' : ''}</div>` : ''}</div>
-   <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? c.rounds : d.slot.r} מתוך ${c.rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
+   <div class="grid g3"><div class="kpi"><span>סבב</span><b>${d.finished ? stg(k).rounds : d.slot.r} מתוך ${stg(k).rounds}</b></div><div class="kpi"><span>בחירה</span><b>${Math.min(d.picks.length + 1, d.order.length)} מתוך ${d.order.length}</b></div><div class="kpi"><span>פנויים במאגר</span><b>${avail}</b></div></div>
    ${unitChips(k)}${clockCard(k)}
    ${isHumanMine(k) ? needsCard(k) : '<div class="demo-note">צפייה בלבד – רק שלישות היחידה בוחרת. היחידות האחרות בוחרות אוטומטית כשאין משתמש מחובר.</div>'}
    <div class="card"><div class="row spread" style="margin-bottom:4px"><h2 style="margin:0">מאגר מועמדים – ${esc(c.corps)} (${cs(k).cands.length})</h2>${can('fav', k) ? favToggle(k, !!f.fav, 'roomFav') : ''}</div><div class="mut small" style="margin-bottom:10px">רק מועמדים שסווגו ל${esc(c.label)} · העדפת החייל מוצגת כמידע בלבד – השיבוץ נקבע לפי צורכי היחידות</div>
-   <div class="filters">${sel('f-role', 'סינון לפי תפקיד', ['הכול'].concat(c.roles), f.role)}${sel('f-trait', 'חוזקה נדרשת', ['הכול'].concat(c.traits), f.trait)}${sel('f-rec', 'המלצת מגבש', ['הכול'].concat(A.cfg.RECS), f.rec)}
+   <div class="filters"><label>חיפוש לפי שם / מספר<input type="search" id="f-q" data-inp="fq" placeholder="לדוגמה: כהן או C-2101" value="${esc(f.q || '')}" autocomplete="off" style="min-width:200px"></label>${sel('f-role', 'סינון לפי תפקיד', ['הכול'].concat(c.roles), f.role)}${sel('f-trait', 'חוזקה נדרשת', ['הכול'].concat(c.traits), f.trait)}${sel('f-rec', 'המלצת מגבש', ['הכול'].concat(A.cfg.RECS), f.rec)}
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-fit" data-chg="flt" data-f="fit" ${f.fit ? 'checked' : ''}> עומדים בתנאי הסף</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-wish" data-chg="flt" data-f="wish" ${f.wish ? 'checked' : ''}> ביקשו את היחידה שלי</label>
     <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="f-free" data-chg="flt" data-f="free" ${f.free ? 'checked' : ''}> פנויים בלבד</label></div>
    <div style="overflow:auto"><table class="ctbl"><thead><tr><th>מועמד/ת</th><th>תפקיד</th><th>המלצת מגבש</th><th>תנאי הסף שלכם</th><th>מדדים</th><th>העדפת החייל</th><th>חוזקות בולטות</th><th>סטטוס</th><th></th></tr></thead><tbody>
    ${rows.map((x) => { const tk = d.takenBy[x.id]; return `<tr class="clk ${tk ? 'taken' : ''}" data-act="cand" data-id="${x.id}"><td><b>${esc(x.name)}</b> <span class="mut small">${x.id}</span></td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${fitCell(k, x, unit)}</td><td>${metricChips(k, x, unit)}</td><td>${wishCell(k, x)}</td><td>${strengthChips(k, x)}</td>
      <td>${tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'}</td>
-     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
+     <td><span class="row" style="gap:6px;flex-wrap:nowrap">${cmpBtn(x.id)}${can('fav', k) ? favBtn(k, x.id) : ''}${myTurn && !tk ? `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>` : ''}</span></td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין מועמדים לפי הסינון</td></tr>'}</tbody></table></div></div>
    <div class="card"><h2>יומן בחירות</h2>${log}</div>
-   ${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}`;
+   ${cmpBar()}${A.ui.cand ? drawer(k, A.ui.cand) : ''}${A.ui.editTh ? thModal(k) : ''}${A.ui.cmpOpen ? cmpModal(k) : ''}`;
 };
 
 function radar(k, c) {
@@ -138,8 +139,36 @@ function drawer(k, id) {
    ${R().pages.includes('eval') && A.me.role !== 'מגבש/ת' ? `<a href="#/eval" class="small" data-act="goEval" data-id="${id}">תיק מועמד מלא ודף מגבש ←</a>` : ''}</aside></div>`;
 }
 
+// ---- compare 2-3 candidates side by side ----
+const cmpIds = () => A.ui.cmpIds || (A.ui.cmpIds = []);
+const cmpBtn = (id) => { const on = cmpIds().includes(id); return `<button class="cmpbtn ${on ? 'on' : ''}" data-act="cmpTog" data-id="${id}" data-tip="${on ? 'הסר מההשוואה' : 'הוסף להשוואה (עד 3)'}" aria-pressed="${on}" aria-label="השוואה">${icon('scale', 18)}</button>`; };
+function cmpBar() {
+  const ids = cmpIds(); if (!ids.length || route() !== 'room') return '';
+  const k = corpsKey();
+  return `<div class="cmpbar no-print"><span>${icon('scale', 18)} להשוואה: <b>${ids.map((i) => esc((candOf(k, i) || {}).name || i)).join(' · ')}</b></span><span class="row" style="gap:8px"><button class="btn sm" data-act="cmpOpen" ${ids.length < 2 ? 'disabled' : ''}>${ids.length < 2 ? 'בחרו עוד מועמד/ת' : 'השוואה (' + ids.length + ')'}</button><button class="btn sec sm" data-act="cmpClear">נקה</button></span></div>`;
+}
+function cmpModal(k) {
+  const c = cf(k), d = draftInfo(k), unit = unitOf(k, myUnitName(k)), xs = cmpIds().map((i) => candOf(k, i)).filter(Boolean);
+  const myTurn = isHumanMine(k) && !d.finished && d.slot.u === A.me.unit;
+  const best = (s) => { const vs = xs.map((x) => x.stats[s.k]).filter((v) => v != null); return vs.length > 1 ? (s.low ? Math.min(...vs) : Math.max(...vs)) : null; };
+  const row = (label, f) => `<tr><th>${label}</th>${xs.map((x) => `<td>${f(x)}</td>`).join('')}</tr>`;
+  const stat = (s) => { const b = best(s); return row(esc(s.l) + ' <span class="mut small">(' + (s.low ? 'נמוך עדיף' : 'גבוה עדיף') + ')</span>', (x) => { const v = x.stats[s.k], p = statPass(s, v, unit); return v == null ? '<span class="mut">חסר נתון</span>' : `<span class="cmpv ${p ? 'ok' : ''} ${b != null && v === b ? 'top' : ''}"><bdi>${fmtVal(s, v)}</bdi> <span class="mut small">${esc(s.u)}</span>${p ? ' ✓' : ''}</span>`; }); };
+  return `<div class="drawer-bg" style="align-items:center" data-act="cmpClose"><div class="modal cmpmodal" role="dialog" aria-label="השוואת מועמדים">
+   <div class="row spread"><h2 style="margin:0">השוואת מועמדים</h2><button class="btn sec sm" data-act="cmpClose">סגירה</button></div>
+   <div class="mut small">✓ ירוק = עומד בתנאי הסף של ${esc(unit.name)} · מסגרת = הערך הטוב ביותר בין המושווים. זו הצגה בלבד – אין ציון מסכם והבחירה נשארת שלכם.</div>
+   <div style="overflow:auto"><table class="cmptbl"><thead><tr><th></th>${xs.map((x) => `<th><b>${esc(x.name)}</b><div class="mut small">${x.id}</div></th>`).join('')}</tr></thead><tbody>
+   ${row('תפקיד מומלץ', (x) => esc(x.role))}${row('המלצת מגבש', (x) => recPill(x.rec))}${row('רפואי', (x) => esc(x.med || '—'))}
+   ${c.stats.map(stat).join('')}
+   ${row('חוזקות בולטות', (x) => strengthChips(k, x) || '<span class="mut">—</span>')}
+   ${row('העדפת החייל', (x) => wishCell(k, x))}
+   ${row('התאמה לתנאי הסף', (x) => { const bad = fitBad(k, x, unit); return bad.length ? `<span class="pill p-orange">חסר: ${esc(bad.map((e) => e.s).join(', '))}</span>` : '<span class="pill p-blue">עומד/ת בתנאי הסף</span>'; })}
+   ${row('סטטוס', (x) => { const tk = d.takenBy[x.id]; return tk ? `<span class="pill p-gray">נבחר/ה · ${esc(tk.unit)}</span>` : '<span class="pill p-green">פנוי/ה</span>'; })}
+   ${myTurn ? row('', (x) => d.takenBy[x.id] ? '' : `<button class="btn pickbtn" data-act="pick" data-id="${x.id}">${icon('check', 20)}בחירה</button>`) : ''}
+   </tbody></table></div></div></div>`;
+}
+
 function thModal(k) {
-  const u = unitOf(k, A.me.unit);
+  const u = unitOf(k, typeof A.ui.editTh === 'string' ? A.ui.editTh : A.me.unit);
   return `<div class="drawer-bg" style="align-items:center" data-act="closeTh"><div class="modal" role="dialog" aria-label="עריכת תנאי סף">
    <h2 style="margin:0">עריכת צרכים – ${esc(u.name)}</h2>
    <div><b>מכסות לפי תפקיד</b><div class="mut small">כמה מועמדים נדרשים לכל תפקיד (0 = לא נדרש). אפשר להוריד מתחת למה שכבר נבחר.</div>
@@ -151,6 +180,11 @@ function thModal(k) {
 }
 
 Object.assign(ACTIONS, {
+  fq: (d, t) => { A.ui.f = Object.assign({}, A.ui.f, { q: t.value }); rerender(); },
+  cmpTog: (d, t, e) => { e.stopPropagation(); const a = cmpIds(), i = a.indexOf(d.id); if (i >= 0) a.splice(i, 1); else if (a.length >= 3) { toast('אפשר להשוות עד 3 מועמדים', true); return; } else a.push(d.id); rerender(); },
+  cmpOpen: () => { A.ui.cmpOpen = true; rerender(); },
+  cmpClose: () => { A.ui.cmpOpen = false; rerender(); },
+  cmpClear: () => { A.ui.cmpIds = []; A.ui.cmpOpen = false; rerender(); },
   flt: (d, t) => { A.ui.f = Object.assign({}, A.ui.f, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); rerender(); },
   cand: (d) => { A.ui.nav = filtered(corpsKey()).map((x) => x.id); A.ui.cand = d.id; rerender(); },
   navPrev: () => navStep(-1),
@@ -164,13 +198,13 @@ Object.assign(ACTIONS, {
   },
   reset: async () => { if (confirm('לאפס את הדראפט של החיל? כל הבחירות יימחקו.')) { await api('reset', { corps: corpsKey() }); toast('הדראפט אופס'); } },
   undo: async () => { const k = corpsKey(), l = draftInfo(k).picks.slice(-1)[0]; if (!l) return; await api('undo', { corps: k }); toast('הבחירה האחרונה בוטלה'); },
-  editTh: () => { A.ui.editTh = true; rerender(); },
+  editTh: (d) => { A.ui.editTh = d && d.u ? d.u : true; rerender(); },
   closeTh: () => { A.ui.editTh = false; rerender(); },
   saveTh: async () => {
     const k = corpsKey(), th = {}; let bad = null; cf(k).stats.forEach((s) => { const raw = $('#th-' + s.k).value.trim(); if (raw === '') return; const v = parseStat(s, raw); if (v == null) bad = bad || s.l; else th[s.k] = v; });
     if (bad) { toast('ערך לא תקין ב' + bad + (cf(k).stats.some((s) => isTime(s)) ? ' (זמנים בפורמט 13:30)' : ''), true); return; }
     const quota = {}; cf(k).roles.forEach((r, i) => { quota[r] = $('#q-' + i).value; });
-    await api('thresholds', { corps: k, th, quota, noMed: $('#th-med').checked }); A.ui.editTh = false; toast('המכסות ותנאי הסף עודכנו'); rerender();
+    await api('thresholds', Object.assign({ corps: k, th, quota, noMed: $('#th-med').checked }, typeof A.ui.editTh === 'string' ? { unit: A.ui.editTh } : {})); A.ui.editTh = false; toast('המכסות ותנאי הסף עודכנו'); rerender();
   },
 });
 
@@ -219,8 +253,8 @@ SCREENS.board = (k) => {
    <div class="grid g2"><div class="card"><h2>${d.finished ? 'הדראפט הסתיים' : 'בחירה כעת · ' + esc(c.corps)}</h2>${d.finished ? '<p>כל הבחירות בוצעו.</p>' : `<div class="row spread"><div><h2 style="font-size:26px;margin:0">${esc(d.slot.u)}</h2><div class="mut small">סבב ${d.slot.r} · בחירה ${P.length + 1} מתוך ${d.order.length}</div><div class="mut small">מחפשת: ${Object.keys(unitOf(k, d.slot.u).quota).map((r) => r + ' ×' + (unitOf(k, d.slot.u).quota[r] - countRole(k, d.slot.u, r))).filter((s) => !/×0$|×-/.test(s)).join(', ') || '—'}</div></div>${A.S.clockSeconds ? `<div style="text-align:center"><div style="font-size:38px;font-weight:900" id="clk">${clockText()}</div><div class="mut small">זמן לבחירה</div></div>` : ''}</div>`}
    ${canFav ? '' : ''}${can('advance', k) ? `<div class="row no-print" style="margin-top:10px"><button class="btn sec sm" data-act="simNext" ${d.finished ? 'disabled' : ''}>הדמיית הבחירה הבאה</button><button class="btn sec sm" data-act="reset2">איפוס</button></div>` : ''}</div>
    <div class="card"><h2>הבחירה האחרונה</h2>${last ? `<div class="row spread"><div><b style="font-size:22px">${esc(candOf(k, last.id).name)}</b><div class="mut">${esc(candOf(k, last.id).role)} · נבחר/ה ע״י ${esc(last.unit)} · #${last.n}</div></div><div>${strengthChips(k, candOf(k, last.id))}</div></div>` : '<span class="mut">טרם נבחר איש</span>'}</div></div>
-   <div class="card board"><h2>לוח הדראפט – ${esc(c.label)}</h2><div class="mut small" style="margin-bottom:8px">${P.length} מתוך ${d.order.length} בחירות · סדר מתחלף בכל סבב</div>
-   <table><thead><tr><th></th>${unit.map((u) => `<th>${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${Array.from({ length: c.rounds }, (_, i) => `<tr><th>סבב ${i + 1}<div class="mut small">${i % 2 ? '← משמאל' : '→ מימין'}</div></th>${unit.map((u) => cellFor(i + 1, u.name)).join('')}</tr>`).join('')}</tbody></table></div>
+   <div class="card board"><h2>לוח הדראפט – ${esc(c.label)}</h2><div class="mut small" style="margin-bottom:8px">${P.length} מתוך ${d.order.length} בחירות · ${stg(k).order === 'snake' ? 'סדר מתחלף בכל סבב' : 'אותו סדר בכל סבב'}</div>
+   <table><thead><tr><th></th>${unit.map((u) => `<th>${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${Array.from({ length: stg(k).rounds }, (_, i) => `<tr><th>סבב ${i + 1}<div class="mut small">${stg(k).order === 'snake' ? (i % 2 ? '← משמאל' : '→ מימין') : '→ מימין'}</div></th>${unit.map((u) => cellFor(i + 1, u.name)).join('')}</tr>`).join('')}</tbody></table></div>
    <div class="grid g2">${canFile() ? `<div class="card"><h2>${favOnly ? 'המועדפים הפנויים שלי' : 'הפנויים הבולטים'}</h2><div class="mut small" style="margin-bottom:6px">${favOnly ? 'מועמדים שסימנתם ♥ ועדיין לא נבחרו' : 'לפי מספר החוזקות הבולטות מהגיבוש · לא ציון'}</div>${standout.length ? '' : '<div class="mut">אין מועדפים פנויים כרגע.</div>'}${standout.map((o, i) => `<div class="row spread clk" style="padding:7px 0;border-bottom:1px solid var(--line2);cursor:pointer" data-act="boardCand" data-id="${o.x.id}"><div><b>${i + 1}. ${esc(o.x.name)} · ${esc(o.x.role)}</b><div class="mut small">${esc(o.s.join(' · ') || '—')}</div></div><span class="pill p-blue">עומד/ת בתנאי הסף של ${o.fits} מתוך ${unit.length} יחידות</span></div>`).join('')}</div>` : ''}
    <div class="card"><h2>בחירות לפי תפקיד</h2><div class="mut small" style="margin-bottom:6px">נבחרו / מבוקשים בכל היחידות</div>${c.roles.map((r) => `<div class="row" style="margin:7px 0"><span style="min-width:110px">${esc(r)}</span><div class="bar"><i style="width:${wanted[r] ? got[r] / wanted[r] * 100 : 0}%"></i></div><b>${got[r] || 0} / ${wanted[r] || 0}</b></div>`).join('')}</div></div>
    ${A.ui.cand ? drawer(k, A.ui.cand) : ''}`;
