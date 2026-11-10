@@ -147,6 +147,8 @@ const favList = (k) => (cs(k).favs && A.me && cs(k).favs[A.me.id]) || [];
 const isFav = (k, id) => favList(k).includes(id);
 const heartIcon = (on, s) => `<svg class="ic" width="${s || 18}" height="${s || 18}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.heart}</svg>`;
 const favBtn = (k, id, cls) => { const on = isFav(k, id), t = on ? 'הסר מהמועדפים' : 'הוסף למועדפים'; return `<button class="favbtn ${on ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" data-tip="${t}" aria-pressed="${on}" aria-label="${t}">${heartIcon(on)}</button>`; };
+// a candidate's name as a link to the candidate card (plain text for roles that cannot open candidate files)
+const candLink = (k, id, name) => (canFile() ? `<a href="#/room" class="clink" data-act="openCand" data-id="${esc(id)}" data-k="${esc(k)}" title="פתיחת כרטיס מועמד">${esc(name)}</a>` : esc(name));
 const roleOf = (name) => A.cfg.roles[name];
 const allowed = (p) => !!A.me && R().pages.includes(p.id);
 const homeFor = () => R().home;
@@ -261,7 +263,8 @@ function render() {
   const page = PAGES.find((p) => p.id === r);
   if (!page || !allowed(page)) { go(homeFor()); return; }
   const keep = captureFocus();
-  app.innerHTML = shell(SCREENS[r](corpsKey())).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
+  const dr = A.ui.cand && canFile() ? drawer(corpsKey(), A.ui.cand) : ''; // the candidate card opens on top of any screen
+  app.innerHTML = (shell(SCREENS[r](corpsKey())) + dr).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
   restoreFocus(keep);
   if (SCREENS[r].after) SCREENS[r].after();
   auditView();

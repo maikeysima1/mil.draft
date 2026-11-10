@@ -392,3 +392,6 @@ table td,table th{font-variant-numeric:tabular-nums}
 /* touch targets on phones */
 @media(max-width:900px){.favbtn,.cmpbtn{width:44px;height:44px}.iconbtn{min-width:44px;min-height:44px}.filters label:has(>input[type=checkbox]){min-height:44px}}
 [data-theme=dark]{color-scheme:dark}:root{color-scheme:light}
+
+.clink{color:inherit;text-decoration:none;border-bottom:1px dotted color-mix(in srgb,var(--mut) 70%,transparent);cursor:pointer}
+.clink:hover{color:var(--green);border-bottom-color:var(--green)}

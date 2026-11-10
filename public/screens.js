@@ -331,7 +331,7 @@ SCREENS.command = (k) => {
   let body = '';
   if (tab === 'units') body = `<div class="card"><h2>מכסות לפי יחידה ותפקיד</h2><div class="mut small" style="margin-bottom:8px">שובצו / נדרשו · ירוק: הושלם · כתום: חלקי · אפור: טרם שובץ</div>${matrix}</div>
     <div class="grid g2"><div class="card"><h2>התקדמות לפי חיל</h2>${corpsProg}<div class="mut small">לכל חיל דראפט נפרד: יחידות לוחמה לא מתחרות על אותם מועמדים עם מודיעין או קשר.</div></div>
-    <div class="card"><h2>בחירות אחרונות</h2>${d.picks.slice(-7).reverse().map((p) => `<div class="row" style="padding:4px 0"><b>#${p.n}</b><span>${esc(p.unit)} · ${esc(candOf(k, p.id).name)} ${esc(candOf(k, p.id).role)}</span></div>`).join('') || '<span class="mut">אין בחירות</span>'}</div></div>`;
+    <div class="card"><h2>בחירות אחרונות</h2>${d.picks.slice(-7).reverse().map((p) => `<div class="row" style="padding:4px 0"><b>#${p.n}</b><span>${esc(p.unit)} · ${candLink(k, p.id, candOf(k, p.id).name)} ${esc(candOf(k, p.id).role)}</span></div>`).join('') || '<span class="mut">אין בחירות</span>'}</div></div>`;
   if (tab === 'dist') body = distView(k);
   if (tab === 'cmp') body = cmpView(k);
   if (tab === 'pres') {
@@ -458,7 +458,7 @@ SCREENS.import = (k) => {
    ${photosCard(k, canImp, rows)}
    ${baselineCard(k, canImp)}
    <div class="card"><div class="row spread"><h2 style="margin:0">המאגר הנוכחי – ${esc(c.corps)}</h2><div class="row"><button class="btn sec sm" data-act="exportX">ייצוא לאקסל</button><button class="btn sec sm" data-act="exportC">ייצוא CSV</button></div></div>
-    <div style="overflow:auto;max-height:420px;margin-top:8px"><table><thead><tr><th>מס׳</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>חסר בתיק</th><th>מקור</th></tr></thead><tbody>${cs(k).cands.map((x) => `<tr><td>${x.id}</td><td>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${esc(missingOf(k, x).join(', ') || 'מלא')}</td><td>${esc(x.source || 'מאגר קיים')}</td></tr>`).join('')}</tbody></table></div>
+    <div style="overflow:auto;max-height:420px;margin-top:8px"><table><thead><tr><th>מס׳</th><th>שם</th><th>תפקיד</th><th>המלצה</th><th>חסר בתיק</th><th>מקור</th></tr></thead><tbody>${cs(k).cands.map((x) => `<tr><td>${x.id}</td><td>${candLink(corpsKey(), x.id, x.name)}</td><td>${esc(x.role)}</td><td>${recPill(x.rec)}</td><td>${esc(missingOf(k, x).join(', ') || 'מלא')}</td><td>${esc(x.source || 'מאגר קיים')}</td></tr>`).join('')}</tbody></table></div>
     <div class="mut small" style="margin-top:8px">הנתונים נשמרים בשרת (data/state.json).</div></div>`;
 };
 function setBase(k, aoa) {
@@ -526,13 +526,13 @@ function downloadCsv(name, aoa) {
   const blob = new Blob(['﻿' + aoa.map((r) => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-const tbl = (rows) => `<div style="overflow:auto"><table><thead><tr>${rows[0].map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${rows[0].length}" class="mut">אין נתונים</td></tr>`}</tbody></table></div>`;
+const tbl = (rows, nameCol, idCol, k) => `<div style="overflow:auto"><table><thead><tr>${rows[0].map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((v, i) => `<td>${i === nameCol ? candLink(k, r[idCol], v) : esc(v)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${rows[0].length}" class="mut">אין נתונים</td></tr>`}</tbody></table></div>`;
 
 SCREENS.results = (k) => {
   const c = cf(k), d = draftInfo(k), tab = A.ui.rtab || 'assign';
   const tabs = [['assign', 'שיבוצים'], ['units', 'לפי יחידה'], ['free', 'ללא שיבוץ'], ['log', 'יומן פעילות']];
   const free = cs(k).cands.length - d.picks.length, gap = unitRows(k).slice(1).reduce((a, r) => a + r[4], 0);
-  const body = tab === 'assign' ? tbl([assignHead(k)].concat(assignRows(k))) : tab === 'units' ? tbl(unitRows(k)) : tab === 'free' ? tbl(unassignedRows(k)) : tbl(logRows(k));
+  const body = tab === 'assign' ? tbl([assignHead(k)].concat(assignRows(k)), 3, 4, k) : tab === 'units' ? tbl(unitRows(k)) : tab === 'free' ? tbl(unassignedRows(k), 0, 1, k) : tbl(logRows(k));
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תוצאות ויומן – ${esc(c.label)}</h1><div class="mut small">${d.finished ? 'הדראפט הסתיים' : 'הדראפט בעיצומו – התוצאות חלקיות'}</div></div>
     <div class="row no-print"><button class="btn" data-act="expXlsx">ייצוא Excel</button><button class="btn sec" data-act="expCsv">CSV (${esc(tabs.find((t) => t[0] === tab)[1])})</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
    <div class="grid g3"><div class="kpi"><span>שובצו</span><b>${d.picks.length} מתוך ${d.order.length}</b></div><div class="kpi"><span>ללא שיבוץ</span><b>${free}</b></div><div class="kpi"><span>פער מכסות</span><b>${gap}</b></div></div>
