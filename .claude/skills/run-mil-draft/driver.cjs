@@ -81,6 +81,8 @@ async function main() {
       ok(await lp.locator('[data-act=lorg]').count() === 5, 'login step 1 offers 5 corps (רגלים, מודיעין, קשר, משאבי אנוש, פיתוח)');
       ok(await lp.locator('[data-act=login]').isDisabled(), 'login button disabled until חיל, יחידה and תפקיד are chosen');
       await lp.click('[data-act=lorg][data-v=hr]'); await lp.waitForTimeout(300); ok((await lp.locator('[data-act=lunit]').allInnerTexts()).join('|') === 'משאבי אנוש|מטה|ראש אכ״א', 'HR corps units: משאבי אנוש / מטה / ראש אכ״א');
+      await lp.click('[data-act=lorg][data-v=combat]'); await lp.click('[data-act=lunit][data-v="חטיבת גבעתי"]'); await lp.waitForTimeout(300);
+      ok((await lp.locator('[data-act=sel] b').allInnerTexts()).join('|') === 'שלישות|מפקד/ת הכשרה|מגבש/ת צוות 1|מגבש/ת צוות 2|מגבש/ת צוות 3|מגבש/ת צוות 4', 'roles under a unit: שלישות, מפקד/ת הכשרה, מגבש/ת צוות 1-4');
       await lp.click('[data-act=lorg][data-v=dev]'); await lp.waitForTimeout(300); ok(await lp.locator('[data-act=sel]').count() === 2, 'פיתוח: single unit auto-selected, 2 system roles offered');
       await lp.close();
       const g = await session(browser, 'u1'); await g.page.waitForSelector('.clock.me');

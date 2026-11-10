@@ -158,13 +158,14 @@ function shell(inner) {
 
 // ---- login ----
 // three steps: חיל ← יחידה ← תפקיד (users carry org / orgUnit / roleLabel from the server)
-const ROLE_ORDER = ['שלישות', 'מגבש/ת', 'מפקד/ת הכשרה', 'ראש מטה', 'מנהל/ת מערכת', 'צופה/ת'];
+const ROLE_ORDER = ['שלישות', 'מפקד/ת הכשרה', 'מגבש/ת', 'ראש מטה', 'מנהל/ת מערכת', 'צופה/ת'];
 function loginUnits(org) { // a corps: its units in draft order, then its evaluation event; HR / dev: in config order
   const names = []; A.cfg.users.filter((u) => u.org === org).forEach((u) => { if (!names.includes(u.orgUnit)) names.push(u.orgUnit); });
   const corps = A.cfg.corps[org], idx = (n) => { const i = corps ? corps.units.findIndex((x) => x.name === n) : -1; return i < 0 ? 999 : i; };
   return corps ? names.sort((a, b) => idx(a) - idx(b)) : names;
 }
-const loginRoles = (org, unit) => A.cfg.users.filter((u) => u.org === org && u.orgUnit === unit).sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || (a.group || 0) - (b.group || 0));
+// under every unit of a corps: the unit's שלישות, the training commander and the evaluators (teams 1-4) of that corps
+const loginRoles = (org, unit) => A.cfg.users.filter((u) => u.org === org && (u.orgUnit === unit || (u.role === 'מגבש/ת' && A.cfg.corps[org]))).sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || (a.group || 0) - (b.group || 0));
 function loginAuto() { // skip steps that have a single option
   const org = A.ui.lorg; if (!org) return;
   const units = loginUnits(org); if (!A.ui.lunit && units.length === 1) A.ui.lunit = units[0];

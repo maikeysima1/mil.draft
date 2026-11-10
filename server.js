@@ -115,6 +115,8 @@ Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
 const INITIALS = { 'מפקד/ת הכשרה': 'מה', 'ראש מטה': 'רמ', 'צופה/ת': 'צו', 'מנהל/ת מערכת': 'מנ' };
 [['u3', 'hr', 'משאבי אנוש', 'מפקד/ת הכשרה'], ['hr-0-1', 'hr', 'משאבי אנוש', 'ראש מטה'], ['hr-1-0', 'hr', 'מטה', 'מפקד/ת הכשרה'], ['h1', 'hr', 'מטה', 'ראש מטה'], ['hr-2-0', 'hr', 'ראש אכ״א', 'מפקד/ת הכשרה'], ['hr-2-1', 'hr', 'ראש אכ״א', 'ראש מטה'],
  ['a1', 'dev', 'צוות פיתוח', 'מנהל/ת מערכת'], ['o1', 'dev', 'צוות פיתוח', 'צופה/ת']].forEach(([id, org, unit, role]) => USERS.push({ id, title: role + ' · ' + unit, unit, corps: null, role, initial: INITIALS[role], org, orgUnit: unit, roleLabel: role }));
+// the training commander is also a role under every unit (same permissions as before: scope = all corps)
+Object.keys(C.corps).forEach((k) => C.corps[k].units.map((u) => u.name).concat([C.corps[k].eventName]).forEach((unit, i) => USERS.push({ id: 'c-' + k + '-' + i, title: 'מפקד/ת הכשרה · ' + unit, unit, corps: null, role: 'מפקד/ת הכשרה', initial: 'מה', org: k, orgUnit: unit, roleLabel: 'מפקד/ת הכשרה' })));
 // login structure for corps users: חיל ← יחידה ← תפקיד
 USERS.forEach((u) => { if (u.org) return; u.org = u.corps; u.orgUnit = u.unit; u.roleLabel = u.role === 'מגבש/ת' ? 'מגבש/ת צוות ' + u.group : u.role; });
 const userById = (id) => USERS.find((u) => u.id === id);
