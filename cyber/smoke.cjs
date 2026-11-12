@@ -38,7 +38,7 @@ let bad = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if
   const rec = await open('r1'); await go(rec, 'leads'); ok(await rec.locator('[data-act=newLead]').count() === 0, 'recruiter: leads are view-only');
   await rec.locator('.kcard').first().click(); await rec.waitForSelector('.drawer'); ok(await rec.locator('.drawer select[data-chg=stage]').count() === 0, 'recruiter cannot change a lead stage');
   // intelligence layer
-  const fresh = await open('m1'); await fresh.evaluate(() => { localStorage.removeItem('cyberhire-v2'); }); await fresh.reload(); await fresh.waitForSelector('.side'); await go(fresh, 'dash');
+  const fresh = await open('m1'); await fresh.evaluate(() => { localStorage.removeItem('cyberhire-v3'); }); await fresh.reload(); await fresh.waitForSelector('.side'); await go(fresh, 'dash');
   const dashTxt = await fresh.locator('main').innerText();
   ok(/מה לעשות עכשיו/.test(dashTxt) && await fresh.locator('.card:has-text("מה לעשות עכשיו") .tl').count() >= 3, 'dashboard ranks next actions, each with a reason');
   ok(/צפי איוש למשרות פתוחות/.test(dashTxt) && /הנחות ברירת מחדל/.test(dashTxt), 'forecast table states its source (defaults until there is enough history)');
@@ -58,6 +58,20 @@ let bad = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if
   await fresh.selectOption('#vf-s', { index: 1 }); await fresh.fill('#vf-n', '40'); await fresh.click('[data-act=verify]'); await fresh.waitForTimeout(250);
   ok(!(await fresh.evaluate(([id, s2]) => isVerified(S.cands.find((x) => x.id === id), s2), [rv.id, sk])), 'a score under the threshold does not verify the skill');
   ok(/מאומתים/.test(await fresh.locator('.drawer').innerText()), 'job match shows declared vs verified skills');
+  // military service -> cyber skills
+  await go(fresh, 'mil'); ok(/תרגום שירות צבאי/.test(await fresh.locator('main h1').innerText()) && /כישורים משוערים/.test(await fresh.locator('main').innerText()), 'translator page renders a translation');
+  await fresh.selectOption('select[data-f=unit]', 'חטיבת ההגנה בסייבר (אגף התקשוב)'); await fresh.waitForTimeout(200);
+  ok(/SIEM/.test(await fresh.locator('main').innerText()) && /SOC וניטור/.test(await fresh.locator('main').innerText()), 'cyber-defense role translates to SOC skills and field');
+  await fresh.selectOption('select[data-f=unit]', 'יחידה קרבית'); await fresh.waitForTimeout(200);
+  ok(/אין מיפוי טכני ישיר/.test(await fresh.locator('main').innerText()) && /פיקוד והובלת צוות/.test(await fresh.locator('main').innerText()), 'combat role: no invented technical skills, only soft skills');
+  const mc = await fresh.evaluate(() => { const c = S.cands.find((x) => x.mil && translate(x.mil) && translate(x.mil).sk.length); return { id: c.id, sk: translate(c.mil).sk.map((x) => x[0]) }; });
+  await fresh.evaluate((id) => { A.ui.open = { t: 'cand', id }; render(); }, mc.id); await fresh.waitForSelector('.drawer');
+  const dtx = await fresh.locator('.drawer').innerText(); ok(/רקע צבאי ← כישורי סייבר/.test(dtx) && /תרגום משוער/.test(dtx) && /מסווג/.test(dtx), 'candidate file shows the translation with the not-a-fact / no-classified warning');
+  const mm = await fresh.evaluate((id) => { const c = S.cands.find((x) => x.id === id), inferredOnly = translate(c.mil).sk.map((x) => x[0]).filter((k) => !c.skills.includes(k)); const j = { family: c.family, level: 'Junior', skills: inferredOnly.slice(0, 2), certs: [], clearance: false, budget: [0, 999] }; return { n: inferredOnly.length, have: inferredOnly.length ? match(j, c).items[2].ok : null }; }, mc.id);
+  ok(mm.n === 0 || mm.have === false, 'inferred skills do not count as the candidate\'s skills in matching');
+  await fresh.selectOption('#ml-u', 'תפקיד מטה / אבטחת מידע'); await fresh.waitForTimeout(200); await fresh.selectOption('#ml-r', 'קצין/ת אבטחת מידע'); await fresh.fill('#ml-y', '4'); await fresh.click('[data-act=mlSave]'); await fresh.waitForTimeout(250);
+  const ms = (await S(fresh)).cands.find((x) => x.id === mc.id).mil; ok(ms.unit === 'תפקיד מטה / אבטחת מידע' && ms.role === 'קצין/ת אבטחת מידע' && ms.years === 4, 'recruiter updates the military background from the file');
+  ok(/Risk Assessment/.test(await fresh.locator('.drawer').innerText()), 'translation updates with the new background');
   ok(errs.length === 0, 'no page errors ' + errs.join(' | '));
   console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); await b.close(); process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error('FAIL', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });
