@@ -141,7 +141,7 @@ async function main() {
       const cm = await session(browser, 'u3'); await go(cm.page, 'roster');
       await cm.page.fill('#rf-q', nc.name); await cm.page.waitForTimeout(400); ok(await cm.page.locator('tr.clk').count() === 1, 'roster search finds the new soldier');
       await cm.page.locator('tr.clk .clink').first().click(); await cm.page.waitForSelector('.drawer');
-      await cm.page.click('[data-act=cfOpen][data-t=periodic]'); await cm.page.selectOption('select[data-f=rec]', 'ממשיך/ה'); await cm.page.fill('#cf-summary', 'התחלה טובה, משתלב/ת בצוות'); await cm.page.click('[data-act=cfSave]'); await cm.page.waitForTimeout(600);
+      await cm.page.click('[data-act=cfOpen][data-t=periodic]'); await cm.page.selectOption('select[data-f=rec]', 'ממשיך/ה'); await cm.page.fill('#cf-strong', 'משתלב/ת מהר בצוות'); await cm.page.fill('#cf-plan', 'להמשיך במסלול הרגיל'); await cm.page.click('[data-act=cfSave]'); await cm.page.waitForTimeout(600);
       ok(/הסטטוס נשמר/.test(await cm.page.locator('#toast').innerText()) && /סטטוס/.test(await cm.page.locator('.drawer .tl').first().innerText()), 'periodic status entered from the soldier file and shown in the timeline');
       await api('dismiss-open', 'u3', { corps: K, id: nc.id, reason: 'בדיקה לצורך הדגמת חדר ההדחה' }); await go(cm.page, 'dismiss');
       ok(await cm.page.locator('.room').count() >= 1 && /נימוקים נדרשים/.test(await cm.page.locator('.room').first().innerText()), 'dismissal room lists the open candidates with the positions counter');
@@ -149,6 +149,20 @@ async function main() {
       await cm.page.fill('#op-' + nc.id, 'נימוק שנכתב מתוך חדר ההדחה'); await cm.page.locator('#room-' + nc.id + ' [data-act=opSave]').click(); await cm.page.waitForTimeout(600);
       ok(/הנימוק נרשם/.test(await cm.page.locator('#toast').innerText()) && await cm.page.locator('#room-' + nc.id + ' .opn').count() === 1, 'position written from the dismissal room and listed there');
       ok(await cm.page.locator('#room-' + nc.id + ' select[data-f=decision] option[disabled]').count() === 1, '"הודח/ה" is disabled in the room until enough positions exist');
+      // periodic screen: deadline, priority order, structured summary, continuous entry
+      const ps = (await api('state', 'u3')).json; ok(ps.period.daysLeft >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(ps.period.end), 'period carries its end date and the days left');
+      await deny('u3', 'periodic', { corps: K, id: nc.id, rec: 'ממשיך/ה', strong: 'חוזקה כלשהי בתקופה' }, 'structured status without "המלצה להמשך"');
+      const sr = await api('periodic', 'u3', { corps: K, id: nc.id, rec: 'ממשיך/ה', strong: 'ניווט מדויק', improve: 'עבודה בצוות', plan: 'להמשיך במסלול' }), rvn = by(await st(), nc.id).reviews.slice(-1)[0];
+      ok(sr.status === 200 && rvn.parts.plan === 'להמשיך במסלול' && /חוזקות: ניווט מדויק/.test(rvn.summary) && /המלצה להמשך/.test(rvn.summary), 'structured status is stored in parts and as one readable summary');
+      await go(cm.page, 'periodic'); const ptxt = await cm.page.locator('main').innerText();
+      ok(/ימים עד סוף התקופה/.test(ptxt) && /התקדמות לפי יחידה/.test(ptxt), 'periodic screen shows the deadline and progress per unit');
+      const order = await cm.page.evaluate(() => periodicRows(corpsKey()).map((x) => !!periodRv(x))); ok(order.indexOf(true) === -1 || order.lastIndexOf(false) < order.indexOf(true), 'soldiers without a status are listed first');
+      const firstId = await cm.page.evaluate(() => periodicRows(corpsKey()).find((x) => !periodRv(x)).id), nextId = await cm.page.evaluate((id) => nextMissing(corpsKey(), id), firstId);
+      await cm.page.click('button[data-act=pOpen]:has-text("התחלת הזנה רציפה")'); await cm.page.waitForSelector('#cf-plan');
+      ok(await cm.page.locator('.pctx').count() === 1, 'the form shows the daily trend and the previous status next to it');
+      await cm.page.selectOption('select[data-f=rec]', 'ממשיך/ה'); await cm.page.fill('#cf-plan', 'ממשיך/ה כרגיל בתקופה הבאה'); await cm.page.click('[data-act=cfSaveNext]'); await cm.page.waitForTimeout(700);
+      ok((await cm.page.evaluate(() => A.ui.cand)) === nextId && await cm.page.locator('#cf-plan').count() === 1 && !!by(await st(), firstId).reviews.find((r) => r.period === ps.period.key), '"save and next" saves and opens the next soldier without a status');
+      await cm.page.click('[data-act=cfCancel]'); await cm.page.keyboard.press('Escape');
       const hq = await session(browser, 'h1'); ok(await hq.page.locator('.clink').count() === 0 && /מספרים מסכמים בלבד/.test(await hq.page.locator('main').innerText()), 'ראש מטה sees totals only, no names');
       ok(ev.errs.length + cm.errs.length + hq.errs.length === 0, 'no page errors in the UI flows ' + ev.errs.concat(cm.errs, hq.errs).join('|'));
       console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); process.exitCode = bad ? 1 : 0;

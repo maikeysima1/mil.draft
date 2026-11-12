@@ -406,3 +406,8 @@ table td,table th{font-variant-numeric:tabular-nums}
 .opform,.decide{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
 .decide{background:color-mix(in srgb,var(--blue) 6%,transparent);border-radius:12px;padding:12px;border-top:0}
 details.tl summary{cursor:pointer}
+
+/* periodic status */
+.pctx{background:var(--bg2);border-radius:12px;padding:10px 12px}
+.frow3{display:grid;grid-template-columns:minmax(120px,220px) 1fr 60px;gap:12px;align-items:center;padding:5px 0}
+.frow3 b{text-align:end;font-variant-numeric:tabular-nums}

@@ -410,6 +410,11 @@ table td,table th{font-variant-numeric:tabular-nums}
 .opform,.decide{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
 .decide{background:color-mix(in srgb,var(--blue) 6%,transparent);border-radius:12px;padding:12px;border-top:0}
 details.tl summary{cursor:pointer}
+
+/* periodic status */
+.pctx{background:var(--bg2);border-radius:12px;padding:10px 12px}
+.frow3{display:grid;grid-template-columns:minmax(120px,220px) 1fr 60px;gap:12px;align-items:center;padding:5px 0}
+.frow3 b{text-align:end;font-variant-numeric:tabular-nums}
 </style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 <script>try{localStorage.getItem('x')}catch(e){var _m={};Object.defineProperty(window,'localStorage',{value:{getItem:function(k){return k in _m?_m[k]:null},setItem:function(k,v){_m[k]=String(v)},removeItem:function(k){delete _m[k]}}})}</script>
@@ -707,7 +712,8 @@ const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusa
 // current review period: quarter (רבעון) or half-year (חציון)
 function periodOf(ts, type) {
   const [y, m] = dayKey(ts).split('-').map(Number), n = type === 'חציון' ? Math.ceil(m / 6) : Math.ceil(m / 3);
-  return { key: y + (type === 'חציון' ? '-H' : '-Q') + n, label: (type === 'חציון' ? 'חציון ' : 'רבעון ') + n + ' / ' + y, type: type === 'חציון' ? 'חציון' : 'רבעון' };
+  const lastM = n * (type === 'חציון' ? 6 : 3), end = y + '-' + String(lastM).padStart(2, '0') + '-' + new Date(Date.UTC(y, lastM, 0)).getUTCDate();
+  return { key: y + (type === 'חציון' ? '-H' : '-Q') + n, label: (type === 'חציון' ? 'חציון ' : 'רבעון ') + n + ' / ' + y, type: type === 'חציון' ? 'חציון' : 'רבעון', end, daysLeft: Math.round((Date.parse(end) - Date.parse(dayKey(ts))) / DAY) };
 }
 const periodType = () => (state.settings && C.TR.periods.includes(state.settings.period) ? state.settings.period : 'רבעון');
 const isActive = (c) => !['הודח/ה', 'סיים/ה הכשרה'].includes(c.tstatus);
@@ -851,9 +857,13 @@ function apiHandle(p, b, user) {
   if (p === 'periodic') {
     allow('periodic', 'סטטוס תקופתי מוזן ע״י מפקד/ת הכשרה'); const c = soldier(b.id); mustBeActive(c);
     if (!T.periodRec.includes(b.rec)) throw new Error('יש לבחור סיכום: ממשיך/ה, במעקב או מועמד/ת להדחה');
-    const summary = text(b.summary, 1500); if (summary.length < 10) throw new Error('יש לכתוב סיכום קצר (לפחות 10 תווים)');
+    // structured summary (strengths / to improve / plan); a single free-text summary is still accepted
+    const parts = { strong: text(b.strong, 500), improve: text(b.improve, 500), plan: text(b.plan, 500) }, hasParts = !!(parts.strong || parts.improve || parts.plan);
+    if (hasParts && !parts.plan) throw new Error('יש למלא "המלצה להמשך"');
+    const summary = hasParts ? [parts.strong && 'חוזקות: ' + parts.strong, parts.improve && 'לשיפור: ' + parts.improve, 'המלצה להמשך: ' + parts.plan].filter(Boolean).join(' · ') : text(b.summary, 1500);
+    if (summary.length < 10 || (hasParts && (parts.strong + parts.improve + parts.plan).length < 10)) throw new Error('יש לכתוב סיכום קצר (לפחות 10 תווים)');
     const lv = cf.traits.map((t, i) => { const v = parseInt((b.lv || [])[i], 10); return [0, 1, 2].includes(v) ? v : null; });
-    const per = periodOf(Date.now(), periodType()), rv = { period: per.key, label: per.label, ts: Date.now(), by: user.title, lv, rec: b.rec, summary };
+    const per = periodOf(Date.now(), periodType()), rv = { period: per.key, label: per.label, ts: Date.now(), by: user.title, lv, rec: b.rec, summary, parts: hasParts ? parts : null };
     const i = c.reviews.findIndex((x) => x.period === per.key); if (i >= 0) c.reviews[i] = rv; else c.reviews.push(rv);
     lv.forEach((v, j) => { if (v != null) c.lv[j] = v; }); // the card always shows the latest known level
     let opened = false;
@@ -1336,10 +1346,17 @@ function cardForm(k, c) {
   const ta = (field, ph, val) => `<textarea id="cf-${field}" data-inp="cfSet" data-f="${field}" rows="3" placeholder="${ph}" style="width:100%">${esc(val || '')}</textarea>`;
   let body = '', title = '', btn = '';
   if (f.type === 'daily') { title = 'מעקב יומי – היום'; btn = 'שמירת הרישום'; body = `<label>איך היה היום?</label>${seg('level', TR().daily, f.level)}<label>נוכחות ${sel('att', TR().attend, f.att)}</label>${ta('text', 'משפט או שניים על היום (לא חובה)', f.text)}`; }
-  if (f.type === 'periodic') { title = 'סטטוס ' + A.S.period.label; btn = 'שמירת הסטטוס'; body = `<div class="mut small">רמה בכל תחום (לא חובה – תחום שלא סומן נשאר כפי שהיה)</div>${cf(k).traits.map((t, i) => `<div class="row spread" style="padding:4px 0"><span>${esc(t)}</span><div class="seg">${WORDS.map((w, j) => `<button type="button" class="${f.lv[i] === j ? 'on l' + j : ''}" data-act="cfLv" data-i="${i}" data-v="${j}">${w}</button>`).join('')}</div></div>`).join('')}<label>סיכום התקופה ${sel('rec', TR().periodRec, f.rec, 'בחרו…')}</label>${f.rec === TR().periodRec[2] ? '<div class="demo-note">בחירה ב"מועמד/ת להדחה" תפתח בדיקת הדחה.</div>' : ''}${ta('summary', 'סיכום קצר: מה השתפר, מה דורש חיזוק, מה ההמלצה להמשך', f.summary)}`; }
+  if (f.type === 'periodic') {
+    const prev = (c.reviews || []).filter((y) => y.period !== A.S.period.key).sort((a, b) => b.ts - a.ts)[0], t1 = (field, label, ph) => `<label>${label}<textarea id="cf-${field}" data-inp="cfSet" data-f="${field}" rows="2" placeholder="${ph}" style="width:100%">${esc(f[field] || '')}</textarea></label>`;
+    title = 'סטטוס ' + A.S.period.label; btn = 'שמירת הסטטוס';
+    body = `<div class="pctx"><div class="mut small">מעקב יומי – 4 שבועות אחרונים</div>${trend(c, 300)}${prev ? `<div class="mut small" style="margin-top:6px">${esc(prev.label)} · ${esc(prev.by)}</div><div class="small"><b>${esc(prev.rec)}</b> – ${esc(prev.summary)}</div>` : '<div class="mut small" style="margin-top:6px">אין סטטוס מתקופה קודמת.</div>'}</div>
+     <div class="mut small">רמה בכל תחום (לא חובה – תחום שלא סומן נשאר כפי שהיה)</div>${cf(k).traits.map((t, i) => `<div class="row spread" style="padding:4px 0"><span>${esc(t)}</span><div class="seg">${WORDS.map((w, j) => `<button type="button" class="${f.lv[i] === j ? 'on l' + j : ''}" data-act="cfLv" data-i="${i}" data-v="${j}">${w}</button>`).join('')}</div></div>`).join('')}
+     ${t1('strong', 'חוזקות', 'מה בלט לטובה בתקופה')}${t1('improve', 'לשיפור', 'מה דורש חיזוק')}${t1('plan', 'המלצה להמשך (חובה)', 'מה עושים בתקופה הבאה')}
+     <label>סיכום התקופה ${sel('rec', TR().periodRec, f.rec, 'בחרו…')}</label>${f.rec === TR().periodRec[2] ? '<div class="demo-note">בחירה ב"מועמד/ת להדחה" תפתח בדיקת הדחה.</div>' : ''}`;
+  }
   if (f.type === 'open') { title = 'פתיחת בדיקת הדחה'; btn = 'פתיחת הבדיקה'; body = `<div class="demo-note">פתיחת בדיקה אינה הדחה. ההחלטה מתקבלת בנפרד ע״י מפקד/ת ההכשרה, ומתועדת בתיק.</div>${ta('reason', 'מה הסיבה לבדיקה? עובדות ומקרים, לא התרשמות כללית', f.reason)}`; }
   if (f.type === 'decide') { const d = openDis(c); title = 'החלטה בבדיקת הדחה'; btn = 'שמירת ההחלטה'; body = `<div class="card" style="background:var(--bg2);padding:10px"><div class="mut small">נפתחה ע״י ${esc(d.openedBy)} · ${fmtD(d.openedTs)}</div>${esc(d.reason)}</div><label>החלטה ${sel('decision', TR().decisions, f.decision, 'בחרו…')}</label>${ta('note', 'נימוק ההחלטה (חובה)', f.note)}`; }
-  return `<div class="card" style="border:2px solid var(--blue)"><h3 style="margin:0 0 8px">${title}</h3><div style="display:flex;flex-direction:column;gap:10px">${body}<div class="row"><button class="btn" data-act="cfSave">${btn}</button><button class="btn sec" data-act="cfCancel">ביטול</button></div></div></div>`;
+  return `<div class="card" style="border:2px solid var(--blue)"><h3 style="margin:0 0 8px">${title}</h3><div style="display:flex;flex-direction:column;gap:10px">${body}<div class="row"><button class="btn" data-act="cfSave">${btn}</button>${f.type === 'periodic' && nextMissing(k, c.id) ? `<button class="btn sec" data-act="cfSaveNext">שמירה ומעבר ל${esc(candOf(k, nextMissing(k, c.id)).name)} ←</button>` : ''}<button class="btn sec" data-act="cfCancel">ביטול</button></div></div></div>`;
 }
 function drawer(k, id) {
   const c = candOf(k, id); if (!c) return '';
@@ -1368,16 +1385,17 @@ Object.assign(ACTIONS, {
   goRoom: () => { A.ui.cand = null; A.ui.cf = null; go('dismiss'); },
   tlAll: () => { A.ui.tlAll = !A.ui.tlAll; rerender(); },
   fav: async (d, t, e) => { e.stopPropagation(); const k = corpsKey(); try { await api('fav', { corps: k, id: d.id, on: !isFav(k, d.id) }); } catch (x) { /* toast shown */ } },
-  cfOpen: (d) => { const k = corpsKey(), c = candOf(k, A.ui.cand), m = myToday(c), r = periodRv(c); A.ui.cf = { type: d.t, id: c.id, level: m ? m.level : null, att: m ? m.att : TR().attend[0], text: m ? m.text : '', lv: r ? r.lv.slice() : c.lv.map(() => null), rec: r ? r.rec : '', summary: r ? r.summary : '', reason: '', decision: '', note: '' }; rerender(); },
+  cfOpen: (d) => { const k = corpsKey(), c = candOf(k, A.ui.cand), m = myToday(c), r = periodRv(c); A.ui.cf = { type: d.t, id: c.id, level: m ? m.level : null, att: m ? m.att : TR().attend[0], text: m ? m.text : '', lv: r ? r.lv.slice() : c.lv.map(() => null), rec: r ? r.rec : '', summary: r ? r.summary : '', strong: r && r.parts ? r.parts.strong : '', improve: r && r.parts ? r.parts.improve : '', plan: r ? (r.parts ? r.parts.plan : r.summary) : '', reason: '', decision: '', note: '' }; rerender(); },
   cfCancel: () => { A.ui.cf = null; rerender(); },
   cfSet: (d, t) => { if (A.ui.cf) { A.ui.cf[d.f] = t.value; if (t.tagName === 'SELECT') rerender(); } },
   cfSeg: (d) => { A.ui.cf[d.f] = +d.v; rerender(); },
   cfLv: (d) => { const f = A.ui.cf; f.lv[+d.i] = f.lv[+d.i] === +d.v ? null : +d.v; rerender(); },
-  cfSave: async () => {
+  cfSaveNext: () => ACTIONS.cfSave(null, null, null, true),
+  cfSave: async (d0, t0, e0, goNext) => {
     const k = corpsKey(), f = A.ui.cf, c = candOf(k, f.id);
     try {
       if (f.type === 'daily') { if (f.level == null) { toast('בחרו איך היה היום', true); return; } await api('daily', { corps: k, id: f.id, level: f.level, att: f.att, text: f.text }); toast('המעקב היומי נשמר'); }
-      if (f.type === 'periodic') { const r = await api('periodic', { corps: k, id: f.id, lv: f.lv, rec: f.rec, summary: f.summary }); toast(r.opened ? 'הסטטוס נשמר ונפתחה בדיקת הדחה' : 'הסטטוס נשמר'); }
+      if (f.type === 'periodic') { const r = await api('periodic', { corps: k, id: f.id, lv: f.lv, rec: f.rec, strong: f.strong, improve: f.improve, plan: f.plan }); toast(r.opened ? 'הסטטוס נשמר ונפתחה בדיקת הדחה' : 'הסטטוס נשמר'); const nx = goNext && nextMissing(k, f.id); if (nx) { A.ui.cand = nx; A.ui.cf = null; ACTIONS.cfOpen({ t: 'periodic' }); return; } if (goNext) toast('הוזן סטטוס לכל הרשימה'); }
       if (f.type === 'open') { await api('dismiss-open', { corps: k, id: f.id, reason: f.reason }); toast('נפתחה בדיקת הדחה ל' + c.name); }
       if (f.type === 'decide') { if (f.decision === TR().decisions[2] && !confirm('להדיח את ' + c.name + ' מההכשרה? ההחלטה נרשמת בתיק ואי אפשר לבטל אותה מהמערכת.')) return; await api('dismiss-decide', { corps: k, id: f.id, decision: f.decision, note: f.note }); toast('ההחלטה נשמרה: ' + f.decision); }
       A.ui.cf = null; rerender();
@@ -1458,12 +1476,25 @@ Object.assign(ACTIONS, {
 });
 
 // ---- periodic status ----
+// order of work: who has no status yet comes first, and among them whoever needs the most attention
+const pLow = (x) => (x.daily || []).filter((e) => daysAgo(e.ts) <= 14 && e.level === 0).length;
+const pPrio = (x) => (periodRv(x) ? 0 : 1000) + (x.tstatus === 'בבדיקת הדחה' ? 300 : (x.tstatus === 'במעקב' ? 200 : 0)) + pLow(x) * 10;
+function periodicRows(k) { const f = A.ui.pf || {}; return visible(k).filter(isActive).filter((x) => (!f.unit || x.unit === f.unit) && (!f.team || x.group === +f.team) && (!f.miss || !periodRv(x))).sort((a, b) => pPrio(b) - pPrio(a) || a.name.localeCompare(b.name, 'he')); }
+// the next soldier in the current list who still has no status for this period
+function nextMissing(k, afterId) { const ids = periodicRows(k).map((x) => x.id), i = ids.indexOf(afterId), order = ids.slice(i + 1).concat(ids.slice(0, Math.max(i, 0))); return order.find((id) => id !== afterId && !periodRv(candOf(k, id))) || null; }
 SCREENS.periodic = (k) => {
-  const c = cf(k), all = visible(k).filter(isActive), only = A.ui.pMiss, rows = all.filter((x) => !only || !periodRv(x)), done = all.filter(periodRv).length; A.ui.list = rows.map((x) => x.id);
-  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">סטטוס ${esc(A.S.period.label)} – ${esc(c.label)}</h1><div class="mut small">סיכום תקופתי לכל חייל/ת פעיל/ה: רמה בכל תחום, סיכום, והמלצה להמשך${can('periodic', k) ? '' : ' · צפייה בלבד'}</div></div><div class="row"><b>${done} / ${all.length}</b><span class="mut small">הוזנו</span></div></div>
-   <div class="card"><div class="filters"><label><input type="checkbox" id="p-miss" data-chg="pMiss" ${only ? 'checked' : ''}> רק מי שחסר לו סטטוס (${all.length - done})</label></div>
-   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>יחידה</th><th>סטטוס נוכחי</th><th>תקופה קודמת</th><th>${esc(A.S.period.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x), pr = (x.reviews || []).filter((y) => y.period !== A.S.period.key).sort((a, b) => b.ts - a.ts)[0];
-     return `<tr><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<b>${candLink(k, x.id, x.name)}</b></span></td><td>${esc(x.unit)}</td><td>${stPill(x)}</td><td>${pr ? `<span class="pill p-gray">${esc(pr.rec)}</span> <span class="mut small">${esc(pr.label)}</span>` : '<span class="mut">—</span>'}</td><td>${r ? `<span class="pill ${r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red')}">${esc(r.rec)}</span> <span class="mut small">${esc(r.by)} · ${fmtD(r.ts)}</span>` : '<span class="pill p-orange">חסר</span>'}</td><td>${can('periodic', k) ? `<button class="btn sec sm" data-act="pOpen" data-id="${x.id}">${r ? 'עדכון' : 'הזנת סטטוס'}</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">לכל החיילים הפעילים הוזן סטטוס לתקופה</td></tr>'}</tbody></table></div></div>`;
+  const c = cf(k), f = A.ui.pf || {}, all = visible(k).filter(isActive), rows = periodicRows(k), done = all.filter(periodRv).length, P = A.S.period, left = P.daysLeft, missing = all.length - done, edit = can('periodic', k); A.ui.list = rows.map((x) => x.id);
+  const sel = (key, label, opts, val) => `<label>${label}<select data-chg="pf" data-f="${key}"><option value="">הכול</option>${opts.map((o) => `<option ${String(o) === String(val || '') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+  const first = rows.find((x) => !periodRv(x));
+  const units = c.units.map((u) => { const g = all.filter((x) => x.unit === u.name), d = g.filter(periodRv).length; return g.length ? `<div class="frow3"><span>${esc(u.name)}</span><div class="bar"><i style="width:${d / g.length * 100}%;background:var(--blue)"></i></div><b>${d} / ${g.length}</b></div>` : ''; }).join('');
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">סטטוס ${esc(P.label)} – ${esc(c.label)}</h1><div class="mut small">סיכום תקופתי לכל חייל/ת פעיל/ה: רמה בכל תחום, חוזקות, לשיפור והמלצה להמשך${edit ? '' : ' · צפייה בלבד'}</div></div>
+    <div class="row">${edit && first ? `<button class="btn" data-act="pOpen" data-id="${first.id}">התחלת הזנה רציפה (${rows.filter((x) => !periodRv(x)).length})</button>` : ''}</div></div>
+   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div class="kpi"><b>${done} / ${all.length}</b><span>הוזנו לתקופה</span></div><div class="kpi"><b>${missing}</b><span>חסרים</span></div><div class="kpi"><b>${left}</b><span>ימים עד סוף התקופה</span><div class="small ${missing && left <= 14 ? '' : 'mut'}" ${missing && left <= 14 ? 'style="color:var(--red);font-weight:700"' : ''}>${esc(P.end.slice(8) + '/' + P.end.slice(5, 7))}${missing && left <= 14 ? ' · נותרו ' + missing + ' להזנה' : ''}</div></div></div>
+   <div class="card"><h2>התקדמות לפי יחידה</h2>${units}</div>
+   <div class="card"><div class="filters">${A.me.role === 'מגבש/ת' ? '' : sel('unit', 'יחידה', c.units.map((u) => u.name), f.unit) + sel('team', 'צוות', [1, 2, 3, 4], f.team)}<label><input type="checkbox" id="p-miss" data-chg="pf" data-f="miss" ${f.miss ? 'checked' : ''}> רק מי שחסר לו סטטוס (${missing})</label></div>
+   <div class="mut small" style="margin-bottom:8px">הסדר: קודם מי שעוד לא הוזן, ובתוכם מי שבבדיקת הדחה, במעקב, או עם ימי "מתקשה" בשבועיים האחרונים.</div>
+   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>יחידה · צוות</th><th>סטטוס נוכחי</th><th>שבועיים אחרונים</th><th>תקופה קודמת</th><th>${esc(P.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x), pr = (x.reviews || []).filter((y) => y.period !== P.key).sort((a, b) => b.ts - a.ts)[0], w = (x.daily || []).filter((e) => daysAgo(e.ts) <= 14), wk = TR().daily.map((q, j) => w.filter((e) => e.level === j).length);
+     return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<b>${candLink(k, x.id, x.name)}</b></span></td><td>${esc(x.unit)} · ${x.group}</td><td>${stPill(x)}</td><td>${w.length ? TR().daily.map((q, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(q)}</span>` : '')).join(' ') : '<span class="mut small">אין רישום</span>'}</td><td>${pr ? `<span class="pill p-gray">${esc(pr.rec)}</span>` : '<span class="mut">—</span>'}</td><td>${r ? `<span class="pill ${r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red')}">${esc(r.rec)}</span> <span class="mut small">${fmtD(r.ts)}</span>` : '<span class="pill p-orange">חסר</span>'}</td><td>${edit ? `<button class="btn ${r ? 'sec' : ''} sm" data-act="pOpen" data-id="${x.id}">${r ? 'עדכון' : 'הזנה'}</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין חיילים לפי הסינון</td></tr>'}</tbody></table></div></div>`;
 };
 // ---- dismissal room (חדר הדחה): every commander writes a reasoned position per candidate, then the decision is taken on that basis ----
 const STANCE_CLS = ['p-red', 'p-orange', 'p-green'];
@@ -1510,8 +1541,8 @@ Object.assign(ACTIONS, {
   },
 });
 Object.assign(ACTIONS, {
-  pMiss: (d, t) => { A.ui.pMiss = t.checked; rerender(); },
-  pOpen: (d) => { ACTIONS.openCand(d); ACTIONS.cfOpen({ t: 'periodic' }); },
+  pf: (d, t) => { A.ui.pf = Object.assign({}, A.ui.pf, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); rerender(); },
+  pOpen: (d, t, e) => { if (e) e.stopPropagation(); ACTIONS.openCand(d); ACTIONS.cfOpen({ t: 'periodic' }); },
 });
 
 // ---- intake (גיוס המועמד) ----

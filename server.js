@@ -195,7 +195,8 @@ const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusa
 // current review period: quarter (רבעון) or half-year (חציון)
 function periodOf(ts, type) {
   const [y, m] = dayKey(ts).split('-').map(Number), n = type === 'חציון' ? Math.ceil(m / 6) : Math.ceil(m / 3);
-  return { key: y + (type === 'חציון' ? '-H' : '-Q') + n, label: (type === 'חציון' ? 'חציון ' : 'רבעון ') + n + ' / ' + y, type: type === 'חציון' ? 'חציון' : 'רבעון' };
+  const lastM = n * (type === 'חציון' ? 6 : 3), end = y + '-' + String(lastM).padStart(2, '0') + '-' + new Date(Date.UTC(y, lastM, 0)).getUTCDate();
+  return { key: y + (type === 'חציון' ? '-H' : '-Q') + n, label: (type === 'חציון' ? 'חציון ' : 'רבעון ') + n + ' / ' + y, type: type === 'חציון' ? 'חציון' : 'רבעון', end, daysLeft: Math.round((Date.parse(end) - Date.parse(dayKey(ts))) / DAY) };
 }
 const periodType = () => (state.settings && C.TR.periods.includes(state.settings.period) ? state.settings.period : 'רבעון');
 const isActive = (c) => !['הודח/ה', 'סיים/ה הכשרה'].includes(c.tstatus);
@@ -339,9 +340,13 @@ function apiHandle(p, b, user) {
   if (p === 'periodic') {
     allow('periodic', 'סטטוס תקופתי מוזן ע״י מפקד/ת הכשרה'); const c = soldier(b.id); mustBeActive(c);
     if (!T.periodRec.includes(b.rec)) throw new Error('יש לבחור סיכום: ממשיך/ה, במעקב או מועמד/ת להדחה');
-    const summary = text(b.summary, 1500); if (summary.length < 10) throw new Error('יש לכתוב סיכום קצר (לפחות 10 תווים)');
+    // structured summary (strengths / to improve / plan); a single free-text summary is still accepted
+    const parts = { strong: text(b.strong, 500), improve: text(b.improve, 500), plan: text(b.plan, 500) }, hasParts = !!(parts.strong || parts.improve || parts.plan);
+    if (hasParts && !parts.plan) throw new Error('יש למלא "המלצה להמשך"');
+    const summary = hasParts ? [parts.strong && 'חוזקות: ' + parts.strong, parts.improve && 'לשיפור: ' + parts.improve, 'המלצה להמשך: ' + parts.plan].filter(Boolean).join(' · ') : text(b.summary, 1500);
+    if (summary.length < 10 || (hasParts && (parts.strong + parts.improve + parts.plan).length < 10)) throw new Error('יש לכתוב סיכום קצר (לפחות 10 תווים)');
     const lv = cf.traits.map((t, i) => { const v = parseInt((b.lv || [])[i], 10); return [0, 1, 2].includes(v) ? v : null; });
-    const per = periodOf(Date.now(), periodType()), rv = { period: per.key, label: per.label, ts: Date.now(), by: user.title, lv, rec: b.rec, summary };
+    const per = periodOf(Date.now(), periodType()), rv = { period: per.key, label: per.label, ts: Date.now(), by: user.title, lv, rec: b.rec, summary, parts: hasParts ? parts : null };
     const i = c.reviews.findIndex((x) => x.period === per.key); if (i >= 0) c.reviews[i] = rv; else c.reviews.push(rv);
     lv.forEach((v, j) => { if (v != null) c.lv[j] = v; }); // the card always shows the latest known level
     let opened = false;
