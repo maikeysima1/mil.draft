@@ -1,7 +1,7 @@
 // CyberHire (experiment): leads + candidates for cyber-security recruiting. Client-only demo: all data is fictional and lives in this browser.
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const KEY = 'cyberhire-v1', DAY = 86400e3;
+const KEY = 'cyberhire-v2', DAY = 86400e3;
 const T = {
   leadStages: ['ליד חדש', 'נוצר קשר', 'פגישת אפיון', 'הצעה נשלחה', 'משא ומתן', 'נסגר – לקוח', 'אבוד'],
   candStages: ['מקור', 'סינון טלפוני', 'ראיון טכני', 'מטלה מעשית', 'ראיון מנהל', 'הצעה', 'התקבל/ה', 'נדחה', 'פרש/ה'],
@@ -16,6 +16,9 @@ const T = {
   reject: ['פער בכישורים', 'ציפיות שכר', 'חוסר ניסיון', 'התאמה לצוות', 'קיבל/ה הצעה אחרת', 'אין מענה'],
   budget: { Junior: [18, 26], Mid: [28, 40], Senior: [40, 58], Lead: [55, 75] }, // thousand ILS / month – illustrative only
   stuck: { lead: 10, cand: 7 }, // days in one stage before an item is flagged
+  // stage-to-hire assumptions used by the forecast UNTIL there is enough own history (minHist decided candidates); then the system uses its own data
+  passDefault: { 'מקור': 0.5, 'סינון טלפוני': 0.6, 'ראיון טכני': 0.5, 'מטלה מעשית': 0.6, 'ראיון מנהל': 0.7, 'הצעה': 0.75 }, minHist: 30,
+  verifyPass: 70, // practical test score that counts as a verified skill
 };
 const USERS = [{ id: 'm1', name: 'דנה', title: 'מנהלת גיוס', role: 'מנהל/ת גיוס' }, { id: 'r1', name: 'יואב', title: 'מגייס', role: 'מגייס/ת' }, { id: 'r2', name: 'מאיה', title: 'מגייסת', role: 'מגייס/ת' }, { id: 's1', name: 'עומר', title: 'מנהל לקוחות', role: 'מכירות' }];
 const PERM = { 'מנהל/ת גיוס': { leads: true, cands: true, salary: true, admin: true }, 'מגייס/ת': { leads: false, cands: true, salary: true }, 'מכירות': { leads: true, cands: false, salary: false } };
@@ -55,27 +58,78 @@ function seed() {
     const fit = openJobs.filter((j) => j.family === fam); if (stage !== 'מקור' && fit.length) c.jobId = fit[i % fit.length].id; // only attached to a job in the candidate's own field
     if (candOpen(c)) c.next = { date: isoD(n0 + (Math.floor(rnd() * 8) - 1) * DAY), text: pick(['תיאום ראיון', 'שליחת מטלה', 'קבלת משוב מהלקוח', 'שיחת שכר', 'בדיקת ממליצים']) };
     if (stage === 'נדחה' || stage === 'פרש/ה') c.rejectReason = pick(T.reject);
+    c.verified = {}; if (T.candStages.indexOf(stage) >= 3 || (stage === 'נדחה' && rnd() > 0.5)) c.skills.slice(0, 2).forEach((sk2) => { c.verified[sk2] = { score: Math.round(55 + rnd() * 43), ts: created + 5 * DAY, by: c.owner }; });
+    c.hist = [{ stage: 'מקור', ts: created }]; if (stage !== 'מקור') c.hist.push({ stage, ts: c.stageTs });
     return c;
   });
-  return { v: 1, leads, jobs, cands, log: [] };
+  // demo: three past candidates in the field of open jobs, so "bring back" has something real to show
+  [[10, 0, 'ציפיות שכר', 40], [17, 1, 'ציפיות שכר', 35], [11, 2, 'קיבל/ה הצעה אחרת', 150]].forEach(([ci, ji, why, ago]) => {
+    const c = cands[ci], j = openJobs[ji % openJobs.length]; if (!c || !j) return;
+    c.family = j.family; c.level = j.level; c.skills = T.skills[j.family].slice(0, 3); c.stage = why === 'ציפיות שכר' ? 'נדחה' : 'פרש/ה'; c.jobId = null; c.next = null;
+    c.rejectReason = why; c.rejectTs = n0 - ago * DAY; c.salary = Math.round((j.budget[0] + j.budget[1] * 2) / 3);
+    c.notes.push({ ts: c.rejectTs, by: c.owner, text: (why === 'ציפיות שכר' ? 'נדחה/תה: ציפיות שכר גבוהות מהתקציב של משרה קודמת.' : 'פרש/ה: קיבל/ה הצעה אחרת.') });
+  });
+  return { v: 2, leads, jobs, cands, log: [] };
 }
 function jobFromLead(l, id, ts) { return { id, leadId: l.id, company: l.company, title: l.need + ' · ' + l.level, family: l.need, level: l.level, skills: T.skills[l.need].slice(0, 3), certs: l.level === 'Junior' ? ['Security+'] : (l.need === 'GRC וציות' ? ['CISM', 'ISO 27001 LA'] : (l.need === 'בדיקות חדירה / Red Team' ? ['OSCP'] : (l.need === 'אבטחת ענן' ? ['AWS Security', 'CCSP'] : ['CISSP']))), clearance: l.clearance, budget: l.budget.slice(), headcount: l.headcount, filled: 0, status: 'פתוחה', openTs: ts || now() }; }
-let S; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; } if (!S || S.v !== 1) S = seed();
+let S; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; } if (!S || S.v !== 2) S = seed();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } };
 const logAct = (text) => { S.log.unshift({ ts: now(), by: A.me ? A.me.id : '', text }); if (S.log.length > 300) S.log.pop(); };
 const note = (x, text) => x.notes.push({ ts: now(), by: A.me.id, text });
-const setStage = (x, stage) => { x.stage = stage; x.stageTs = now(); };
+const setStage = (x, stage) => { x.stage = stage; x.stageTs = now(); if (x.hist) x.hist.push({ stage, ts: x.stageTs }); };
 
 // ---------- matching: transparent rules, no hidden score. The recruiter decides. ----------
 function match(j, c) {
-  const need = j.skills, have = need.filter((x) => c.skills.includes(x));
-  const items = [{ l: 'תחום', ok: c.family === j.family, t: c.family }, { l: 'בכירות', ok: T.levels.indexOf(c.level) >= T.levels.indexOf(j.level), t: c.level + ' מול ' + j.level }, { l: 'כישורים', ok: have.length >= Math.ceil(need.length / 2), t: have.length + ' מתוך ' + need.length + (have.length ? ' (' + have.join(', ') + ')' : '') }];
+  const need = j.skills, have = need.filter((x) => c.skills.includes(x)), ver = have.filter((x) => isVerified(c, x));
+  const items = [{ l: 'תחום', ok: c.family === j.family, t: c.family }, { l: 'בכירות', ok: T.levels.indexOf(c.level) >= T.levels.indexOf(j.level), t: c.level + ' מול ' + j.level }, { l: 'כישורים', ok: have.length >= Math.ceil(need.length / 2), t: have.length + ' מתוך ' + need.length + (have.length ? ' (' + have.join(', ') + ')' : '') + ' · מאומתים ' + ver.length }];
   if (j.certs.length) items.push({ l: 'תעודה', ok: j.certs.some((x) => c.certs.includes(x)), t: j.certs.filter((x) => c.certs.includes(x)).join(', ') || 'אין מהנדרשות' });
   if (j.clearance) items.push({ l: 'סיווג ביטחוני', ok: !!c.clearance, t: c.clearance ? 'יש' : 'אין' });
   items.push({ l: 'שכר', ok: c.salary <= j.budget[1], t: money(c.salary) + ' מול תקרה ' + money(j.budget[1]) });
-  return { met: items.filter((i) => i.ok).length, total: items.length, items };
+  return { met: items.filter((i) => i.ok).length, total: items.length, items, ver: ver.length, need: need.length };
 }
-const matchChips = (m, salary) => m.items.filter((i) => salary || i.l !== 'שכר').map((i) => `<span class="pill ${i.ok ? 'p-green' : 'p-orange'}" title="${esc(i.t)}">${i.ok ? '✓' : '✗'} ${esc(i.l)}</span>`).join(' ');
+const matchChips = (m, salary) => m.items.filter((i) => salary || i.l !== 'שכר').map((i) => `<span class="pill ${i.ok ? 'p-green' : 'p-orange'}" title="${esc(i.t)}">${i.ok ? '✓' : '✗'} ${esc(i.l)}</span>`).join(' ') + (m.need ? ` <span class="pill ${m.ver ? 'p-blue' : 'p-gray'}" title="כישורים שעברו מטלה מעשית">🛡 ${m.ver}/${m.need} מאומתים</span>` : '');
+
+// ---------- the intelligence layer: verified skills, forecast, rediscovery, next actions. Every result shows its reason. ----------
+const isVerified = (c, sk) => !!(c.verified && c.verified[sk] && c.verified[sk].score >= T.verifyPass);
+const skillPill = (c, sk) => { const v = c.verified && c.verified[sk]; return `<span class="pill ${v ? (v.score >= T.verifyPass ? 'p-green' : 'p-orange') : 'p-blue'}" title="${v ? 'מטלה מעשית: ' + v.score + ' · ' + fmtD(v.ts) : 'מוצהר – לא נבדק'}">${v && v.score >= T.verifyPass ? '🛡 ' : ''}${esc(sk)}${v ? ' ' + v.score : ''}</span>`; };
+// pass rate from each stage to the next. Own history once there are enough decided candidates, otherwise the stated defaults.
+function passRates() {
+  const decided = S.cands.filter((c) => !candOpen(c) && c.hist && c.hist.length > 1);
+  if (decided.length < T.minHist) return { src: 'הנחות ברירת מחדל (' + decided.length + ' מתוך ' + T.minHist + ' מועמדים עם היסטוריה)', r: T.passDefault };
+  const r = {}, idx = (st) => T.candStages.indexOf(st), top = (c) => Math.max(...c.hist.map((h) => idx(h.stage)).filter((i) => i <= idx('התקבל/ה')));
+  Object.keys(T.passDefault).forEach((st) => { const i = idx(st), reached = decided.filter((c) => top(c) >= i), passed = reached.filter((c) => top(c) > i); r[st] = reached.length ? passed.length / reached.length : T.passDefault[st]; });
+  return { src: 'הנתונים שלכם (' + decided.length + ' מועמדים)', r };
+}
+const hireProb = (c, R) => { if (c.stage === 'התקבל/ה') return 1; if (!candOpen(c)) return 0; let p = 1; T.candStages.slice(T.candStages.indexOf(c.stage), T.candStages.indexOf('התקבל/ה')).forEach((st) => { p *= R[st] == null ? 1 : R[st]; }); return p; };
+function forecast(j) {
+  const P = passRates(), pipe = S.cands.filter((c) => c.jobId === j.id && candOpen(c)), exp = pipe.reduce((a, c) => a + hireProb(c, P.r), 0), left = j.headcount - j.filled;
+  const p0 = hireProb({ stage: 'מקור' }, P.r), more = exp >= left ? 0 : Math.ceil((left - exp) / Math.max(p0, 0.01));
+  const fam = S.cands.filter((c) => c.family === j.family && T.levels.indexOf(c.level) >= T.levels.indexOf(j.level) && c.salary != null).map((c) => c.salary).sort((a, b) => a - b);
+  const med = fam.length >= 3 ? fam[Math.floor(fam.length / 2)] : null, risks = [];
+  if (med != null && j.budget[1] < med) risks.push('התקרה (' + money(j.budget[1]) + ') מתחת לחציון ציפיות השכר במאגר לתפקיד כזה (' + money(med) + ', ' + fam.length + ' מועמדים)');
+  if (j.clearance) { const n = S.cands.filter((c) => c.family === j.family && c.clearance).length; if (n < 3) risks.push('נדרש סיווג ביטחוני ויש רק ' + n + ' מועמדים עם סיווג בתחום'); }
+  const lateDays = Math.floor((now() - j.openTs) / DAY); if (lateDays >= 75) risks.push('המשרה פתוחה ' + lateDays + ' ימים');
+  return { pipe, exp, left, more, risks, src: P.src, med, ok: exp >= left * 0.9 };
+}
+// past candidates whose rejection reason no longer applies to this job
+function rediscover(j) {
+  return S.cands.filter((c) => !candOpen(c) && c.stage !== 'התקבל/ה' && c.family === j.family && c.jobId !== j.id && T.levels.indexOf(c.level) >= T.levels.indexOf(j.level)).map((c) => {
+    const ago = c.rejectTs ? Math.floor((now() - c.rejectTs) / DAY) : null;
+    if (c.rejectReason === 'ציפיות שכר' && c.salary != null && c.salary <= j.budget[1]) return { c, why: 'נדחה/תה על ציפיות שכר (' + money(c.salary) + '), והתקרה במשרה הזו ' + money(j.budget[1]) };
+    if (c.rejectReason === 'קיבל/ה הצעה אחרת' && ago != null && ago >= 120) return { c, why: 'קיבל/ה הצעה אחרת לפני ' + ago + ' ימים – אולי פתוח/ה שוב' };
+    if (c.rejectReason === 'אין מענה' && ago != null && ago >= 60) return { c, why: 'לא ענה/תה לפני ' + ago + ' ימים – שווה ניסיון נוסף' };
+    return null;
+  }).filter(Boolean);
+}
+// what to do now, ranked by impact. Each item names its reason and opens the right file.
+function nextActions() {
+  const out = [], today = isoD(now()), add = (w, t, kind, id, txt, why) => out.push({ w, t, kind, id, txt, why });
+  S.cands.filter((c) => c.stage === 'הצעה' && daysIn(c) >= 2).forEach((c) => add(100 + daysIn(c), 'סגירת הצעה', 'openCand', c.id, c.name, 'בשלב הצעה ' + daysIn(c) + ' ימים – בשוק תחרותי מועמדים מקבלים הצעות נוספות'));
+  S.jobs.filter(jobOpen).forEach((j) => { const f = forecast(j); if (f.more > 0) add(80 + f.more, 'הזנת המשפך', 'openJob', j.id, j.company + ' · ' + j.title, 'צפי ' + f.exp.toFixed(1) + ' מתוך ' + f.left + ' תקנים – חסרים בערך ' + f.more + ' מועמדים חדשים'); if (f.risks.length && f.risks[0].startsWith('התקרה')) add(70, 'שיחת תקציב עם הלקוח', 'openJob', j.id, j.company, f.risks[0]); rediscover(j).slice(0, 2).forEach((r) => add(60, 'החזרת מועמד/ת', 'openCand', r.c.id, r.c.name + ' ← ' + j.company, r.why)); });
+  S.cands.filter((c) => candOpen(c) && ['ראיון טכני', 'מטלה מעשית'].includes(c.stage) && c.jobId).forEach((c) => { const j = S.jobs.find((x) => x.id === c.jobId); const miss = j ? j.skills.filter((sk) => c.skills.includes(sk) && !isVerified(c, sk)) : []; if (miss.length) add(40, 'מטלה מעשית', 'openCand', c.id, c.name, 'כישורים מוצהרים שלא נבדקו: ' + miss.join(', ')); });
+  S.leads.concat(S.cands).filter((x) => (x.company ? leadOpen(x) : candOpen(x)) && x.next && x.next.date < today).forEach((x) => add(30, 'משימה באיחור', x.company ? 'openLead' : 'openCand', x.id, x.company || x.name, x.next.text + ' (' + x.next.date.slice(8) + '/' + x.next.date.slice(5, 7) + ')'));
+  return out.sort((a, b) => b.w - a.w);
+}
 
 // ---------- small UI helpers ----------
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : ''); clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ''; }, 3000); }
@@ -106,6 +160,8 @@ SCREENS.dash = () => {
   const kpi = (v, l, sub) => `<div class="kpi"><b>${v}</b><span>${l}</span>${sub ? `<div class="mut small">${sub}</div>` : ''}</div>`;
   return `<div><h1 class="h1">תמונת מצב</h1><div class="mut small">גיוס לתפקידי סייבר: לידים של לקוחות, משרות פתוחות ומועמדים בתהליך · כל הנתונים פיקטיביים</div></div>
    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${kpi(L.filter(leadOpen).length, 'לידים פתוחים', L.filter((l) => l.stage === 'נסגר – לקוח').length + ' נסגרו כלקוח')}${kpi(J.length, 'משרות פתוחות', J.reduce((a, j) => a + j.headcount - j.filled, 0) + ' תקנים לאיוש')}${kpi(act.length, 'מועמדים בתהליך')}${kpi(C.filter((c) => c.stage === 'הצעה').length, 'בשלב הצעה')}${kpi(C.filter((c) => c.stage === 'התקבל/ה').length, 'התקבלו')}</div>
+   <div class="card"><h2>מה לעשות עכשיו</h2><div class="mut small" style="margin-bottom:6px">פעולות מסודרות לפי השפעה: הצעות פתוחות, משרות שהמשפך שלהן לא יספיק, מועמדים שאפשר להחזיר, כישורים לא מאומתים ומשימות באיחור. לכל שורה הסיבה שלה.</div>${nextActions().slice(0, 8).map((a) => `<div class="tl row spread" style="flex-wrap:nowrap;align-items:flex-start"><span><span class="pill p-dark">${esc(a.t)}</span> <a href="#" class="clink" data-act="${a.kind}" data-id="${a.id}">${esc(a.txt)}</a><div class="mut small" style="margin-top:3px">${esc(a.why)}</div></span></span></div>`).join('') || '<span class="mut">אין פעולות דחופות.</span>'}</div>
+   <div class="card"><h2>צפי איוש למשרות פתוחות</h2><div class="mut small" style="margin-bottom:6px">לכל מועמד/ת בתהליך: הסיכוי לעבור מהשלב הנוכחי עד קבלה, לפי ${esc(passRates().src)}. הצפי הוא סכום הסיכויים – הערכה, לא הבטחה.</div><div style="overflow:auto"><table><thead><tr><th>משרה</th><th>תקנים</th><th>בתהליך</th><th>צפי איוש</th><th>חסרים בראש המשפך</th><th>סיכונים</th></tr></thead><tbody>${J.map((j) => { const f = forecast(j); return `<tr><td><a href="#" class="clink" data-act="openJob" data-id="${j.id}">${esc(j.company)}</a><div class="mut small">${esc(j.title)}</div></td><td>${f.left}</td><td>${f.pipe.length}</td><td><span class="pill ${f.ok ? 'p-green' : (f.exp >= f.left * 0.5 ? 'p-orange' : 'p-red')}">${f.exp.toFixed(1)}</span></td><td>${f.more || '·'}</td><td class="small">${f.risks.map(esc).join('<br>') || '<span class="mut">—</span>'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="mut">אין משרות פתוחות</td></tr>'}</tbody></table></div></div>
    <div class="grid g2"><div class="card"><h2>משפך לידים</h2>${funnel(T.leadStages, L, 'f1')}</div><div class="card"><h2>משפך מועמדים</h2>${funnel(T.candStages, C, 'f2')}</div></div>
    <div class="grid g2"><div class="card"><h2>לטיפול היום (${due.length})</h2>${due.slice(0, 8).map(({ x, t }) => `<div class="tl row spread"><a href="#" class="clink" data-act="${t === 'lead' ? 'openLead' : 'openCand'}" data-id="${x.id}">${esc(t === 'lead' ? x.company : x.name)}</a><span class="row" style="gap:6px"><span class="pill p-gray">${t === 'lead' ? 'ליד' : 'מועמד/ת'}</span>${nextHtml(x)}</span></div>`).join('') || '<span class="mut">אין משימות פתוחות להיום.</span>'}</div>
     <div class="card"><h2>תקועים בשלב</h2><div class="mut small" style="margin-bottom:6px">ליד ${T.stuck.lead}+ ימים, מועמד/ת ${T.stuck.cand}+ ימים באותו שלב. גיוס בסייבר ארוך ממילא – מה שנתקע בלי סיבה מאבד מועמדים.</div>${stuckL.map((l) => `<div class="tl row spread"><a href="#" class="clink" data-act="openLead" data-id="${l.id}">${esc(l.company)}</a><span class="row" style="gap:6px"><span class="pill p-gray">${esc(l.stage)}</span>${agePill(l, T.stuck.lead)}</span></div>`).concat(stuckC.map((c) => `<div class="tl row spread"><a href="#" class="clink" data-act="openCand" data-id="${c.id}">${esc(c.name)}</a><span class="row" style="gap:6px"><span class="pill p-gray">${esc(c.stage)}</span>${agePill(c, T.stuck.cand)}</span></div>`)).slice(0, 8).join('') || '<span class="mut">אין פריטים תקועים.</span>'}</div></div>
@@ -162,11 +218,13 @@ function leadDrawer(l) {
 function candDrawer(c) {
   const edit = can('cands'), j = S.jobs.find((x) => x.id === c.jobId), open = S.jobs.filter(jobOpen);
   return wrap(`<span class="row" style="gap:12px;flex-wrap:nowrap">${avatar(c.id, 56)}<span>${esc(c.name)}</span></span>`, `${c.id} · ${esc(c.family)} · ${esc(c.level)} · ${c.years} שנות ניסיון · ${esc(c.location)} · מקור: ${esc(c.source)} · מגייס/ת: ${esc(uName(c.owner))}`, `
-   <div class="row">${c.skills.map((s) => `<span class="pill p-blue">${esc(s)}</span>`).join('')}${c.certs.map((s) => `<span class="pill p-violet">${esc(s)}</span>`).join('')}${c.clearance ? '<span class="pill p-orange">סיווג ביטחוני</span>' : ''}</div>
+   <div class="row">${c.skills.map((s) => skillPill(c, s)).join('')}${c.certs.map((s) => `<span class="pill p-violet">${esc(s)}</span>`).join('')}${c.clearance ? '<span class="pill p-orange">סיווג ביטחוני</span>' : ''}</div>
    <div class="row"><span class="pill p-gray">זמינות: ${c.notice ? c.notice + ' ימי הודעה' : 'מיידית'}</span>${can('salary') ? `<span class="pill p-gray">ציפיות שכר ${money(c.salary)}</span>` : ''}${candOpen(c) ? agePill(c, T.stuck.cand) : ''}</div>
    <div class="card">${stageCtl('cand', c, T.candStages, edit)}${['נדחה', 'פרש/ה'].includes(c.stage) ? `<div class="row" style="margin-top:8px"><label>סיבה${edit ? sel(`data-chg="reason" data-kind="cand" data-id="${c.id}"`, T.reject, c.rejectReason, 'בחרו…') : esc(c.rejectReason || '—')}</label></div>` : ''}
     <div class="row" style="margin-top:8px"><label>מוגש/ת למשרה${edit ? `<select data-chg="assign" data-id="${c.id}"><option value="">— ללא —</option>${open.concat(j && !jobOpen(j) ? [j] : []).map((x) => `<option value="${x.id}" ${x.id === c.jobId ? 'selected' : ''}>${esc(x.company)} · ${esc(x.title)}</option>`).join('')}</select>` : esc(j ? j.company + ' · ' + j.title : '—')}</label></div>
     ${j ? `<div style="margin-top:8px"><div class="mut small">עמידה בדרישות המשרה (${match(j, c).met} מתוך ${match(j, c).total})</div>${matchChips(match(j, c), can('salary'))}</div>` : ''}</div>
+   <div class="card"><h3 class="h3">אימות כישורים – מטלה מעשית</h3><div class="mut small" style="margin-bottom:6px">כישור נחשב מאומת מציון ${T.verifyPass}. בהתאמה למשרה מוצגים בנפרד כישורים מוצהרים ומאומתים.</div>${c.skills.map((sk) => { const v = c.verified && c.verified[sk]; return `<div class="row spread tl"><span>${skillPill(c, sk)}</span><span class="mut small">${v ? 'נבדק ' + fmtD(v.ts) + ' · ' + esc(uName(v.by)) : 'לא נבדק'}</span></div>`; }).join('')}
+    ${edit ? `<div class="row" style="align-items:flex-end;margin-top:8px"><label>כישור${sel('id="vf-s"', c.skills.concat(T.skills[c.family].filter((x) => !c.skills.includes(x))), '', 'בחרו…')}</label><label>ציון במטלה (0–100)<input type="number" id="vf-n" min="0" max="100" style="width:110px"></label><button class="btn sec sm" data-act="verify" data-id="${c.id}">רישום תוצאה</button></div>` : ''}</div>
    <div class="card"><h3 class="h3">הצעד הבא</h3>${nextCtl('cand', c, edit) || '<span class="mut">לא נקבע</span>'}</div>
    <div class="card"><h3 class="h3">היסטוריה</h3>${noteCtl('cand', c, edit)}${notesHtml(c)}</div>`);
 }
@@ -175,6 +233,8 @@ function jobDrawer(j) {
   const row = (c, m, extra) => `<div class="tl"><div class="row spread"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(c.id, 30)}<a href="#" class="clink" data-act="openCand" data-id="${c.id}"><b>${esc(c.name)}</b></a><span class="mut small">${esc(c.level)} · ${c.years} שנים</span></span><span class="row" style="gap:6px">${extra}</span></div><div style="margin-top:4px">${matchChips(m, can('salary'))}</div></div>`;
   return wrap(esc(j.title), `${j.id} · ${esc(j.company)} · ${j.filled} מתוך ${j.headcount} אוישו · תקציב ${money(j.budget[0])}–${money(j.budget[1])}`, `
    <div class="row">${j.skills.map((s) => `<span class="pill p-blue">${esc(s)}</span>`).join('')}${j.certs.map((s) => `<span class="pill p-violet">${esc(s)}</span>`).join('')}${j.clearance ? '<span class="pill p-orange">נדרש סיווג ביטחוני</span>' : ''}<span class="pill ${jobOpen(j) ? 'p-blue' : 'p-green'}">${esc(j.status)}</span></div>
+   ${jobOpen(j) ? (() => { const f = forecast(j); return `<div class="card"><h3 class="h3">צפי איוש</h3><div class="row" style="gap:16px"><div><b style="font-size:26px">${f.exp.toFixed(1)}</b> <span class="mut">מתוך ${f.left} תקנים</span></div>${f.more ? `<span class="pill p-orange">חסרים בערך ${f.more} מועמדים חדשים בראש המשפך</span>` : '<span class="pill p-green">המשפך הנוכחי צפוי להספיק</span>'}</div><div class="mut small" style="margin-top:4px">לפי ${esc(f.src)}</div>${f.risks.map((r) => `<div class="demo-note" style="margin-top:6px">${esc(r)}</div>`).join('')}</div>`; })() : ''}
+   ${jobOpen(j) && rediscover(j).length ? `<div class="card"><h3 class="h3">אפשר להחזיר (${rediscover(j).length})</h3><div class="mut small" style="margin-bottom:6px">מועמדים שנדחו או פרשו בעבר, כשהסיבה לא רלוונטית למשרה הזו.</div>${rediscover(j).map((r) => `<div class="tl row spread"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(r.c.id, 30)}<span><a href="#" class="clink" data-act="openCand" data-id="${r.c.id}"><b>${esc(r.c.name)}</b></a><div class="mut small">${esc(r.why)}</div></span></span>${edit ? `<button class="btn sec sm" data-act="revive" data-id="${r.c.id}" data-job="${j.id}">החזרה לתהליך</button>` : ''}</div>`).join('')}</div>` : ''}
    <div class="card"><h3 class="h3">בתהליך למשרה (${inp.length})</h3>${inp.map((c) => row(c, match(j, c), `<span class="pill ${c.stage === 'התקבל/ה' ? 'p-green' : (candOpen(c) ? 'p-blue' : 'p-gray')}">${esc(c.stage)}</span>`)).join('') || '<span class="mut">עדיין לא הוגשו מועמדים.</span>'}</div>
    <div class="card"><h3 class="h3">מועמדים מהמאגר באותו תחום</h3><div class="mut small" style="margin-bottom:6px">לפי כללים גלויים: תחום, בכירות, לפחות חצי מהכישורים, תעודה, סיווג ושכר. אין ציון נסתר – ההחלטה את מי להגיש היא שלך.</div>${pool.map(({ c, m }) => row(c, m, `<span class="pill p-gray">${m.met} מתוך ${m.total}</span>${edit && jobOpen(j) ? `<button class="btn sec sm" data-act="submit" data-id="${c.id}" data-job="${j.id}">הגשה למשרה</button>` : ''}`)).join('') || '<span class="mut">אין במאגר מועמדים פעילים בתחום הזה. זה פער כישורים – כדאי לפתוח מקור חדש.</span>'}</div>`);
 }
@@ -186,7 +246,7 @@ function formModal() {
 }
 
 // ---------- shell + render ----------
-function loginView() { return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>CyberHire</span></div><h1>לידים ומועמדים לגיוס בסייבר – <em>במקום אחד</em></h1><p>מעקב אחרי לקוחות עם צורך בגיוס, משרות פתוחות ומועמדים בתהליך: מה תקוע, מה לטיפול היום, ואיפה חסרים כישורים.</p><div class="chips"><span>לידים</span><span>משרות</span><span>מועמדים</span></div><div class="demo-note">גרסת ניסוי: כל הנתונים פיקטיביים ונשמרים בדפדפן שלך בלבד. אין כאן כניסה מאובטחת.</div></section><section class="picker"><h2>כניסה</h2><p class="mut" style="margin:0">בחרו תפקיד כדי לראות את המערכת מהצד שלו.</p><div class="roles">${USERS.map((u) => `<button class="user" data-act="login" data-id="${u.id}"><span class="avatar">${esc(u.name[0])}</span><span class="u-t"><b>${esc(u.name)} · ${esc(u.title)}</b><small>${esc(u.role)}${PERM[u.role].leads && PERM[u.role].cands ? ' · הכול' : (PERM[u.role].leads ? ' · עריכת לידים, צפייה במועמדים בלי שכר' : ' · עריכת מועמדים, צפייה בלידים')}</small></span></button>`).join('')}</div></section></div>`; }
+function loginView() { return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>CyberHire</span></div><h1>גיוס בסייבר שיודע <em>מה לעשות עכשיו</em></h1><p>לא רק מעקב: כישורים מאומתים במטלה מעשית, צפי איוש לכל משרה, החזרת מועמדים שנדחו כשהסיבה כבר לא רלוונטית, ורשימת פעולות לפי השפעה – כל המלצה עם הסיבה שלה.</p><div class="chips"><span>כישורים מאומתים</span><span>צפי איוש</span><span>החזרת מועמדים</span><span>מה לעשות עכשיו</span></div><div class="demo-note">גרסת ניסוי: כל הנתונים פיקטיביים ונשמרים בדפדפן שלך בלבד. אין כאן כניסה מאובטחת.</div></section><section class="picker"><h2>כניסה</h2><p class="mut" style="margin:0">בחרו תפקיד כדי לראות את המערכת מהצד שלו.</p><div class="roles">${USERS.map((u) => `<button class="user" data-act="login" data-id="${u.id}"><span class="avatar">${esc(u.name[0])}</span><span class="u-t"><b>${esc(u.name)} · ${esc(u.title)}</b><small>${esc(u.role)}${PERM[u.role].leads && PERM[u.role].cands ? ' · הכול' : (PERM[u.role].leads ? ' · עריכת לידים, צפייה במועמדים בלי שכר' : ' · עריכת מועמדים, צפייה בלידים')}</small></span></button>`).join('')}</div></section></div>`; }
 function shell(inner) { const r = route(), pg = PAGES.find((p) => p.id === r); return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>CyberHire</span></div><nav class="nav">${PAGES.map((p) => `<a href="#/${p.id}" class="${r === p.id ? 'on' : ''}">${icon(p.icon)}<span>${p.name}</span></a>`).join('')}</nav><div class="side-foot"><div class="meta">גרסת ניסוי · נתונים פיקטיביים</div><div class="usercard"><span class="avatar">${esc(A.me.name[0])}</span><span class="uc-t"><b>${esc(A.me.name)} · ${esc(A.me.title)}</b><small>${esc(A.me.role)}</small></span></div></div></aside><div class="content"><header class="tbar"><div class="bar-t"><span class="bar-page">${pg ? pg.name : ''}</span></div><div class="bar-r"><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="ערכת נושא">${icon('moon', 18)}</button><button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header><main>${inner}</main></div></div>`; }
 function render() {
   const app = $('#app'), ae = document.activeElement, keep = ae && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
@@ -233,13 +293,15 @@ const ACTIONS = {
     } else {
       if (!(f.name || '').trim() || !f.family || !f.level) { toast('חסר: שם, תחום ובכירות', true); return; }
       const yrs = parseInt(f.years, 10), sal = parseFloat(f.salary);
-      const c = { id: 'C' + (301 + S.cands.length), name: f.name.trim(), family: f.family, level: f.level, years: isFinite(yrs) ? yrs : 0, skills: [], certs: [], clearance: !!f.clearance, salary: isFinite(sal) ? sal : null, notice: 0, location: '', source: f.source || '', owner: A.me.id, stage: T.candStages[0], jobId: null, createdTs: n0, stageTs: n0, next: null, notes: [{ ts: n0, by: A.me.id, text: 'נוסף/ה למאגר.' }] };
+      const c = { id: 'C' + (301 + S.cands.length), name: f.name.trim(), family: f.family, level: f.level, years: isFinite(yrs) ? yrs : 0, skills: [], certs: [], clearance: !!f.clearance, salary: isFinite(sal) ? sal : null, notice: 0, location: '', source: f.source || '', owner: A.me.id, stage: T.candStages[0], jobId: null, createdTs: n0, stageTs: n0, next: null, verified: {}, hist: [{ stage: T.candStages[0], ts: n0 }], notes: [{ ts: n0, by: A.me.id, text: 'נוסף/ה למאגר.' }] };
       S.cands.push(c); logAct('מועמד/ת חדש/ה: ' + c.name); A.ui.open = { t: 'cand', id: c.id };
     }
     A.ui.form = null; save(); toast('נשמר'); render();
   },
+  verify: (d) => { const c = byKind('cand', d.id), sk = $('#vf-s').value, n = parseInt($('#vf-n').value, 10); if (!sk || !(n >= 0 && n <= 100)) { toast('בחרו כישור וציון בין 0 ל-100', true); return; } c.verified = c.verified || {}; c.verified[sk] = { score: n, ts: now(), by: A.me.id }; if (!c.skills.includes(sk)) c.skills.push(sk); note(c, 'מטלה מעשית – ' + sk + ': ' + n + (n >= T.verifyPass ? ' (מאומת)' : ' (מתחת לסף)')); logAct(c.name + ': מטלה מעשית ב' + sk + ' – ' + n); save(); toast(n >= T.verifyPass ? sk + ' סומן כמאומת' : 'נרשם – מתחת לסף האימות'); render(); },
+  revive: (d) => { const c = byKind('cand', d.id), j = S.jobs.find((x) => x.id === d.job); c.jobId = j.id; const why = c.rejectReason; c.rejectReason = null; setStage(c, 'סינון טלפוני'); note(c, 'הוחזר/ה לתהליך למשרה ' + j.company + ' (סיבת הדחייה הקודמת: ' + why + ')'); logAct(c.name + ' הוחזר/ה לתהליך ל' + j.company); save(); toast(c.name + ' חזר/ה לתהליך'); render(); },
   csv: (d) => {
-    const rows = d.t === 'leads' ? [['מס׳', 'חברה', 'ענף', 'איש קשר', 'צורך', 'בכירות', 'שלב', 'ימים בשלב', 'אחראי/ת', 'סיבת אובדן']].concat(S.leads.map((l) => [l.id, l.company, l.sector, l.contact, l.need, l.level, l.stage, daysIn(l), uName(l.owner), l.lostReason || ''])) : d.t === 'jobs' ? [['מס׳', 'לקוח', 'משרה', 'כישורים', 'תעודות', 'איוש', 'מצב']].concat(S.jobs.map((j) => [j.id, j.company, j.title, j.skills.join(' / '), j.certs.join(' / '), j.filled + '/' + j.headcount, j.status])) : [['מס׳', 'שם', 'תחום', 'בכירות', 'שנות ניסיון', 'כישורים', 'תעודות', 'שלב', 'ימים בשלב', 'מגייס/ת', 'סיבה']].concat(S.cands.map((c) => [c.id, c.name, c.family, c.level, c.years, c.skills.join(' / '), c.certs.join(' / '), c.stage, daysIn(c), uName(c.owner), c.rejectReason || '']));
+    const rows = d.t === 'leads' ? [['מס׳', 'חברה', 'ענף', 'איש קשר', 'צורך', 'בכירות', 'שלב', 'ימים בשלב', 'אחראי/ת', 'סיבת אובדן']].concat(S.leads.map((l) => [l.id, l.company, l.sector, l.contact, l.need, l.level, l.stage, daysIn(l), uName(l.owner), l.lostReason || ''])) : d.t === 'jobs' ? [['מס׳', 'לקוח', 'משרה', 'כישורים', 'תעודות', 'איוש', 'מצב']].concat(S.jobs.map((j) => [j.id, j.company, j.title, j.skills.join(' / '), j.certs.join(' / '), j.filled + '/' + j.headcount, j.status])) : [['מס׳', 'שם', 'תחום', 'בכירות', 'שנות ניסיון', 'כישורים', 'תעודות', 'שלב', 'ימים בשלב', 'מגייס/ת', 'סיבה']].concat(S.cands.map((c) => [c.id, c.name, c.family, c.level, c.years, c.skills.map((sk) => sk + (isVerified(c, sk) ? ' (מאומת ' + c.verified[sk].score + ')' : '')).join(' / '), c.certs.join(' / '), c.stage, daysIn(c), uName(c.owner), c.rejectReason || '']));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + rows.map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' })); a.download = 'cyberhire-' + d.t + '.csv'; a.click(); toast('הקובץ הורד');
   },
   reset: () => { if (!confirm('לאפס לנתוני ההדגמה? כל מה שהוזן בדפדפן הזה יימחק.')) return; S = seed(); save(); A.ui = {}; toast('אופס לנתוני ההדגמה'); render(); },

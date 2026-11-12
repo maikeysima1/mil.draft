@@ -37,6 +37,27 @@ let bad = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if
   await go(sales, 'leads'); ok(await sales.locator('[data-act=newLead]').count() === 1, 'sales can add leads');
   const rec = await open('r1'); await go(rec, 'leads'); ok(await rec.locator('[data-act=newLead]').count() === 0, 'recruiter: leads are view-only');
   await rec.locator('.kcard').first().click(); await rec.waitForSelector('.drawer'); ok(await rec.locator('.drawer select[data-chg=stage]').count() === 0, 'recruiter cannot change a lead stage');
+  // intelligence layer
+  const fresh = await open('m1'); await fresh.evaluate(() => { localStorage.removeItem('cyberhire-v2'); }); await fresh.reload(); await fresh.waitForSelector('.side'); await go(fresh, 'dash');
+  const dashTxt = await fresh.locator('main').innerText();
+  ok(/מה לעשות עכשיו/.test(dashTxt) && await fresh.locator('.card:has-text("מה לעשות עכשיו") .tl').count() >= 3, 'dashboard ranks next actions, each with a reason');
+  ok(/צפי איוש למשרות פתוחות/.test(dashTxt) && /הנחות ברירת מחדל/.test(dashTxt), 'forecast table states its source (defaults until there is enough history)');
+  const fs = await S(fresh), oj = fs.jobs.find((j) => j.status === 'פתוחה');
+  const fc = await fresh.evaluate((id) => { const f = forecast(S.jobs.find((x) => x.id === id)); return { exp: f.exp, left: f.left, pipe: f.pipe.length, more: f.more }; }, oj.id);
+  ok(fc.exp >= 0 && fc.exp <= fc.pipe && (fc.exp >= fc.left || fc.more > 0), 'forecast: expected hires never exceed the pipeline, and a gap asks for more candidates');
+  const rd = await fresh.evaluate(() => S.jobs.filter((j) => j.status === 'פתוחה').flatMap((j) => rediscover(j).map((r) => ({ j: j.id, c: r.c.id, why: r.why, sal: r.c.salary, cap: j.budget[1], reason: r.c.rejectReason }))));
+  ok(rd.length >= 1 && rd.every((r) => r.reason !== 'ציפיות שכר' || r.sal <= r.cap), 'rediscovery: rejected-on-salary candidates come back only when the new budget covers them');
+  await fresh.click(`[data-act=openJob][data-id=${rd[0].j}]`).catch(async () => { await go(fresh, 'jobs'); await fresh.click(`tr[data-id=${rd[0].j}]`); }); await fresh.waitForSelector('.drawer');
+  ok(/צפי איוש/.test(await fresh.locator('.drawer').innerText()) && /אפשר להחזיר/.test(await fresh.locator('.drawer').innerText()), 'job file shows the forecast and who can be brought back');
+  await fresh.click(`.drawer [data-act=revive][data-id=${rd[0].c}]`); await fresh.waitForTimeout(250);
+  const rv = (await S(fresh)).cands.find((x) => x.id === rd[0].c); ok(rv.stage === 'סינון טלפוני' && rv.jobId === rd[0].j && !rv.rejectReason, 'revived candidate is back in the process for that job');
+  await fresh.click('.drawer [data-act=close]'); await fresh.evaluate((id) => { A.ui.open = { t: 'cand', id }; render(); }, rv.id); await fresh.waitForSelector('#vf-s');
+  const sk = await fresh.locator('#vf-s option').nth(1).getAttribute('value') || await fresh.locator('#vf-s option').nth(1).innerText();
+  await fresh.selectOption('#vf-s', { index: 1 }); await fresh.fill('#vf-n', '85'); await fresh.click('[data-act=verify]'); await fresh.waitForTimeout(250);
+  const vv = (await S(fresh)).cands.find((x) => x.id === rv.id); ok(vv.verified[sk] && vv.verified[sk].score === 85 && await fresh.evaluate(([id, s2]) => isVerified(S.cands.find((x) => x.id === id), s2), [rv.id, sk]), 'practical test score 85 marks the skill as verified');
+  await fresh.selectOption('#vf-s', { index: 1 }); await fresh.fill('#vf-n', '40'); await fresh.click('[data-act=verify]'); await fresh.waitForTimeout(250);
+  ok(!(await fresh.evaluate(([id, s2]) => isVerified(S.cands.find((x) => x.id === id), s2), [rv.id, sk])), 'a score under the threshold does not verify the skill');
+  ok(/מאומתים/.test(await fresh.locator('.drawer').innerText()), 'job match shows declared vs verified skills');
   ok(errs.length === 0, 'no page errors ' + errs.join(' | '));
   console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); await b.close(); process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error('FAIL', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });
