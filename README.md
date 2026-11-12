@@ -1,4 +1,21 @@
-# MIL-DRAFT
+# MIL-DRAFT – שלושה ניסויים
+
+| ניסוי | מה הוא עושה | קוד | קישור |
+|---|---|---|---|
+| **דראפט שיבוץ** | יחידות בוחרות מועמדים בתור, עם מכסות ותנאי סף | `main` (הקבצים כאן) | [index.html](https://maikeysima1.github.io/mil.draft/) |
+| **מעקב הכשרה** | חיילים בהכשרה למסלולים מיוחדים: גיוס, מעקב יומי, סטטוס תקופתי, חדר הדחה | ענף `training-tracker-wip` | [training-experiment.html](https://maikeysima1.github.io/mil.draft/training-experiment.html) |
+| **CyberHire** | לידים, משרות ומועמדים לגיוס בסייבר | ענף `cyber-talent-wip` (תיקיית `cyber/`) | [cyber-experiment.html](https://maikeysima1.github.io/mil.draft/cyber-experiment.html) |
+
+כל השלושה הם הדגמות עם נתונים פיקטיביים, ואף אחד מהם לא נבדק מול משתמש אמיתי.
+- **מה למדנו ומה ההמלצה:** [`docs/learnings.md`](docs/learnings.md)
+- **דף ראיון למשתמשים:** [`docs/interview-guide.md`](docs/interview-guide.md)
+- **הגרסה הקודמת של הדראפט** שמורה בתג `draft-v1`.
+
+הקבצים `training-experiment.html` ו-`cyber-experiment.html` כאן ב-`main` הם תוצרי בנייה מועתקים. עורכים אותם רק בענף של כל ניסוי ומעתיקים מחדש.
+
+---
+
+## דראפט שיבוץ – פרטים
 
 אפליקציה עובדת לפי מוקאפ MIL-DRAFT: חדר בחירה, לוח דראפט חי, דף מגבש, תמונת מצב וייבוא אקסל.
 
