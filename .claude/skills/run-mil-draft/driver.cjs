@@ -163,6 +163,19 @@ async function main() {
       await cm.page.selectOption('select[data-f=rec]', 'ממשיך/ה'); await cm.page.fill('#cf-plan', 'ממשיך/ה כרגיל בתקופה הבאה'); await cm.page.click('[data-act=cfSaveNext]'); await cm.page.waitForTimeout(700);
       ok((await cm.page.evaluate(() => A.ui.cand)) === nextId && await cm.page.locator('#cf-plan').count() === 1 && !!by(await st(), firstId).reviews.find((r) => r.period === ps.period.key), '"save and next" saves and opens the next soldier without a status');
       await cm.page.click('[data-act=cfCancel]'); await cm.page.keyboard.press('Escape');
+      // "my day" (evaluator) and the automatic weekly summary (commander)
+      const td = await session(browser, 'e-combat-2'); ok(await td.page.evaluate(() => location.hash) === '#/today' && /היום שלי – צוות 2/.test(await td.page.locator('main h1').innerText()), 'evaluator lands on "my day" for the own team');
+      const pend0 = await td.page.evaluate(() => visible('combat').filter(isActive).filter((x) => !myToday(x)).length), tid = await td.page.locator('[data-act=tdLv]').first().getAttribute('data-id');
+      await td.page.locator(`[data-act=tdLv][data-id="${tid}"][data-v="1"]`).first().click(); await td.page.waitForTimeout(600);
+      const tdE = by(await st(), tid).daily.filter((e) => e.byId === 'e-combat-2'); ok(tdE.length === 1 && tdE[0].level === 1 && (await td.page.evaluate(() => visible('combat').filter(isActive).filter((x) => !myToday(x)).length)) === pend0 - 1, 'one tap on "my day" saves the daily entry and shortens the waiting list');
+      ok(!(await td.page.locator('main').innerText()).includes(t1.name) || t1.group === 2, '"my day" shows only the evaluator\'s own team');
+      await go(cm.page, 'weekly'); const wt = await cm.page.locator('main').innerText();
+      ok(/סיכום שבועי/.test(wt) && /איך זה מחושב/.test(wt) && /בלי רישום השבוע/.test(wt), 'weekly summary renders with its calculation rule');
+      const wk = await cm.page.evaluate(() => { const w = weekly('combat', ''); return { act: w.act.length, covered: w.covered, none: w.none.length, cmp: w.compared, bad: w.down.concat(w.up).filter((r) => r.a.length < 2 || r.b.length < 2).length, txt: weeklyText('combat', '') }; });
+      ok(wk.covered + wk.none === wk.act && wk.bad === 0, 'weekly summary: every active soldier is either covered or listed as "no entry"; trends need 2+ entries in each week');
+      ok(wk.txt.split('\n').length >= 8 && /חדר הדחה/.test(wk.txt), 'weekly summary is available as plain text');
+      await deny('u4', 'settings', { period: 'חציון' }, 'evaluator changing settings'); await go(td.page, 'weekly'); ok(await td.page.evaluate(() => location.hash) !== '#/weekly', 'the weekly summary is not open to evaluators');
+      ok(td.errs.length === 0, 'no page errors on "my day" ' + td.errs.join('|'));
       const hq = await session(browser, 'h1'); ok(await hq.page.locator('.clink').count() === 0 && /מספרים מסכמים בלבד/.test(await hq.page.locator('main').innerText()), 'ראש מטה sees totals only, no names');
       ok(ev.errs.length + cm.errs.length + hq.errs.length === 0, 'no page errors in the UI flows ' + ev.errs.concat(cm.errs, hq.errs).join('|'));
       console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); process.exitCode = bad ? 1 : 0;

@@ -160,6 +160,68 @@ SCREENS.dash = (k) => {
    ${names ? `<div class="card"><h2>דורשים תשומת לב (${att.length})</h2><div class="mut small" style="margin-bottom:8px">לפי כללים גלויים: בדיקת הדחה פתוחה, מעקב, שני ימי "מתקשה" בשבוע, אין מעקב 3 ימים, או חסר סטטוס תקופתי. אין כאן ציון ואין המלצה.</div>${att.slice(0, 12).map((a) => `<div class="row spread" style="padding:7px 0;border-bottom:1px solid var(--line2)"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(a.c, 32)}<span><b>${candLink(k, a.c.id, a.c.name)}</b> <span class="mut small">${esc(a.c.unit)} · צוות ${a.c.group}</span></span></span><span class="row" style="gap:6px;justify-content:flex-end">${a.why.map((w) => `<span class="pill ${/הדחה/.test(w) ? 'p-red' : 'p-orange'}">${esc(w)}</span>`).join('')}</span></div>`).join('') || '<span class="mut">אין כרגע חיילים שדורשים תשומת לב לפי הכללים.</span>'}${att.length > 12 ? `<div class="mut small" style="margin-top:6px">ועוד ${att.length - 12} – ברשימת החיילים</div>` : ''}</div>` : '<div class="demo-note">התפקיד שלך רואה מספרים מסכמים בלבד, ללא שמות ותיקים.</div>'}`;
 };
 
+// ---- "my day" for the team's evaluator: everything that waits for me, on one screen ----
+SCREENS.today = (k) => {
+  const team = visible(k), act = team.filter(isActive), pend = act.filter((x) => !myToday(x)), doneT = act.filter(myToday);
+  const room = team.filter((x) => { const d = openDis(x); return d && !(d.opinions || []).some((o) => o.byId === A.me.id); }), inRoom = team.filter(openDis);
+  const miss = team.filter((x) => isActive(x) && missingOf(k, x).length), att = attention(k).filter((a) => !/מעקב יומי/.test(a.why.join(' ')) || a.why.length > 1).slice(0, 6);
+  const seg = (x) => { const m = myToday(x); return `<div class="seg">${TR().daily.map((w, j) => `<button type="button" class="${m && m.level === j ? 'on l' + j : ''}" data-act="tdLv" data-id="${x.id}" data-v="${j}">${esc(w)}</button>`).join('')}</div>`; };
+  const line = (x) => `<div class="tl row spread"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<span><b>${candLink(k, x.id, x.name)}</b><div class="mut small">${dailyPill((x.daily || []).filter((e) => !(e.d === A.S.today && e.byId === A.me.id)).sort((a, b) => b.ts - a.ts)[0])}</div></span></span>${seg(x)}</div>`;
+  const step = (n, title, count, body, ok) => `<div class="card"><div class="row spread"><h2 style="margin:0">${n}. ${title}</h2><span class="pill ${ok ? 'p-green' : 'p-orange'}">${ok ? 'הושלם' : count}</span></div>${body}</div>`;
+  return `<div class="row spread"><div><h1 style="font-size:28px;font-weight:800;margin:0">היום שלי – צוות ${A.me.group}</h1><div class="mut small">${fmtD(nowS())} · ${esc(cf(k).label)} · כל מה שמחכה לך, במסך אחד</div></div><div class="row"><b style="font-size:22px">${doneT.length} / ${act.length}</b><span class="mut small">מעקב יומי הוזן</span></div></div>
+   ${step(1, 'מעקב יומי', pend.length + ' ממתינים', `<div class="mut small" style="margin:6px 0">לחיצה אחת שומרת. להערה או לנוכחות – <a href="#/daily">מסך המעקב היומי</a>.</div>${pend.map(line).join('') || '<div class="mut">הוזן מעקב לכל חיילי הצוות היום.</div>'}${doneT.length ? `<details style="margin-top:8px"><summary class="small">הוזנו היום (${doneT.length}) – אפשר לשנות</summary>${doneT.map(line).join('')}</details>` : ''}`, !pend.length)}
+   ${step(2, 'חדר הדחה', room.length + ' ממתינים לנימוק שלך', inRoom.length ? `${inRoom.map((x) => { const d = openDis(x), mine = (d.opinions || []).some((o) => o.byId === A.me.id); return `<div class="tl row spread"><span><b>${candLink(k, x.id, x.name)}</b> <span class="mut small">נפתחה ${agoTxt(d.openedTs)} · ${(d.opinions || []).length} נימוקים</span></span><span class="row" style="gap:6px">${mine ? '<span class="pill p-green">רשמת נימוק</span>' : '<span class="pill p-orange">חסר הנימוק שלך</span>'}</span></div>`; }).join('')}<div class="row" style="margin-top:8px"><a class="btn sec sm" href="#/dismiss">לחדר ההדחה</a></div>` : '<div class="mut" style="margin-top:6px">אין חיילים מהצוות בחדר ההדחה.</div>', !room.length)}
+   ${step(3, 'דף מגבש', miss.length + ' תיקים עם נתונים חסרים', miss.length ? `${miss.slice(0, 6).map((x) => `<div class="tl row spread"><b>${candLink(k, x.id, x.name)}</b><span class="mut small">חסר: ${esc(missingOf(k, x).join(', '))}</span></div>`).join('')}<div class="row" style="margin-top:8px"><a class="btn sec sm" href="#/eval">לדף המגבש</a></div>` : '<div class="mut" style="margin-top:6px">כל התיקים של הצוות מלאים.</div>', !miss.length)}
+   <div class="card"><h2>שווה מבט</h2><div class="mut small" style="margin-bottom:6px">חיילים מהצוות שעולים לפי הכללים הגלויים של תמונת המצב. אין כאן ציון.</div>${att.map((a) => `<div class="tl row spread"><b>${candLink(k, a.c.id, a.c.name)}</b><span class="row" style="gap:6px;justify-content:flex-end">${a.why.map((w) => `<span class="pill ${/הדחה/.test(w) ? 'p-red' : 'p-orange'}">${esc(w)}</span>`).join('')}</span></div>`).join('') || '<span class="mut">אין כרגע חיילים שדורשים תשומת לב מיוחדת.</span>'}</div>`;
+};
+Object.assign(ACTIONS, {
+  tdLv: async (d) => { const k = corpsKey(), c = candOf(k, d.id), m = myToday(c); try { await api('daily', { corps: k, id: d.id, level: +d.v, att: m ? m.att : undefined, text: m ? m.text : '' }); toast(c.name + ': ' + TR().daily[+d.v]); } catch (x) { /* toast shown */ } },
+});
+
+// ---- automatic weekly summary for the training commander: this week against the week before, by stated rules ----
+function weekly(k, unit) {
+  const list = cs(k).cands.filter((x) => !unit || x.unit === unit), act = list.filter(isActive), W = (x, a, b) => (x.daily || []).filter((e) => { const d = daysAgo(e.ts); return d >= a && d <= b; });
+  const avg = (es) => (es.length ? es.reduce((s, e) => s + e.level, 0) / es.length : null), rows = act.map((x) => { const a = W(x, 0, 6), b = W(x, 7, 13); return { x, a, b, av: avg(a), bv: avg(b), low: a.filter((e) => e.level === 0).length }; });
+  const cmp = rows.filter((r) => r.a.length >= 2 && r.b.length >= 2), inWeek = (ts) => ts != null && daysAgo(ts) <= 6;
+  const ev = { opened: [], decided: [], moved: [], intake: [], done: [], status: 0 };
+  list.forEach((x) => { (x.dismiss || []).forEach((d) => { if (inWeek(d.openedTs)) ev.opened.push(x); if (d.status === 'נסגרה' && inWeek(d.decidedTs)) ev.decided.push({ x, d }); }); (x.transfers || []).forEach((t) => { if (inWeek(t.ts)) ev.moved.push({ x, t }); }); if (inWeek(x.intakeTs)) ev.intake.push(x); if (inWeek(x.doneTs)) ev.done.push(x); ev.status += (x.reviews || []).filter((r) => inWeek(r.ts)).length; });
+  return { act, entries: rows.reduce((s, r) => s + r.a.length, 0), covered: rows.filter((r) => r.a.length).length, down: cmp.filter((r) => r.av <= r.bv - 0.5).sort((p, q) => (p.av - p.bv) - (q.av - q.bv)), up: cmp.filter((r) => r.av >= r.bv + 0.5).sort((p, q) => (q.av - q.bv) - (p.av - p.bv)), none: rows.filter((r) => !r.a.length), low: rows.filter((r) => r.low >= 2).sort((p, q) => q.low - p.low), compared: cmp.length, ev, missP: act.filter((x) => !periodRv(x)).length, inRoom: act.filter(openDis) };
+}
+const f1w = (v) => (v + 1).toFixed(1);
+function weeklyText(k, unit) {
+  const w = weekly(k, unit), L = [], nm = (a) => a.map((r) => (r.x || r).name).join(', ') || 'אין';
+  L.push('סיכום שבועי – ' + cf(k).label + (unit ? ' · ' + unit : '') + ' · ' + fmtD(nowS() - 6 * 86400e3) + '–' + fmtD(nowS()));
+  L.push('בהכשרה: ' + w.act.length + ' · רישומי מעקב השבוע: ' + w.entries + ' · חיילים עם רישום: ' + w.covered + ' מתוך ' + w.act.length);
+  L.push('ירדו לעומת השבוע הקודם (' + w.down.length + '): ' + (w.down.map((r) => r.x.name + ' ' + f1w(r.bv) + '→' + f1w(r.av)).join(', ') || 'אין'));
+  L.push('עלו לעומת השבוע הקודם (' + w.up.length + '): ' + (w.up.map((r) => r.x.name + ' ' + f1w(r.bv) + '→' + f1w(r.av)).join(', ') || 'אין'));
+  L.push('שני ימי "מתקשה" ומעלה (' + w.low.length + '): ' + nm(w.low));
+  L.push('בלי רישום השבוע (' + w.none.length + '): ' + nm(w.none));
+  L.push('חדר הדחה: ' + w.inRoom.length + ' פתוחות · נפתחו השבוע ' + w.ev.opened.length + ' · הוחלטו ' + w.ev.decided.length + (w.ev.decided.length ? ' (' + w.ev.decided.map((e) => e.x.name + ': ' + e.d.decision).join(', ') + ')' : ''));
+  L.push('גויסו השבוע: ' + w.ev.intake.length + ' · הועברו יחידה: ' + w.ev.moved.length + ' · סיימו הכשרה: ' + w.ev.done.length);
+  L.push('סטטוס ' + A.S.period.label + ': חסרים ' + w.missP + ' · נותרו ' + A.S.period.daysLeft + ' ימים');
+  return L.join('\n');
+}
+SCREENS.weekly = (k) => {
+  const c = cf(k), unit = c.units.some((u) => u.name === A.ui.wUnit) ? A.ui.wUnit : '', w = weekly(k, unit);
+  const names = (rows, fn) => rows.map((r) => `<div class="tl row spread"><b>${candLink(k, (r.x || r).id, (r.x || r).name)}</b><span class="mut small">${fn(r)}</span></div>`).join('') || '<span class="mut">אין.</span>';
+  const kpi = (v, l, sub) => `<div class="kpi"><b>${v}</b><span>${l}</span>${sub ? `<div class="mut small">${sub}</div>` : ''}</div>`;
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">סיכום שבועי – ${esc(c.label)}</h1><div class="mut small">${fmtD(nowS() - 6 * 86400e3)}–${fmtD(nowS())} · נוצר אוטומטית מהמעקב היומי, מהסטטוסים ומחדר ההדחה</div></div>
+    <div class="row no-print"><label>יחידה<select data-chg="wUnit"><option value="">כל היחידות</option>${c.units.map((u) => `<option ${u.name === unit ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label><button class="btn" data-act="wCopy">העתקה כטקסט</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
+   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">${kpi(w.act.length, 'בהכשרה')}${kpi(w.covered + ' / ' + w.act.length, 'חיילים עם רישום השבוע', w.entries + ' רישומים')}${kpi(w.down.length, 'ירדו')}${kpi(w.up.length, 'עלו')}${kpi(w.inRoom.length, 'בחדר ההדחה')}</div>
+   <div class="demo-note">איך זה מחושב: "ירד" / "עלה" = הפרש של חצי רמה ומעלה בין ממוצע 7 הימים האחרונים לממוצע 7 הימים שלפניהם, ורק לחייל/ת עם שני רישומים לפחות בכל שבוע (${w.compared} מתוך ${w.act.length}). מי שאין לו/לה מספיק רישומים לא מופיע/ה בהשוואה. זה סיכום של מה שנרשם, לא הערכה של החייל/ת.</div>
+   <div class="grid g2"><div class="card"><h2>ירדו לעומת השבוע הקודם (${w.down.length})</h2>${names(w.down, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים')}</div>
+    <div class="card"><h2>עלו לעומת השבוע הקודם (${w.up.length})</h2>${names(w.up, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים')}</div></div>
+   <div class="grid g2"><div class="card"><h2>שני ימי "מתקשה" ומעלה (${w.low.length})</h2>${names(w.low, (r) => r.low + ' ימים מתוך ' + r.a.length + ' רישומים')}</div>
+    <div class="card"><h2>בלי רישום השבוע (${w.none.length})</h2><div class="mut small" style="margin-bottom:4px">אין מידע עליהם – לא "תקין".</div>${names(w.none.slice(0, 12), (r) => esc(r.x.unit) + ' · צוות ' + r.x.group)}${w.none.length > 12 ? `<div class="mut small">ועוד ${w.none.length - 12}</div>` : ''}</div></div>
+   <div class="card"><h2>אירועים השבוע</h2><div class="row" style="gap:8px">${[['נפתחו בדיקות הדחה', w.ev.opened.length], ['הוחלטו בדיקות', w.ev.decided.length], ['הועברו יחידה', w.ev.moved.length], ['גויסו', w.ev.intake.length], ['סיימו הכשרה', w.ev.done.length], ['סטטוסים תקופתיים הוזנו', w.ev.status]].map(([l, n]) => `<span class="pill ${n ? 'p-blue' : 'p-gray'}">${l}: ${n}</span>`).join('')}</div>
+    ${w.ev.decided.map((e) => `<div class="tl"><b>${candLink(k, e.x.id, e.x.name)}</b> – ${esc(e.d.decision)}${e.d.movedTo ? ' · עבר/ה ל' + esc(e.d.movedTo) : ''} <span class="mut small">${esc(e.d.decidedBy)}</span></div>`).join('')}${w.ev.opened.map((x) => `<div class="tl"><b>${candLink(k, x.id, x.name)}</b> – נפתחה בדיקת הדחה</div>`).join('')}
+    <div class="mut small" style="margin-top:8px">סטטוס ${esc(A.S.period.label)}: חסרים ${w.missP} · נותרו ${A.S.period.daysLeft} ימים.</div></div>`;
+};
+Object.assign(ACTIONS, {
+  wUnit: (d, t) => { A.ui.wUnit = t.value; rerender(); },
+  wCopy: async () => { const txt = weeklyText(corpsKey(), A.ui.wUnit || ''); auditEvent('export', 'weekly summary text'); try { await navigator.clipboard.writeText(txt); toast('הסיכום הועתק'); } catch (e) { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('הסיכום הועתק'); } catch (x) { toast('לא ניתן להעתיק מהדפדפן הזה', true); } ta.remove(); } },
+});
+
 // ---- roster ----
 function rosterList(k) {
   const f = A.ui.rf || {}, q = (f.q || '').trim().toLowerCase();
