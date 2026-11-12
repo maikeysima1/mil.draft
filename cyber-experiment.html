@@ -420,7 +420,7 @@ table td,table th{font-variant-numeric:tabular-nums}
 <script>// CyberHire (experiment): leads + candidates for cyber-security recruiting. Client-only demo: all data is fictional and lives in this browser.
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const KEY = 'cyberhire-v2', DAY = 86400e3;
+const KEY = 'cyberhire-v3', DAY = 86400e3;
 const T = {
   leadStages: ['ליד חדש', 'נוצר קשר', 'פגישת אפיון', 'הצעה נשלחה', 'משא ומתן', 'נסגר – לקוח', 'אבוד'],
   candStages: ['מקור', 'סינון טלפוני', 'ראיון טכני', 'מטלה מעשית', 'ראיון מנהל', 'הצעה', 'התקבל/ה', 'נדחה', 'פרש/ה'],
@@ -488,10 +488,12 @@ function seed() {
     c.rejectReason = why; c.rejectTs = n0 - ago * DAY; c.salary = Math.round((j.budget[0] + j.budget[1] * 2) / 3);
     c.notes.push({ ts: c.rejectTs, by: c.owner, text: (why === 'ציפיות שכר' ? 'נדחה/תה: ציפיות שכר גבוהות מהתקציב של משרה קודמת.' : 'פרש/ה: קיבל/ה הצעה אחרת.') });
   });
-  return { v: 2, leads, jobs, cands, log: [] };
+  // demo: military background for part of the pool (generic tracks only – never classified details)
+  const tracks = Object.keys(MIL.tracks);
+  cands.forEach((c, i) => { if (i % 3 === 2) return; const tr = MIL.tracks[tracks[(i * 7) % tracks.length]], r = tr.roles[i % tr.roles.length]; c.mil = { unit: tr.unit, role: r.name, years: [2, 3, 3, 4, 5, 6][i % 6], end: new Date(n0).getFullYear() - (i % 7) }; });
+  return { v: 3, leads, jobs, cands, log: [] };
 }
 function jobFromLead(l, id, ts) { return { id, leadId: l.id, company: l.company, title: l.need + ' · ' + l.level, family: l.need, level: l.level, skills: T.skills[l.need].slice(0, 3), certs: l.level === 'Junior' ? ['Security+'] : (l.need === 'GRC וציות' ? ['CISM', 'ISO 27001 LA'] : (l.need === 'בדיקות חדירה / Red Team' ? ['OSCP'] : (l.need === 'אבטחת ענן' ? ['AWS Security', 'CCSP'] : ['CISSP']))), clearance: l.clearance, budget: l.budget.slice(), headcount: l.headcount, filled: 0, status: 'פתוחה', openTs: ts || now() }; }
-let S; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; } if (!S || S.v !== 2) S = seed();
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } };
 const logAct = (text) => { S.log.unshift({ ts: now(), by: A.me ? A.me.id : '', text }); if (S.log.length > 300) S.log.pop(); };
 const note = (x, text) => x.notes.push({ ts: now(), by: A.me.id, text });
@@ -507,6 +509,67 @@ function match(j, c) {
   return { met: items.filter((i) => i.ok).length, total: items.length, items, ver: ver.length, need: need.length };
 }
 const matchChips = (m, salary) => m.items.filter((i) => salary || i.l !== 'שכר').map((i) => `<span class="pill ${i.ok ? 'p-green' : 'p-orange'}" title="${esc(i.t)}">${i.ok ? '✓' : '✗'} ${esc(i.l)}</span>`).join(' ') + (m.need ? ` <span class="pill ${m.ver ? 'p-blue' : 'p-gray'}" title="כישורים שעברו מטלה מעשית">🛡 ${m.ver}/${m.need} מאומתים</span>` : '');
+
+// ---------- military service -> civilian cyber skills ----------
+// Built from GENERAL PUBLIC knowledge about what these tracks usually involve. It is a starting hypothesis for the recruiter, never a fact about a
+// person: every inferred skill is marked "משוער" until a practical test verifies it. Never ask for or record classified details.
+const MIL = {
+  tracks: {
+    intel_tech: { unit: 'יחידת מודיעין טכנולוגי (כגון 8200)', roles: [
+      { name: 'מפתח/ת תוכנה', fam: ['AppSec / DevSecOps', 'אבטחת AI'], sk: [['Python', 'סביר'], ['Secure Code Review', 'אפשרי'], ['CI/CD Security', 'אפשרי'], ['LLM Security', 'אפשרי']], soft: ['עבודה בצוותי פיתוח קטנים', 'עבודה מול לוחות זמנים מבצעיים'] },
+      { name: 'חוקר/ת חולשות / סייבר', fam: ['בדיקות חדירה / Red Team', 'מודיעין איומים'], sk: [['Reverse Engineering', 'סביר'], ['Malware Analysis', 'סביר'], ['Python', 'סביר'], ['Web Pentest', 'אפשרי']], soft: ['מחקר עצמאי', 'תיעוד ממצאים'] },
+      { name: 'מנתח/ת מודיעין טכנולוגי', fam: ['מודיעין איומים', 'SOC וניטור'], sk: [['OSINT', 'סביר'], ['Threat Hunting', 'אפשרי'], ['Python', 'אפשרי']], soft: ['כתיבה ותחקיר', 'הצגה לדרג מקבל החלטות'] },
+      { name: 'איש/אשת תשתיות ורשתות', fam: ['ארכיטקטורת אבטחה', 'אבטחת ענן'], sk: [['Network Security', 'סביר'], ['IAM', 'אפשרי'], ['AWS', 'אפשרי']], soft: ['אחריות על מערכות קריטיות'] },
+    ] },
+    cyber_def: { unit: 'חטיבת ההגנה בסייבר (אגף התקשוב)', roles: [
+      { name: 'מגן/ת סייבר / אנליסט/ית SOC', fam: ['SOC וניטור', 'תגובה לאירועים (DFIR)'], sk: [['SIEM', 'סביר'], ['EDR', 'סביר'], ['Threat Hunting', 'אפשרי'], ['Incident Response', 'אפשרי']], soft: ['עבודה במשמרות', 'קבלת החלטות תחת לחץ'] },
+      { name: 'מגיב/ה לאירועים', fam: ['תגובה לאירועים (DFIR)', 'מודיעין איומים'], sk: [['Incident Response', 'סביר'], ['Forensics', 'סביר'], ['Malware Analysis', 'אפשרי']], soft: ['ניהול אירוע', 'תחקיר'] },
+      { name: 'בודק/ת חדירות (צוות אדום)', fam: ['בדיקות חדירה / Red Team'], sk: [['Web Pentest', 'סביר'], ['Active Directory', 'סביר'], ['Python', 'אפשרי']], soft: ['חשיבה התקפית', 'כתיבת דוחות'] },
+    ] },
+    cto: { unit: 'יחידת מחשוב (כגון ממר״ם / לוטם)', roles: [
+      { name: 'מפתח/ת מערכות', fam: ['AppSec / DevSecOps'], sk: [['Python', 'סביר'], ['CI/CD Security', 'אפשרי'], ['Kubernetes', 'אפשרי']], soft: ['פיתוח במערכות גדולות'] },
+      { name: 'DevOps / תשתיות ענן', fam: ['אבטחת ענן', 'AppSec / DevSecOps'], sk: [['Kubernetes', 'סביר'], ['Terraform', 'אפשרי'], ['AWS', 'אפשרי'], ['IAM', 'אפשרי']], soft: ['זמינות ותפעול 24/7'] },
+    ] },
+    af_tech: { unit: 'יחידה טכנולוגית בחיל האוויר', roles: [
+      { name: 'מפתח/ת תוכנה', fam: ['AppSec / DevSecOps', 'אבטחת AI'], sk: [['Python', 'סביר'], ['Secure Code Review', 'אפשרי']], soft: ['פיתוח למערכות מבצעיות'] },
+    ] },
+    gov: { unit: 'תפקיד מטה / אבטחת מידע', roles: [
+      { name: 'קצין/ת אבטחת מידע', fam: ['GRC וציות'], sk: [['Risk Assessment', 'סביר'], ['ISO 27001', 'אפשרי'], ['Privacy', 'אפשרי']], soft: ['עבודה מול נהלים ורגולציה', 'הדרכה'] },
+    ] },
+    combat: { unit: 'יחידה קרבית', roles: [
+      { name: 'לוחם/ת / מפקד/ת', fam: [], sk: [], soft: ['פיקוד והובלת צוות', 'עבודה תחת לחץ', 'אחריות'] },
+    ] },
+  },
+  conf: { 'סביר': 'p-blue', 'אפשרי': 'p-gray' },
+};
+const milRole = (m) => { if (!m) return null; const tr = Object.values(MIL.tracks).find((t) => t.unit === m.unit); return tr ? tr.roles.find((r) => r.name === m.role) || null : null; };
+// the translation: inferred skills (never counted as declared/verified), likely fields, how to verify, what to ask without touching classified content
+function translate(m) {
+  const r = milRole(m); if (!r) return null;
+  const lvl = m.years >= 5 ? 'Senior' : (m.years >= 3 ? 'Mid' : 'Junior');
+  const verify = r.sk.map(([k]) => k).slice(0, 3);
+  const ask = ['ספר/י על בעיה טכנית קשה שפתרת – בלי פרטים מסווגים: מה הייתה הבעיה, מה ניסית, מה עבד.', 'באילו כלים ושפות עבדת ביום-יום? (שמות כלים מסחריים או פתוחים)', 'מה גודל הצוות, ומה היה התפקיד שלך בו?'].concat(r.fam.length ? ['איך היית ניגש/ת היום ל' + r.fam[0] + ' בארגון אזרחי?'] : ['למה סייבר, ומה עשית כדי ללמוד את התחום?']);
+  return { r, lvl, fam: r.fam, sk: r.sk, soft: r.soft, verify, ask, note: m.years >= 5 ? 'שירות ארוך – ייתכן ניסיון בהובלת צוות או פרויקט.' : (m.years <= 2 ? 'שירות קצר – לרוב שירות סדיר בלבד; להתייחס כ-Junior עד שיוכח אחרת.' : '') };
+}
+// open jobs this background could fit (field + level), with which inferred skills cover the job
+function milJobs(m) {
+  const t = translate(m); if (!t || !t.fam.length) return [];
+  return S.jobs.filter((j) => jobOpen(j) && t.fam.includes(j.family)).map((j) => ({ j, cover: j.skills.filter((sk) => t.sk.some(([k]) => k === sk)), lvlOk: T.levels.indexOf(t.lvl) >= T.levels.indexOf(j.level) }));
+}
+function milCard(c, edit) {
+  const m = c.mil, t = translate(m);
+  const form = edit ? `<div class="row" style="align-items:flex-end;margin-top:8px"><label>יחידה${sel('id="ml-u" data-chg="mlUnit"', Object.values(MIL.tracks).map((x) => x.unit), (A.ui.mlu != null ? A.ui.mlu : (m && m.unit)) || '', 'ללא / לא ידוע')}</label><label>תפקיד${sel('id="ml-r"', ((Object.values(MIL.tracks).find((x) => x.unit === (A.ui.mlu != null ? A.ui.mlu : (m && m.unit))) || { roles: [] }).roles).map((r) => r.name), m ? m.role : '', 'בחרו…')}</label><label>שנות שירות<input type="number" id="ml-y" min="1" max="30" value="${m ? m.years : ''}" style="width:90px"></label><button class="btn sec sm" data-act="mlSave" data-id="${c.id}">שמירה</button></div>` : '';
+  if (!t) return `<div class="card"><h3 class="h3">רקע צבאי</h3><span class="mut">לא הוזן.</span>${form}</div>`;
+  const jobs = milJobs(m);
+  return `<div class="card"><h3 class="h3">רקע צבאי ← כישורי סייבר</h3><div class="mut small">${esc(m.unit)} · ${esc(m.role)} · ${m.years} שנים${m.end ? ' · סיום ' + m.end : ''}</div>
+   <div class="demo-note" style="margin:8px 0">זה תרגום משוער לפי מידע ציבורי כללי על מסלולים כאלה – לא עובדה על האדם. כישור משוער לא נספר בהתאמה עד שמטלה מעשית מאמתת אותו. אין לבקש או לרשום פרטים מסווגים.</div>
+   <div><b class="small">כישורים משוערים</b> <span class="row" style="gap:4px;display:inline-flex">${t.sk.map(([k, conf]) => `<span class="pill ${isVerified(c, k) ? 'p-green' : MIL.conf[conf]}" title="${isVerified(c, k) ? 'אומת במטלה' : (c.skills.includes(k) ? 'מוצהר, לא אומת' : 'משוער מהשירות')}">${isVerified(c, k) ? '🛡 ' : ''}${esc(k)} · ${isVerified(c, k) ? 'מאומת' : esc(conf)}</span>`).join('') || '<span class="mut">אין מיפוי טכני ישיר</span>'}</span></div>
+   <div style="margin-top:6px"><b class="small">תחומים מתאימים</b> ${t.fam.map((f) => `<span class="pill p-violet">${esc(f)}</span>`).join(' ') || '<span class="mut">לא טכני – מתאים כנקודת כניסה (Junior) עם הכשרה</span>'} <span class="pill p-gray">רמה משוערת: ${t.lvl}</span></div>
+   <div style="margin-top:6px"><b class="small">יכולות רכות</b> ${t.soft.map((x) => `<span class="pill p-gray">${esc(x)}</span>`).join(' ')}</div>${t.note ? `<div class="mut small" style="margin-top:4px">${esc(t.note)}</div>` : ''}
+   ${t.verify.length ? `<div style="margin-top:8px"><b class="small">תוכנית אימות</b><div class="mut small">מטלה מעשית ב: ${t.verify.map((k) => (isVerified(c, k) ? '✓ ' : '') + esc(k)).join(' · ')}</div></div>` : ''}
+   <details style="margin-top:6px"><summary class="small">שאלות לראיון (בלי מידע מסווג)</summary><ul class="small" style="margin:6px 0;padding-inline-start:18px">${t.ask.map((q) => `<li>${esc(q)}</li>`).join('')}</ul></details>
+   ${jobs.length ? `<div style="margin-top:8px"><b class="small">משרות פתוחות שהרקע הזה יכול להתאים להן</b>${jobs.map((x) => `<div class="tl row spread"><a href="#" class="clink" data-act="openJob" data-id="${x.j.id}">${esc(x.j.company)} · ${esc(x.j.title)}</a><span class="row" style="gap:4px"><span class="pill p-gray">${x.cover.length}/${x.j.skills.length} כישורים משוערים</span>${x.lvlOk ? '' : '<span class="pill p-orange">רמה נמוכה מהנדרש</span>'}</span></div>`).join('')}</div>` : ''}${form}</div>`;
+}
 
 // ---------- the intelligence layer: verified skills, forecast, rediscovery, next actions. Every result shows its reason. ----------
 const isVerified = (c, sk) => !!(c.verified && c.verified[sk] && c.verified[sk].score >= T.verifyPass);
@@ -550,6 +613,8 @@ function nextActions() {
   return out.sort((a, b) => b.w - a.w);
 }
 
+let S; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; } if (!S || S.v !== 3) S = seed();
+
 // ---------- small UI helpers ----------
 function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : ''); clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ''; }, 3000); }
 const ICONS = { chart: '<path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-9"/>', users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', flag: '<path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/>', file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>', gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>', out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>', moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>' };
@@ -563,7 +628,7 @@ const agePill = (x, lim) => { const d = daysIn(x); return `<span class="pill ${d
 const nextHtml = (x) => { if (!x.next) return ''; const late = x.next.date < isoD(now()), today = x.next.date === isoD(now()); return `<span class="pill ${late ? 'p-red' : (today ? 'p-orange' : 'p-blue')}">${late ? 'באיחור · ' : (today ? 'היום · ' : '')}${esc(x.next.text)} · ${esc(x.next.date.slice(8) + '/' + x.next.date.slice(5, 7))}</span>`; };
 const sel = (attrs, opts, val, ph) => `<select ${attrs}>${ph != null ? `<option value="">${ph}</option>` : ''}${opts.map((o) => `<option ${String(o) === String(val == null ? '' : val) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
 const route = () => (location.hash.replace('#/', '') || 'dash');
-const PAGES = [{ id: 'dash', name: 'תמונת מצב', icon: 'chart' }, { id: 'leads', name: 'לידים', icon: 'flag' }, { id: 'jobs', name: 'משרות', icon: 'file' }, { id: 'cands', name: 'מועמדים', icon: 'users' }, { id: 'settings', name: 'יומן והגדרות', icon: 'gear' }];
+const PAGES = [{ id: 'dash', name: 'תמונת מצב', icon: 'chart' }, { id: 'mil', name: 'תרגום שירות צבאי', icon: 'shield' }, { id: 'leads', name: 'לידים', icon: 'flag' }, { id: 'jobs', name: 'משרות', icon: 'file' }, { id: 'cands', name: 'מועמדים', icon: 'users' }, { id: 'settings', name: 'יומן והגדרות', icon: 'gear' }];
 
 // ---------- screens ----------
 const SCREENS = {};
@@ -614,6 +679,20 @@ SCREENS.jobs = () => {
   return `<div><h1 class="h1">משרות</h1><div class="mut small">משרה נפתחת כשליד נסגר כלקוח. לחיצה על משרה מציגה את המועמדים שבתהליך ואת מי שעומד בדרישות.</div></div>
    <div class="card"><div style="overflow:auto"><table class="ctbl"><thead><tr><th>משרה</th><th>לקוח</th><th>דרישות</th><th>תקציב חודשי</th><th>איוש</th><th>פתוחה</th><th>בתהליך</th><th>מצב</th></tr></thead><tbody>${rows.map((j) => { const inp = S.cands.filter((c) => c.jobId === j.id && candOpen(c)).length, d = Math.floor((now() - j.openTs) / DAY); return `<tr class="clk" data-act="openJob" data-id="${j.id}"><td><b>${esc(j.title)}</b><div class="mut small">${j.id}</div></td><td>${esc(j.company)}</td><td>${j.skills.map((s) => `<span class="pill p-blue">${esc(s)}</span>`).join(' ')} ${j.certs.map((s) => `<span class="pill p-violet">${esc(s)}</span>`).join(' ')}${j.clearance ? ' <span class="pill p-orange">סיווג</span>' : ''}</td><td>${money(j.budget[0])}–${money(j.budget[1])}</td><td>${j.filled} / ${j.headcount}</td><td>${jobOpen(j) ? `<span class="pill ${d >= 75 ? 'p-red' : (d >= 45 ? 'p-orange' : 'p-gray')}">${d} ימים</span>` : '—'}</td><td>${inp}</td><td><span class="pill ${jobOpen(j) ? 'p-blue' : 'p-green'}">${esc(j.status)}</span></td></tr>`; }).join('') || '<tr><td colspan="8" class="mut">אין משרות. סגרו ליד כלקוח כדי לפתוח משרה.</td></tr>'}</tbody></table></div><div class="mut small" style="margin-top:8px">הסימון הכתום (45+ ימים) והאדום (75+) הוא כלל אצבע בלבד: הערכות בשוק לזמן איוש של משרת סייבר נעות בין כחודש לכמה חודשים ואינן אחידות.</div></div>`;
 };
+SCREENS.mil = () => {
+  const q = A.ui.mq || {}, tr = Object.values(MIL.tracks), unit = q.unit || tr[0].unit, roles = (tr.find((x) => x.unit === unit) || tr[0]).roles, role = roles.some((r) => r.name === q.role) ? q.role : roles[0].name, years = +(q.years || 3);
+  const t = translate({ unit, role, years }), jobs = milJobs({ unit, role, years }), withMil = S.cands.filter((c) => c.mil);
+  const byUnit = tr.map((x) => ({ u: x.unit, n: withMil.filter((c) => c.mil.unit === x.unit).length, h: withMil.filter((c) => c.mil.unit === x.unit && c.stage === 'התקבל/ה').length, act: withMil.filter((c) => c.mil.unit === x.unit && candOpen(c)).length })).filter((x) => x.n);
+  return `<div><h1 class="h1">תרגום שירות צבאי לכישורי סייבר</h1><div class="mut small">מגייס/ת שלא מכיר/ה את המסלולים יכול/ה להבין מה מועמד/ת כנראה יודע/ת, מה לבדוק, ומה לשאול – בלי לגעת במידע מסווג.</div></div>
+   <div class="demo-note">המיפוי בנוי על מידע ציבורי כללי ועל הנחות – הוא נקודת פתיחה לראיון, לא קביעה. שמות יחידות מופיעים רק ברמה הכללית והציבורית. מומלץ לאמת ולהרחיב את המיפוי עם אנשים ששירתו במסלולים.</div>
+   <div class="card"><div class="filters"><label>יחידה${sel('data-chg="mq" data-f="unit"', tr.map((x) => x.unit), unit)}</label><label>תפקיד${sel('data-chg="mq" data-f="role"', roles.map((r) => r.name), role)}</label><label>שנות שירות${sel('data-chg="mq" data-f="years"', [1, 2, 3, 4, 5, 6, 8, 10], years)}</label></div>
+    <div class="grid g2"><div><b>כישורים משוערים</b><div class="row" style="gap:4px;margin-top:4px">${t.sk.map(([k, conf]) => `<span class="pill ${MIL.conf[conf]}">${esc(k)} · ${esc(conf)}</span>`).join('') || '<span class="mut">אין מיפוי טכני ישיר</span>'}</div>
+     <div style="margin-top:10px"><b>תחומים מתאימים</b><div class="row" style="gap:4px;margin-top:4px">${t.fam.map((f) => `<span class="pill p-violet">${esc(f)}</span>`).join('') || '<span class="mut">נקודת כניסה עם הכשרה</span>'}<span class="pill p-gray">רמה משוערת: ${t.lvl}</span></div></div>
+     <div style="margin-top:10px"><b>יכולות רכות</b><div class="row" style="gap:4px;margin-top:4px">${t.soft.map((x) => `<span class="pill p-gray">${esc(x)}</span>`).join('')}</div>${t.note ? `<div class="mut small" style="margin-top:4px">${esc(t.note)}</div>` : ''}</div></div>
+     <div><b>מה לבדוק</b><div class="mut small">${t.verify.length ? 'מטלה מעשית ב: ' + t.verify.map(esc).join(' · ') : 'ראיון מוטיבציה ולמידה עצמית'}</div><b style="display:block;margin-top:10px">מה לשאול</b><ul class="small" style="margin:4px 0;padding-inline-start:18px">${t.ask.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div></div>
+    <div style="margin-top:10px"><b>משרות פתוחות מתאימות (${jobs.length})</b>${jobs.map((x) => `<div class="tl row spread"><a href="#" class="clink" data-act="openJob" data-id="${x.j.id}">${esc(x.j.company)} · ${esc(x.j.title)}</a><span class="row" style="gap:4px"><span class="pill p-gray">${x.cover.length}/${x.j.skills.length} כישורים משוערים</span>${x.lvlOk ? '' : '<span class="pill p-orange">רמה נמוכה מהנדרש</span>'}</span></div>`).join('') || '<div class="mut small">אין כרגע משרה פתוחה בתחומים האלה.</div>'}</div></div>
+   <div class="card"><h2>המאגר לפי רקע צבאי</h2><div class="mut small" style="margin-bottom:6px">${withMil.length} מתוך ${S.cands.length} מועמדים עם רקע צבאי רשום. מספרים קטנים – לא להסיק מהם על יחידות.</div><table><thead><tr><th>יחידה</th><th>מועמדים</th><th>בתהליך</th><th>התקבלו</th></tr></thead><tbody>${byUnit.map((x) => `<tr><td>${esc(x.u)}</td><td>${x.n}</td><td>${x.act}</td><td>${x.h || '·'}</td></tr>`).join('')}</tbody></table></div>`;
+};
 SCREENS.settings = () => `<div><h1 class="h1">יומן והגדרות</h1></div>
    <div class="card"><h2>ייצוא</h2><div class="row"><button class="btn sec" data-act="csv" data-t="leads">לידים (CSV)</button><button class="btn sec" data-act="csv" data-t="cands" ${can('cands') ? '' : 'disabled'}>מועמדים (CSV)</button><button class="btn sec" data-act="csv" data-t="jobs">משרות (CSV)</button></div></div>
    <div class="card"><h2>נתוני הדגמה</h2><div class="row"><button class="btn sec" data-act="reset" ${can('admin') ? '' : 'disabled'}>איפוס לנתוני ההדגמה</button><span class="mut small">הנתונים נשמרים בדפדפן הזה בלבד. כל השמות והחברות פיקטיביים.</span></div></div>
@@ -642,8 +721,9 @@ function candDrawer(c) {
    <div class="card">${stageCtl('cand', c, T.candStages, edit)}${['נדחה', 'פרש/ה'].includes(c.stage) ? `<div class="row" style="margin-top:8px"><label>סיבה${edit ? sel(`data-chg="reason" data-kind="cand" data-id="${c.id}"`, T.reject, c.rejectReason, 'בחרו…') : esc(c.rejectReason || '—')}</label></div>` : ''}
     <div class="row" style="margin-top:8px"><label>מוגש/ת למשרה${edit ? `<select data-chg="assign" data-id="${c.id}"><option value="">— ללא —</option>${open.concat(j && !jobOpen(j) ? [j] : []).map((x) => `<option value="${x.id}" ${x.id === c.jobId ? 'selected' : ''}>${esc(x.company)} · ${esc(x.title)}</option>`).join('')}</select>` : esc(j ? j.company + ' · ' + j.title : '—')}</label></div>
     ${j ? `<div style="margin-top:8px"><div class="mut small">עמידה בדרישות המשרה (${match(j, c).met} מתוך ${match(j, c).total})</div>${matchChips(match(j, c), can('salary'))}</div>` : ''}</div>
+   ${milCard(c, edit)}
    <div class="card"><h3 class="h3">אימות כישורים – מטלה מעשית</h3><div class="mut small" style="margin-bottom:6px">כישור נחשב מאומת מציון ${T.verifyPass}. בהתאמה למשרה מוצגים בנפרד כישורים מוצהרים ומאומתים.</div>${c.skills.map((sk) => { const v = c.verified && c.verified[sk]; return `<div class="row spread tl"><span>${skillPill(c, sk)}</span><span class="mut small">${v ? 'נבדק ' + fmtD(v.ts) + ' · ' + esc(uName(v.by)) : 'לא נבדק'}</span></div>`; }).join('')}
-    ${edit ? `<div class="row" style="align-items:flex-end;margin-top:8px"><label>כישור${sel('id="vf-s"', c.skills.concat(T.skills[c.family].filter((x) => !c.skills.includes(x))), '', 'בחרו…')}</label><label>ציון במטלה (0–100)<input type="number" id="vf-n" min="0" max="100" style="width:110px"></label><button class="btn sec sm" data-act="verify" data-id="${c.id}">רישום תוצאה</button></div>` : ''}</div>
+    ${edit ? `<div class="row" style="align-items:flex-end;margin-top:8px"><label>כישור${sel('id="vf-s"', Array.from(new Set(c.skills.concat(translate(c.mil) ? translate(c.mil).sk.map(([k]) => k) : [], T.skills[c.family]))), '', 'בחרו…')}</label><label>ציון במטלה (0–100)<input type="number" id="vf-n" min="0" max="100" style="width:110px"></label><button class="btn sec sm" data-act="verify" data-id="${c.id}">רישום תוצאה</button></div>` : ''}</div>
    <div class="card"><h3 class="h3">הצעד הבא</h3>${nextCtl('cand', c, edit) || '<span class="mut">לא נקבע</span>'}</div>
    <div class="card"><h3 class="h3">היסטוריה</h3>${noteCtl('cand', c, edit)}${notesHtml(c)}</div>`);
 }
@@ -654,6 +734,7 @@ function jobDrawer(j) {
    <div class="row">${j.skills.map((s) => `<span class="pill p-blue">${esc(s)}</span>`).join('')}${j.certs.map((s) => `<span class="pill p-violet">${esc(s)}</span>`).join('')}${j.clearance ? '<span class="pill p-orange">נדרש סיווג ביטחוני</span>' : ''}<span class="pill ${jobOpen(j) ? 'p-blue' : 'p-green'}">${esc(j.status)}</span></div>
    ${jobOpen(j) ? (() => { const f = forecast(j); return `<div class="card"><h3 class="h3">צפי איוש</h3><div class="row" style="gap:16px"><div><b style="font-size:26px">${f.exp.toFixed(1)}</b> <span class="mut">מתוך ${f.left} תקנים</span></div>${f.more ? `<span class="pill p-orange">חסרים בערך ${f.more} מועמדים חדשים בראש המשפך</span>` : '<span class="pill p-green">המשפך הנוכחי צפוי להספיק</span>'}</div><div class="mut small" style="margin-top:4px">לפי ${esc(f.src)}</div>${f.risks.map((r) => `<div class="demo-note" style="margin-top:6px">${esc(r)}</div>`).join('')}</div>`; })() : ''}
    ${jobOpen(j) && rediscover(j).length ? `<div class="card"><h3 class="h3">אפשר להחזיר (${rediscover(j).length})</h3><div class="mut small" style="margin-bottom:6px">מועמדים שנדחו או פרשו בעבר, כשהסיבה לא רלוונטית למשרה הזו.</div>${rediscover(j).map((r) => `<div class="tl row spread"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(r.c.id, 30)}<span><a href="#" class="clink" data-act="openCand" data-id="${r.c.id}"><b>${esc(r.c.name)}</b></a><div class="mut small">${esc(r.why)}</div></span></span>${edit ? `<button class="btn sec sm" data-act="revive" data-id="${r.c.id}" data-job="${j.id}">החזרה לתהליך</button>` : ''}</div>`).join('')}</div>` : ''}
+   ${jobOpen(j) ? (() => { const mb = S.cands.filter((c) => candOpen(c) && c.jobId !== j.id && c.family !== j.family && translate(c.mil) && translate(c.mil).fam.includes(j.family)); return mb.length ? `<div class="card"><h3 class="h3">רקע צבאי מתאים מתחום אחר (${mb.length})</h3><div class="mut small" style="margin-bottom:6px">מועמדים שרשומים בתחום אחר, אבל השירות הצבאי שלהם מרמז על התחום של המשרה. לאמת במטלה מעשית לפני הגשה.</div>${mb.slice(0, 6).map((c) => `<div class="tl row spread"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(c.id, 30)}<span><a href="#" class="clink" data-act="openCand" data-id="${c.id}"><b>${esc(c.name)}</b></a><div class="mut small">${esc(c.family)} · שירות: ${esc(c.mil.role)}, ${esc(c.mil.unit)}</div></span></span><span class="pill p-gray">${j.skills.filter((sk) => translate(c.mil).sk.some(([k]) => k === sk)).length}/${j.skills.length} משוערים</span></div>`).join('')}</div>` : ''; })() : ''}
    <div class="card"><h3 class="h3">בתהליך למשרה (${inp.length})</h3>${inp.map((c) => row(c, match(j, c), `<span class="pill ${c.stage === 'התקבל/ה' ? 'p-green' : (candOpen(c) ? 'p-blue' : 'p-gray')}">${esc(c.stage)}</span>`)).join('') || '<span class="mut">עדיין לא הוגשו מועמדים.</span>'}</div>
    <div class="card"><h3 class="h3">מועמדים מהמאגר באותו תחום</h3><div class="mut small" style="margin-bottom:6px">לפי כללים גלויים: תחום, בכירות, לפחות חצי מהכישורים, תעודה, סיווג ושכר. אין ציון נסתר – ההחלטה את מי להגיש היא שלך.</div>${pool.map(({ c, m }) => row(c, m, `<span class="pill p-gray">${m.met} מתוך ${m.total}</span>${edit && jobOpen(j) ? `<button class="btn sec sm" data-act="submit" data-id="${c.id}" data-job="${j.id}">הגשה למשרה</button>` : ''}`)).join('') || '<span class="mut">אין במאגר מועמדים פעילים בתחום הזה. זה פער כישורים – כדאי לפתוח מקור חדש.</span>'}</div>`);
 }
@@ -665,7 +746,7 @@ function formModal() {
 }
 
 // ---------- shell + render ----------
-function loginView() { return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>CyberHire</span></div><h1>גיוס בסייבר שיודע <em>מה לעשות עכשיו</em></h1><p>לא רק מעקב: כישורים מאומתים במטלה מעשית, צפי איוש לכל משרה, החזרת מועמדים שנדחו כשהסיבה כבר לא רלוונטית, ורשימת פעולות לפי השפעה – כל המלצה עם הסיבה שלה.</p><div class="chips"><span>כישורים מאומתים</span><span>צפי איוש</span><span>החזרת מועמדים</span><span>מה לעשות עכשיו</span></div><div class="demo-note">גרסת ניסוי: כל הנתונים פיקטיביים ונשמרים בדפדפן שלך בלבד. אין כאן כניסה מאובטחת.</div></section><section class="picker"><h2>כניסה</h2><p class="mut" style="margin:0">בחרו תפקיד כדי לראות את המערכת מהצד שלו.</p><div class="roles">${USERS.map((u) => `<button class="user" data-act="login" data-id="${u.id}"><span class="avatar">${esc(u.name[0])}</span><span class="u-t"><b>${esc(u.name)} · ${esc(u.title)}</b><small>${esc(u.role)}${PERM[u.role].leads && PERM[u.role].cands ? ' · הכול' : (PERM[u.role].leads ? ' · עריכת לידים, צפייה במועמדים בלי שכר' : ' · עריכת מועמדים, צפייה בלידים')}</small></span></button>`).join('')}</div></section></div>`; }
+function loginView() { return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>CyberHire</span></div><h1>גיוס בסייבר שיודע <em>מה לעשות עכשיו</em></h1><p>לא רק מעקב: כישורים מאומתים במטלה מעשית, צפי איוש לכל משרה, החזרת מועמדים שנדחו כשהסיבה כבר לא רלוונטית, ורשימת פעולות לפי השפעה – כל המלצה עם הסיבה שלה.</p><div class="chips"><span>תרגום שירות צבאי</span><span>כישורים מאומתים</span><span>צפי איוש</span><span>החזרת מועמדים</span><span>מה לעשות עכשיו</span></div><div class="demo-note">גרסת ניסוי: כל הנתונים פיקטיביים ונשמרים בדפדפן שלך בלבד. אין כאן כניסה מאובטחת.</div></section><section class="picker"><h2>כניסה</h2><p class="mut" style="margin:0">בחרו תפקיד כדי לראות את המערכת מהצד שלו.</p><div class="roles">${USERS.map((u) => `<button class="user" data-act="login" data-id="${u.id}"><span class="avatar">${esc(u.name[0])}</span><span class="u-t"><b>${esc(u.name)} · ${esc(u.title)}</b><small>${esc(u.role)}${PERM[u.role].leads && PERM[u.role].cands ? ' · הכול' : (PERM[u.role].leads ? ' · עריכת לידים, צפייה במועמדים בלי שכר' : ' · עריכת מועמדים, צפייה בלידים')}</small></span></button>`).join('')}</div></section></div>`; }
 function shell(inner) { const r = route(), pg = PAGES.find((p) => p.id === r); return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>CyberHire</span></div><nav class="nav">${PAGES.map((p) => `<a href="#/${p.id}" class="${r === p.id ? 'on' : ''}">${icon(p.icon)}<span>${p.name}</span></a>`).join('')}</nav><div class="side-foot"><div class="meta">גרסת ניסוי · נתונים פיקטיביים</div><div class="usercard"><span class="avatar">${esc(A.me.name[0])}</span><span class="uc-t"><b>${esc(A.me.name)} · ${esc(A.me.title)}</b><small>${esc(A.me.role)}</small></span></div></div></aside><div class="content"><header class="tbar"><div class="bar-t"><span class="bar-page">${pg ? pg.name : ''}</span></div><div class="bar-r"><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="ערכת נושא">${icon('moon', 18)}</button><button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header><main>${inner}</main></div></div>`; }
 function render() {
   const app = $('#app'), ae = document.activeElement, keep = ae && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
@@ -690,7 +771,7 @@ const ACTIONS = {
   logout: () => { A.me = null; localStorage.removeItem('cyberhire-user'); A.ui = {}; render(); },
   theme: () => { localStorage.setItem('cyberhire-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); },
   view: (d) => { A.ui[d.k] = d.v; render(); },
-  openLead: (d) => { A.ui.open = { t: 'lead', id: d.id }; render(); }, openCand: (d) => { A.ui.open = { t: 'cand', id: d.id }; render(); }, openJob: (d) => { A.ui.open = { t: 'job', id: d.id }; render(); },
+  openLead: (d) => { A.ui.open = { t: 'lead', id: d.id }; render(); }, openCand: (d) => { A.ui.open = { t: 'cand', id: d.id }; A.ui.mlu = null; render(); }, openJob: (d) => { A.ui.open = { t: 'job', id: d.id }; render(); },
   close: () => { A.ui.open = null; render(); },
   lf: (d, t) => { A.ui.lf = Object.assign({}, A.ui.lf, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); render(); },
   cf: (d, t) => { A.ui.cf = Object.assign({}, A.ui.cf, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); render(); },
@@ -717,10 +798,13 @@ const ACTIONS = {
     }
     A.ui.form = null; save(); toast('נשמר'); render();
   },
+  mq: (d, t) => { A.ui.mq = Object.assign({}, A.ui.mq, { [d.f]: t.value }); if (d.f === 'unit') A.ui.mq.role = ''; render(); },
+  mlUnit: (d, t) => { A.ui.mlu = t.value; render(); },
+  mlSave: (d) => { const c = byKind('cand', d.id), u = $('#ml-u').value, r = $('#ml-r').value, y = parseInt($('#ml-y').value, 10); if (!u) { c.mil = null; A.ui.mlu = null; note(c, 'רקע צבאי הוסר'); save(); render(); return; } if (!r || !(y >= 1 && y <= 30)) { toast('בחרו תפקיד ושנות שירות', true); return; } c.mil = { unit: u, role: r, years: y, end: c.mil && c.mil.end }; A.ui.mlu = null; note(c, 'רקע צבאי: ' + r + ', ' + u + ', ' + y + ' שנים'); logAct(c.name + ': עודכן רקע צבאי'); save(); toast('הרקע הצבאי נשמר'); render(); },
   verify: (d) => { const c = byKind('cand', d.id), sk = $('#vf-s').value, n = parseInt($('#vf-n').value, 10); if (!sk || !(n >= 0 && n <= 100)) { toast('בחרו כישור וציון בין 0 ל-100', true); return; } c.verified = c.verified || {}; c.verified[sk] = { score: n, ts: now(), by: A.me.id }; if (!c.skills.includes(sk)) c.skills.push(sk); note(c, 'מטלה מעשית – ' + sk + ': ' + n + (n >= T.verifyPass ? ' (מאומת)' : ' (מתחת לסף)')); logAct(c.name + ': מטלה מעשית ב' + sk + ' – ' + n); save(); toast(n >= T.verifyPass ? sk + ' סומן כמאומת' : 'נרשם – מתחת לסף האימות'); render(); },
   revive: (d) => { const c = byKind('cand', d.id), j = S.jobs.find((x) => x.id === d.job); c.jobId = j.id; const why = c.rejectReason; c.rejectReason = null; setStage(c, 'סינון טלפוני'); note(c, 'הוחזר/ה לתהליך למשרה ' + j.company + ' (סיבת הדחייה הקודמת: ' + why + ')'); logAct(c.name + ' הוחזר/ה לתהליך ל' + j.company); save(); toast(c.name + ' חזר/ה לתהליך'); render(); },
   csv: (d) => {
-    const rows = d.t === 'leads' ? [['מס׳', 'חברה', 'ענף', 'איש קשר', 'צורך', 'בכירות', 'שלב', 'ימים בשלב', 'אחראי/ת', 'סיבת אובדן']].concat(S.leads.map((l) => [l.id, l.company, l.sector, l.contact, l.need, l.level, l.stage, daysIn(l), uName(l.owner), l.lostReason || ''])) : d.t === 'jobs' ? [['מס׳', 'לקוח', 'משרה', 'כישורים', 'תעודות', 'איוש', 'מצב']].concat(S.jobs.map((j) => [j.id, j.company, j.title, j.skills.join(' / '), j.certs.join(' / '), j.filled + '/' + j.headcount, j.status])) : [['מס׳', 'שם', 'תחום', 'בכירות', 'שנות ניסיון', 'כישורים', 'תעודות', 'שלב', 'ימים בשלב', 'מגייס/ת', 'סיבה']].concat(S.cands.map((c) => [c.id, c.name, c.family, c.level, c.years, c.skills.map((sk) => sk + (isVerified(c, sk) ? ' (מאומת ' + c.verified[sk].score + ')' : '')).join(' / '), c.certs.join(' / '), c.stage, daysIn(c), uName(c.owner), c.rejectReason || '']));
+    const rows = d.t === 'leads' ? [['מס׳', 'חברה', 'ענף', 'איש קשר', 'צורך', 'בכירות', 'שלב', 'ימים בשלב', 'אחראי/ת', 'סיבת אובדן']].concat(S.leads.map((l) => [l.id, l.company, l.sector, l.contact, l.need, l.level, l.stage, daysIn(l), uName(l.owner), l.lostReason || ''])) : d.t === 'jobs' ? [['מס׳', 'לקוח', 'משרה', 'כישורים', 'תעודות', 'איוש', 'מצב']].concat(S.jobs.map((j) => [j.id, j.company, j.title, j.skills.join(' / '), j.certs.join(' / '), j.filled + '/' + j.headcount, j.status])) : [['מס׳', 'שם', 'תחום', 'בכירות', 'שנות ניסיון', 'כישורים', 'תעודות', 'רקע צבאי', 'שלב', 'ימים בשלב', 'מגייס/ת', 'סיבה']].concat(S.cands.map((c) => [c.id, c.name, c.family, c.level, c.years, c.skills.map((sk) => sk + (isVerified(c, sk) ? ' (מאומת ' + c.verified[sk].score + ')' : '')).join(' / '), c.certs.join(' / '), c.mil ? c.mil.role + ' · ' + c.mil.unit + ' · ' + c.mil.years + ' שנים' : '', c.stage, daysIn(c), uName(c.owner), c.rejectReason || '']));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + rows.map((r) => r.map((v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' })); a.download = 'cyberhire-' + d.t + '.csv'; a.click(); toast('הקובץ הורד');
   },
   reset: () => { if (!confirm('לאפס לנתוני ההדגמה? כל מה שהוזן בדפדפן הזה יימחק.')) return; S = seed(); save(); A.ui = {}; toast('אופס לנתוני ההדגמה'); render(); },
