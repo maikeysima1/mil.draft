@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0F1B35"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="MIL-DRAFT"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><title>MIL-DRAFT</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0F1B35"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="MIL-TRACK"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><title>MIL-TRACK</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>/* MIL-DRAFT design system — light/dark tokens, RTL-first */
 *{box-sizing:border-box}
@@ -447,12 +447,11 @@ const NAMES = ['איתמר ל.', 'יונתן ר.', 'עידו מ.', 'אורי ש.
 const AREAS=['צפון','מרכז','דרום','ירושלים'];
 const MEDS=['ללא מגבלות','מגבלה קלה','מגבלה בינונית'];
 const RECS=['מומלץ','מומלץ בהסתייגות','לא מומלץ'];
-// EXPERIMENT: three training tracks for candidates to special units. Internal keys (combat / intel / signals) are kept from the earlier
-// version; only the content changed. Unit names, stages and tracks follow general public descriptions and are NOT verified against
+// Three training tracks for candidates to special units (keys: recon / special / pilot). Unit names, stages and tracks follow general public descriptions and are NOT verified against
 // official IDF data - replace them with the real structure before any real use. Measures (stats) are illustrative.
 const corps = {
-  combat: {
-    key: 'combat', label: 'יח״טיות חטיבתיות (גדס״ר)', corps: 'יח״טיות חטיבתיות', short: 'יח״טיות', prefix: 'C-2', size: 22, eventName: 'גיבוש יח״טיות', evalSource: 'גיבוש יח״טיות ומפקדי ההכשרה', myUnit: 'גדס״ר גבעתי', targetLabel: 'פלוגה', fallback: 'גדוד חי״ר בחטיבת האם',
+  recon: {
+    key: 'recon', label: 'יח״טיות חטיבתיות (גדס״ר)', corps: 'יח״טיות חטיבתיות', short: 'יח״טיות', prefix: 'C-2', size: 22, eventName: 'גיבוש יח״טיות', evalSource: 'גיבוש יח״טיות ומפקדי ההכשרה', myUnit: 'גדס״ר גבעתי', targetLabel: 'פלוגה', fallback: 'גדוד חי״ר בחטיבת האם',
     roles: ['לוחם/ת סיור', 'נגביסט', 'מאגיסט', 'חובש קרבי', 'צלף', 'קשר מבצעי'],
     mix: ['לוחם/ת סיור', 'לוחם/ת סיור', 'נגביסט', 'לוחם/ת סיור', 'מאגיסט', 'חובש קרבי', 'לוחם/ת סיור', 'צלף', 'קשר מבצעי', 'נגביסט', 'חובש קרבי'],
     traits: ['מקצועיות', 'עבודה תחת לחץ', 'עבודה בצוות', 'יכולת הובלה', 'ניווט'],
@@ -467,8 +466,8 @@ const corps = {
       { name: 'סיירת חרוב (כפיר)', badge: 'חר', desc: 'היחידה המיוחדת של חטיבת כפיר', need: 1 },
     ],
   },
-  intel: {
-    key: 'intel', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות', fallback: 'שיבוץ מחדש מחוץ ליחידות המיוחדות', nextTrack: 'combat',
+  special: {
+    key: 'special', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות', fallback: 'שיבוץ מחדש מחוץ ליחידות המיוחדות', nextTrack: 'recon',
     roles: ['לוחם/ת', 'חובש/ת', 'צלף/ת', 'קשר/ית'],
     mix: ['לוחם/ת', 'לוחם/ת', 'חובש/ת', 'לוחם/ת', 'צלף/ת', 'לוחם/ת', 'קשר/ית', 'לוחם/ת'],
     traits: ['עמידה בעומס', 'עבודה בצוות', 'קור רוח', 'משמעת מבצעית', 'למידה מהירה'],
@@ -482,8 +481,8 @@ const corps = {
       { name: 'יחידה 669', badge: '669', desc: 'חילוץ והצלה בהיטס', tier: 1 }, { name: 'מגלן', badge: 'מג', desc: 'חטיבת הקומנדו', tier: 2, need: 2 }, { name: 'דובדבן', badge: 'דו', desc: 'חטיבת הקומנדו', tier: 2, need: 3 },
     ],
   },
-  signals: {
-    key: 'signals', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה', fallback: 'שיבוץ מחדש מחוץ לקורס הטיס', nextTrack: 'intel',
+  pilot: {
+    key: 'pilot', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה', fallback: 'שיבוץ מחדש מחוץ לקורס הטיס', nextTrack: 'special',
     roles: ['חניך/ת טיס', 'חניך/ת ניווט'],
     mix: ['חניך/ת טיס', 'חניך/ת טיס', 'חניך/ת ניווט', 'חניך/ת טיס'],
     traits: ['קואורדינציה', 'חלוקת קשב', 'קבלת החלטות', 'למידה מהירה', 'עבודה בצוות'],
@@ -498,7 +497,6 @@ const corps = {
     ],
   },
 };
-Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
 // Training-follow-up model. The system tracks soldiers in training who are candidates for a special unit (יח״ט / יחידה מיוחדת).
@@ -519,7 +517,7 @@ const TR = {
 // When no lower unit in the track has an open need, the soldier moves to the next track (corps.nextTrack: flight course -> special units ->
 // brigade recon units - also an illustration), to its unit with the largest open need. With no next track / no open need: corps.fallback.
 // special units the soldiers are candidates for (generic names – replace with the real ones)
-const TARGETS = { combat: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], intel: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], signals: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
+const TARGETS = { recon: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], special: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], pilot: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
@@ -533,7 +531,7 @@ const ROLES = {
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
 // Login step 1 ("חיל"): the five entrances. Users carry org / orgUnit / roleLabel for steps 1-3.
 const ORGS = [
-  { key: 'combat', label: 'יח״טיות חטיבתיות' }, { key: 'intel', label: 'יחידות מיוחדות' }, { key: 'signals', label: 'קורס טיס' },
+  { key: 'recon', label: 'יח״טיות חטיבתיות' }, { key: 'special', label: 'יחידות מיוחדות' }, { key: 'pilot', label: 'קורס טיס' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
 module.exports={ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
@@ -543,17 +541,17 @@ return module.exports; })();
 <script>// In-browser replacement for server.js (generated by build-standalone.py)
 const LocalServer = (function () {
 const C = CONFIG;
-const KEY = 'mil-training-state-v8';
+const KEY = 'mil-track-state-v9';
 // ---------- users (demo users, as in the mockup login screen) ----------
 const USERS = [
-  { id: 'u1', title: 'שלישות גדס״ר גבעתי', unit: 'גדס״ר גבעתי', corps: 'combat', role: 'שלישות', initial: 'ש' },
-  { id: 'u2', title: 'שלישות שייטת 13', unit: 'שייטת 13', corps: 'intel', role: 'שלישות', initial: 'ש' },
-  { id: 'u6', title: 'שלישות קורס טיס – שלב בסיסי', unit: 'קורס טיס – שלב בסיסי', corps: 'signals', role: 'שלישות', initial: 'ש' },
+  { id: 'u1', title: 'שלישות גדס״ר גבעתי', unit: 'גדס״ר גבעתי', corps: 'recon', role: 'שלישות', initial: 'ש' },
+  { id: 'u2', title: 'שלישות שייטת 13', unit: 'שייטת 13', corps: 'special', role: 'שלישות', initial: 'ש' },
+  { id: 'u6', title: 'שלישות קורס טיס – שלב בסיסי', unit: 'קורס טיס – שלב בסיסי', corps: 'pilot', role: 'שלישות', initial: 'ש' },
 ];
 const canDo = C.canDo;
 // one evaluator per team (צוות 1..4) in every corps: "מגבש צוות 1 אחראי על צוות 1" and so on
 const TEAMS = [1, 2, 3, 4];
-const LEGACY_EVAL = { 'combat|3': 'u4', 'intel|2': 'u5', 'signals|1': 'u7' };
+const LEGACY_EVAL = { 'recon|3': 'u4', 'special|2': 'u5', 'pilot|1': 'u7' };
 const CORPS_SHORT_S = {}; Object.keys(C.corps).forEach((k) => { CORPS_SHORT_S[k] = C.corps[k].short; });
 Object.keys(C.corps).forEach((k) => TEAMS.forEach((g) => USERS.push({ id: LEGACY_EVAL[k + '|' + g] || 'e-' + k + '-' + g, title: 'מגבש/ת צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: 'מגבש/ת', initial: 'מג' })));
 // extra evaluator-sheet values (kept separate from the 5 traits that drive the radar)
@@ -578,17 +576,6 @@ function cleanWish(cf, w) {
 // ---- Excel uploads: reference data ("previous cycle") and updates to existing candidates ----
 const toNum = (v) => { if (v === '' || v == null) return null; const x = Number(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
 // reference rows are anonymous: names are never stored, only the fields needed for analysis
-function cleanBaseline(cf, rows) {
-  const out = [];
-  (Array.isArray(rows) ? rows : []).slice(0, 3000).forEach((r) => {
-    if (!cf.roles.includes(r.role)) return;
-    const stats = {}; cf.stats.forEach((s) => { stats[s.k] = toNum((r.stats || {})[s.k]); });
-    const mot = toNum(r.motivation), cb = toNum(r.combat);
-    out.push({ role: r.role, rec: C.RECS.includes(r.rec) ? r.rec : null, med: C.MEDS.includes(r.med) ? r.med : null, profile: toNum(r.profile), stats,
-      motivation: mot >= 1 && mot <= 5 ? Math.round(mot) : null, combat: cb === 0 || cb === 1 || cb === 2 ? cb : null, unit: cf.units.some((u) => u.name === r.unit) ? r.unit : '' });
-  });
-  return out;
-}
 // candidate photo: small JPEG data URL produced by the browser (resized before upload); anything else is ignored
 const cleanPhoto = (v) => (typeof v === 'string' && v.length <= 60000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v) ? v : null);
 // apply uploaded values onto a candidate (only fields that were provided)
@@ -706,7 +693,7 @@ function seedCands() {
 // ---------- training model + api (shared with the standalone build) ----------
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-const SCHEMA = 8;
+const SCHEMA = 9;
 const DAY = 86400e3;
 const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ts)); // YYYY-MM-DD, Israel time
 // current review period: quarter (רבעון) or half-year (חציון)
@@ -770,10 +757,25 @@ function freshState() {
   Object.keys(C.corps).forEach((k) => { const needs = {}; C.corps[k].units.forEach((u) => { needs[u.name] = u.need || 0; }); st.corps[k] = { cands: seedTraining(k, cands[k]), favs: {}, needs }; });
   return st;
 }
-// what a client receives. Favorites are private: every client only gets its own list.
+// What a client receives - decided on the server, by role. The screen is not the security boundary:
+//   scope 'all' with file access (admin, training commander) -> everything
+//   scope 'corps' (שלישות)                                   -> the own track only
+//   scope 'group' (evaluator)                                 -> the own team in the own track only, no activity log
+//   no file access (ראש מטה, observer)                        -> anonymous rows with just what the totals need: no names, notes, reasons or log
+//   unknown user                                              -> nothing
+// Favorites are private: every client only gets its own list.
 function makeSnapshot(userId) {
-  const now = Date.now(), o = { version: state.version, serverNow: now, today: dayKey(now), period: periodOf(now, periodType()), settings: { period: periodType() }, corps: {}, log: state.log.slice(-400).reverse() };
-  Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: userId && f[userId] ? { [userId]: f[userId] } : {} }); });
+  const now = Date.now(), user = userById(userId), R = user ? C.ROLES[user.role] : null, today = dayKey(now), per = periodOf(now, periodType());
+  const files = !!R && (R.pages.includes('roster') || R.pages.includes('daily'));
+  const o = { version: state.version, serverNow: now, today, period: per, settings: { period: periodType() }, corps: {}, log: [] };
+  const anon = (c, i) => ({ id: 'x' + i, name: '', unit: c.unit, group: c.group, tstatus: c.tstatus, lv: [], stats: {}, daily: (c.daily || []).some((e) => e.d === today) ? [{ d: today, ts: now, level: 1 }] : [], reviews: (c.reviews || []).some((r) => r.period === per.key) ? [{ period: per.key, ts: now }] : [], dismiss: [], transfers: (c.transfers || []).map(() => ({})) });
+  Object.keys(C.corps).forEach((k) => {
+    const cst = state.corps[k], f = cst.favs || {}, mine = userId && f[userId] ? { [userId]: f[userId] } : {};
+    let cands = [];
+    if (R && (R.scope === 'all' || user.corps === k)) cands = !files ? cst.cands.map(anon) : (R.scope === 'group' ? cst.cands.filter((c) => c.group === user.group) : cst.cands);
+    o.corps[k] = { cands, favs: files ? mine : {}, needs: cst.needs || {} };
+  });
+  if (R && files && R.scope !== 'group') o.log = state.log.filter((l) => R.scope === 'all' || !l.corps || l.corps === user.corps).slice(-400).reverse();
   return o;
 }
 // every state-changing action. Throws Error(hebrew message) on a refused action; returns the response object.
@@ -1081,7 +1083,7 @@ function go(r) { location.hash = '#/' + r; }
 // corps shown on screens: users bound to a corps are fixed to it; others can switch
 function corpsKey() {
   if (A.me.corps) return A.me.corps;
-  return A.ui.corps || 'combat';
+  return A.ui.corps || Object.keys(A.cfg.corps)[0];
 }
 function corpsSwitcher() {
   if (A.me.corps) return `<span class="chip navy">${esc(cf(A.me.corps).corps)}</span>`;
@@ -1101,7 +1103,7 @@ function shell(inner) {
   const dark = document.documentElement.dataset.theme === 'dark';
   const k = A.me.corps || A.ui.corps;
   const scope = A.me.corps ? cf(A.me.corps).corps : 'כל המסלולים';
-  return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>MIL-DRAFT</span></div><nav class="nav">${nav}</nav>
+  return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>MIL-TRACK</span></div><nav class="nav">${nav}</nav>
     <div class="side-foot"><div class="meta">אב־טיפוס לדמו · כל הנתונים פיקטיביים</div>
     <div class="usercard"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span class="uc-t"><b>${esc(A.me.title)}</b><small>${esc(A.me.unit)}</small></span></div>
     <div class="row" style="gap:6px"><span class="lbadge">שכבה ${R().layer} · ${esc(A.me.role)}</span></div></div></aside>
@@ -1141,7 +1143,7 @@ function loginView() {
   const s2 = org ? loginUnits(org).map((n) => `<button class="choice ${unit === n ? 'on' : ''}" data-act="lunit" data-v="${esc(n)}">${esc(n)}</button>`).join('') : '<div class="mut small">בחרו חיל תחילה</div>';
   const s3 = org && unit ? loginRoles(org, unit).map((x) => `<button class="user ${x.id === A.ui.sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.roleLabel)}</b><small>${esc(x.title)}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`).join('') : '<div class="mut small">בחרו יחידה תחילה</div>';
   const target = o ? PAGES.find((p) => p.id === o.home).name : '';
-  return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-DRAFT</span></div>
+  return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-TRACK</span></div>
    <h1>מהגיוס ועד סיום ההכשרה – <em>תמונה אחת</em> של כל חייל/ת</h1>
    <p>מעקב אחרי חיילים בהכשרה שמועמדים ליחידות מיוחדות: גיוס המועמד, מעקב יומי, סטטוס תקופתי ובדיקת הדחה – עם תיק אחד לכל חייל/ת.</p>
    <div class="chips"><span>3 אירועים מרכזיים</span><span>מעקב יומי</span><span>6 שכבות סיווג</span></div>
@@ -1358,7 +1360,6 @@ function cardForm(k, c) {
      <label>סיכום התקופה ${sel('rec', TR().periodRec, f.rec, 'בחרו…')}</label>${f.rec === TR().periodRec[2] ? '<div class="demo-note">בחירה ב"מועמד/ת להדחה" תפתח בדיקת הדחה.</div>' : ''}`;
   }
   if (f.type === 'open') { title = 'פתיחת בדיקת הדחה'; btn = 'פתיחת הבדיקה'; body = `<div class="demo-note">פתיחת בדיקה אינה הדחה. ההחלטה מתקבלת בנפרד ע״י מפקד/ת ההכשרה, ומתועדת בתיק.</div>${ta('reason', 'מה הסיבה לבדיקה? עובדות ומקרים, לא התרשמות כללית', f.reason)}`; }
-  if (f.type === 'decide') { const d = openDis(c); title = 'החלטה בבדיקת הדחה'; btn = 'שמירת ההחלטה'; body = `<div class="card" style="background:var(--bg2);padding:10px"><div class="mut small">נפתחה ע״י ${esc(d.openedBy)} · ${fmtD(d.openedTs)}</div>${esc(d.reason)}</div><label>החלטה ${sel('decision', TR().decisions, f.decision, 'בחרו…')}</label>${ta('note', 'נימוק ההחלטה (חובה)', f.note)}`; }
   return `<div class="card" style="border:2px solid var(--blue)"><h3 style="margin:0 0 8px">${title}</h3><div style="display:flex;flex-direction:column;gap:10px">${body}<div class="row"><button class="btn" data-act="cfSave">${btn}</button>${f.type === 'periodic' && nextMissing(k, c.id) ? `<button class="btn sec" data-act="cfSaveNext">שמירה ומעבר ל${esc(candOf(k, nextMissing(k, c.id)).name)} ←</button>` : ''}<button class="btn sec" data-act="cfCancel">ביטול</button></div></div></div>`;
 }
 function drawer(k, id) {
@@ -1400,7 +1401,6 @@ Object.assign(ACTIONS, {
       if (f.type === 'daily') { if (f.level == null) { toast('בחרו איך היה היום', true); return; } await api('daily', { corps: k, id: f.id, level: f.level, att: f.att, text: f.text }); toast('המעקב היומי נשמר'); }
       if (f.type === 'periodic') { const r = await api('periodic', { corps: k, id: f.id, lv: f.lv, rec: f.rec, strong: f.strong, improve: f.improve, plan: f.plan }); toast(r.opened ? 'הסטטוס נשמר ונפתחה בדיקת הדחה' : 'הסטטוס נשמר'); const nx = goNext && nextMissing(k, f.id); if (nx) { A.ui.cand = nx; A.ui.cf = null; ACTIONS.cfOpen({ t: 'periodic' }); return; } if (goNext) toast('הוזן סטטוס לכל הרשימה'); }
       if (f.type === 'open') { await api('dismiss-open', { corps: k, id: f.id, reason: f.reason }); toast('נפתחה בדיקת הדחה ל' + c.name); }
-      if (f.type === 'decide') { if (f.decision === TR().decisions[2] && !confirm('להדיח את ' + c.name + ' מההכשרה? ההחלטה נרשמת בתיק ואי אפשר לבטל אותה מהמערכת.')) return; await api('dismiss-decide', { corps: k, id: f.id, decision: f.decision, note: f.note }); toast('ההחלטה נשמרה: ' + f.decision); }
       A.ui.cf = null; rerender();
     } catch (x) { /* toast shown */ }
   },

@@ -1,4 +1,4 @@
-// MIL-DRAFT server: static files + JSON API + SSE live updates + autopilot for units without an online user.
+// MIL-TRACK server: static files + JSON API + SSE live updates. Follows soldiers in training for special units.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -24,19 +24,17 @@ function openJson(txt) { // reads both plain and encrypted files (so enabling DA
 }
 const ACCESS_CODE = process.env.ACCESS_CODE || '';
 const PUB = path.join(__dirname, 'public');
-const CLOCK_SECONDS = Number(process.env.CLOCK_SECONDS) || 0;   // 0 = no time pressure (default). Opt in with CLOCK_SECONDS=<seconds>: a human unit that does not pick in time is auto-picked
-const BOT_DELAY_MS = 1000;   // delay between automatic picks
 
 // ---------- users (demo users, as in the mockup login screen) ----------
 const USERS = [
-  { id: 'u1', title: 'שלישות גדס״ר גבעתי', unit: 'גדס״ר גבעתי', corps: 'combat', role: 'שלישות', initial: 'ש' },
-  { id: 'u2', title: 'שלישות שייטת 13', unit: 'שייטת 13', corps: 'intel', role: 'שלישות', initial: 'ש' },
-  { id: 'u6', title: 'שלישות קורס טיס – שלב בסיסי', unit: 'קורס טיס – שלב בסיסי', corps: 'signals', role: 'שלישות', initial: 'ש' },
+  { id: 'u1', title: 'שלישות גדס״ר גבעתי', unit: 'גדס״ר גבעתי', corps: 'recon', role: 'שלישות', initial: 'ש' },
+  { id: 'u2', title: 'שלישות שייטת 13', unit: 'שייטת 13', corps: 'special', role: 'שלישות', initial: 'ש' },
+  { id: 'u6', title: 'שלישות קורס טיס – שלב בסיסי', unit: 'קורס טיס – שלב בסיסי', corps: 'pilot', role: 'שלישות', initial: 'ש' },
 ];
 const canDo = C.canDo;
 // one evaluator per team (צוות 1..4) in every corps: "מגבש צוות 1 אחראי על צוות 1" and so on
 const TEAMS = [1, 2, 3, 4];
-const LEGACY_EVAL = { 'combat|3': 'u4', 'intel|2': 'u5', 'signals|1': 'u7' };
+const LEGACY_EVAL = { 'recon|3': 'u4', 'special|2': 'u5', 'pilot|1': 'u7' };
 const CORPS_SHORT_S = {}; Object.keys(C.corps).forEach((k) => { CORPS_SHORT_S[k] = C.corps[k].short; });
 Object.keys(C.corps).forEach((k) => TEAMS.forEach((g) => USERS.push({ id: LEGACY_EVAL[k + '|' + g] || 'e-' + k + '-' + g, title: 'מגבש/ת צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: 'מגבש/ת', initial: 'מג' })));
 // extra evaluator-sheet values (kept separate from the 5 traits that drive the radar)
@@ -61,17 +59,6 @@ function cleanWish(cf, w) {
 // ---- Excel uploads: reference data ("previous cycle") and updates to existing candidates ----
 const toNum = (v) => { if (v === '' || v == null) return null; const x = Number(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
 // reference rows are anonymous: names are never stored, only the fields needed for analysis
-function cleanBaseline(cf, rows) {
-  const out = [];
-  (Array.isArray(rows) ? rows : []).slice(0, 3000).forEach((r) => {
-    if (!cf.roles.includes(r.role)) return;
-    const stats = {}; cf.stats.forEach((s) => { stats[s.k] = toNum((r.stats || {})[s.k]); });
-    const mot = toNum(r.motivation), cb = toNum(r.combat);
-    out.push({ role: r.role, rec: C.RECS.includes(r.rec) ? r.rec : null, med: C.MEDS.includes(r.med) ? r.med : null, profile: toNum(r.profile), stats,
-      motivation: mot >= 1 && mot <= 5 ? Math.round(mot) : null, combat: cb === 0 || cb === 1 || cb === 2 ? cb : null, unit: cf.units.some((u) => u.name === r.unit) ? r.unit : '' });
-  });
-  return out;
-}
 // candidate photo: small JPEG data URL produced by the browser (resized before upload); anything else is ignored
 const cleanPhoto = (v) => (typeof v === 'string' && v.length <= 60000 && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(v) ? v : null);
 // apply uploaded values onto a candidate (only fields that were provided)
@@ -189,7 +176,7 @@ function seedCands() {
 // ---------- training model + api (shared with the standalone build) ----------
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-const SCHEMA = 8;
+const SCHEMA = 9;
 const DAY = 86400e3;
 const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ts)); // YYYY-MM-DD, Israel time
 // current review period: quarter (רבעון) or half-year (חציון)
@@ -253,10 +240,25 @@ function freshState() {
   Object.keys(C.corps).forEach((k) => { const needs = {}; C.corps[k].units.forEach((u) => { needs[u.name] = u.need || 0; }); st.corps[k] = { cands: seedTraining(k, cands[k]), favs: {}, needs }; });
   return st;
 }
-// what a client receives. Favorites are private: every client only gets its own list.
+// What a client receives - decided on the server, by role. The screen is not the security boundary:
+//   scope 'all' with file access (admin, training commander) -> everything
+//   scope 'corps' (שלישות)                                   -> the own track only
+//   scope 'group' (evaluator)                                 -> the own team in the own track only, no activity log
+//   no file access (ראש מטה, observer)                        -> anonymous rows with just what the totals need: no names, notes, reasons or log
+//   unknown user                                              -> nothing
+// Favorites are private: every client only gets its own list.
 function makeSnapshot(userId) {
-  const now = Date.now(), o = { version: state.version, serverNow: now, today: dayKey(now), period: periodOf(now, periodType()), settings: { period: periodType() }, corps: {}, log: state.log.slice(-400).reverse() };
-  Object.keys(C.corps).forEach((k) => { const f = state.corps[k].favs || {}; o.corps[k] = Object.assign({}, state.corps[k], { favs: userId && f[userId] ? { [userId]: f[userId] } : {} }); });
+  const now = Date.now(), user = userById(userId), R = user ? C.ROLES[user.role] : null, today = dayKey(now), per = periodOf(now, periodType());
+  const files = !!R && (R.pages.includes('roster') || R.pages.includes('daily'));
+  const o = { version: state.version, serverNow: now, today, period: per, settings: { period: periodType() }, corps: {}, log: [] };
+  const anon = (c, i) => ({ id: 'x' + i, name: '', unit: c.unit, group: c.group, tstatus: c.tstatus, lv: [], stats: {}, daily: (c.daily || []).some((e) => e.d === today) ? [{ d: today, ts: now, level: 1 }] : [], reviews: (c.reviews || []).some((r) => r.period === per.key) ? [{ period: per.key, ts: now }] : [], dismiss: [], transfers: (c.transfers || []).map(() => ({})) });
+  Object.keys(C.corps).forEach((k) => {
+    const cst = state.corps[k], f = cst.favs || {}, mine = userId && f[userId] ? { [userId]: f[userId] } : {};
+    let cands = [];
+    if (R && (R.scope === 'all' || user.corps === k)) cands = !files ? cst.cands.map(anon) : (R.scope === 'group' ? cst.cands.filter((c) => c.group === user.group) : cst.cands);
+    o.corps[k] = { cands, favs: files ? mine : {}, needs: cst.needs || {} };
+  });
+  if (R && files && R.scope !== 'group') o.log = state.log.filter((l) => R.scope === 'all' || !l.corps || l.corps === user.corps).slice(-400).reverse();
   return o;
 }
 // every state-changing action. Throws Error(hebrew message) on a refused action; returns the response object.
@@ -574,4 +576,4 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     fs.createReadStream(f).pipe(res);
   } catch (e) { json(res, 400, { error: e.message }); }
-}).listen(PORT, () => console.log('MIL-DRAFT running on http://localhost:' + PORT));
+}).listen(PORT, () => console.log('MIL-TRACK running on http://localhost:' + PORT));

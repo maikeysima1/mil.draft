@@ -3,12 +3,11 @@ const NAMES = ['איתמר ל.', 'יונתן ר.', 'עידו מ.', 'אורי ש.
 const AREAS=['צפון','מרכז','דרום','ירושלים'];
 const MEDS=['ללא מגבלות','מגבלה קלה','מגבלה בינונית'];
 const RECS=['מומלץ','מומלץ בהסתייגות','לא מומלץ'];
-// EXPERIMENT: three training tracks for candidates to special units. Internal keys (combat / intel / signals) are kept from the earlier
-// version; only the content changed. Unit names, stages and tracks follow general public descriptions and are NOT verified against
+// Three training tracks for candidates to special units (keys: recon / special / pilot). Unit names, stages and tracks follow general public descriptions and are NOT verified against
 // official IDF data - replace them with the real structure before any real use. Measures (stats) are illustrative.
 const corps = {
-  combat: {
-    key: 'combat', label: 'יח״טיות חטיבתיות (גדס״ר)', corps: 'יח״טיות חטיבתיות', short: 'יח״טיות', prefix: 'C-2', size: 22, eventName: 'גיבוש יח״טיות', evalSource: 'גיבוש יח״טיות ומפקדי ההכשרה', myUnit: 'גדס״ר גבעתי', targetLabel: 'פלוגה', fallback: 'גדוד חי״ר בחטיבת האם',
+  recon: {
+    key: 'recon', label: 'יח״טיות חטיבתיות (גדס״ר)', corps: 'יח״טיות חטיבתיות', short: 'יח״טיות', prefix: 'C-2', size: 22, eventName: 'גיבוש יח״טיות', evalSource: 'גיבוש יח״טיות ומפקדי ההכשרה', myUnit: 'גדס״ר גבעתי', targetLabel: 'פלוגה', fallback: 'גדוד חי״ר בחטיבת האם',
     roles: ['לוחם/ת סיור', 'נגביסט', 'מאגיסט', 'חובש קרבי', 'צלף', 'קשר מבצעי'],
     mix: ['לוחם/ת סיור', 'לוחם/ת סיור', 'נגביסט', 'לוחם/ת סיור', 'מאגיסט', 'חובש קרבי', 'לוחם/ת סיור', 'צלף', 'קשר מבצעי', 'נגביסט', 'חובש קרבי'],
     traits: ['מקצועיות', 'עבודה תחת לחץ', 'עבודה בצוות', 'יכולת הובלה', 'ניווט'],
@@ -23,8 +22,8 @@ const corps = {
       { name: 'סיירת חרוב (כפיר)', badge: 'חר', desc: 'היחידה המיוחדת של חטיבת כפיר', need: 1 },
     ],
   },
-  intel: {
-    key: 'intel', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות', fallback: 'שיבוץ מחדש מחוץ ליחידות המיוחדות', nextTrack: 'combat',
+  special: {
+    key: 'special', label: 'יחידות מיוחדות', corps: 'יחידות מיוחדות', short: 'מיוחדות', prefix: 'C-3', size: 18, eventName: 'גיבוש יחידות מיוחדות', evalSource: 'גיבוש ומפקדי הצוותים', myUnit: 'שייטת 13', targetLabel: 'התמחות', fallback: 'שיבוץ מחדש מחוץ ליחידות המיוחדות', nextTrack: 'recon',
     roles: ['לוחם/ת', 'חובש/ת', 'צלף/ת', 'קשר/ית'],
     mix: ['לוחם/ת', 'לוחם/ת', 'חובש/ת', 'לוחם/ת', 'צלף/ת', 'לוחם/ת', 'קשר/ית', 'לוחם/ת'],
     traits: ['עמידה בעומס', 'עבודה בצוות', 'קור רוח', 'משמעת מבצעית', 'למידה מהירה'],
@@ -38,8 +37,8 @@ const corps = {
       { name: 'יחידה 669', badge: '669', desc: 'חילוץ והצלה בהיטס', tier: 1 }, { name: 'מגלן', badge: 'מג', desc: 'חטיבת הקומנדו', tier: 2, need: 2 }, { name: 'דובדבן', badge: 'דו', desc: 'חטיבת הקומנדו', tier: 2, need: 3 },
     ],
   },
-  signals: {
-    key: 'signals', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה', fallback: 'שיבוץ מחדש מחוץ לקורס הטיס', nextTrack: 'intel',
+  pilot: {
+    key: 'pilot', label: 'קורס טיס', corps: 'קורס טיס', short: 'טיס', prefix: 'C-4', size: 16, eventName: 'גיבוש קורס טיס', evalSource: 'גיבוש ומדריכי הקורס', myUnit: 'קורס טיס – שלב בסיסי', targetLabel: 'מגמה', fallback: 'שיבוץ מחדש מחוץ לקורס הטיס', nextTrack: 'special',
     roles: ['חניך/ת טיס', 'חניך/ת ניווט'],
     mix: ['חניך/ת טיס', 'חניך/ת טיס', 'חניך/ת ניווט', 'חניך/ת טיס'],
     traits: ['קואורדינציה', 'חלוקת קשב', 'קבלת החלטות', 'למידה מהירה', 'עבודה בצוות'],
@@ -54,7 +53,6 @@ const corps = {
     ],
   },
 };
-Object.keys(corps).forEach((k) => { corps[k].rounds = 4; });
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
 // Training-follow-up model. The system tracks soldiers in training who are candidates for a special unit (יח״ט / יחידה מיוחדת).
@@ -75,7 +73,7 @@ const TR = {
 // When no lower unit in the track has an open need, the soldier moves to the next track (corps.nextTrack: flight course -> special units ->
 // brigade recon units - also an illustration), to its unit with the largest open need. With no next track / no open need: corps.fallback.
 // special units the soldiers are candidates for (generic names – replace with the real ones)
-const TARGETS = { combat: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], intel: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], signals: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
+const TARGETS = { recon: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], special: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], pilot: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
@@ -89,7 +87,7 @@ const ROLES = {
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
 // Login step 1 ("חיל"): the five entrances. Users carry org / orgUnit / roleLabel for steps 1-3.
 const ORGS = [
-  { key: 'combat', label: 'יח״טיות חטיבתיות' }, { key: 'intel', label: 'יחידות מיוחדות' }, { key: 'signals', label: 'קורס טיס' },
+  { key: 'recon', label: 'יח״טיות חטיבתיות' }, { key: 'special', label: 'יחידות מיוחדות' }, { key: 'pilot', label: 'קורס טיס' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
 module.exports={ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};

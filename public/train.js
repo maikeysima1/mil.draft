@@ -84,7 +84,6 @@ function cardForm(k, c) {
      <label>סיכום התקופה ${sel('rec', TR().periodRec, f.rec, 'בחרו…')}</label>${f.rec === TR().periodRec[2] ? '<div class="demo-note">בחירה ב"מועמד/ת להדחה" תפתח בדיקת הדחה.</div>' : ''}`;
   }
   if (f.type === 'open') { title = 'פתיחת בדיקת הדחה'; btn = 'פתיחת הבדיקה'; body = `<div class="demo-note">פתיחת בדיקה אינה הדחה. ההחלטה מתקבלת בנפרד ע״י מפקד/ת ההכשרה, ומתועדת בתיק.</div>${ta('reason', 'מה הסיבה לבדיקה? עובדות ומקרים, לא התרשמות כללית', f.reason)}`; }
-  if (f.type === 'decide') { const d = openDis(c); title = 'החלטה בבדיקת הדחה'; btn = 'שמירת ההחלטה'; body = `<div class="card" style="background:var(--bg2);padding:10px"><div class="mut small">נפתחה ע״י ${esc(d.openedBy)} · ${fmtD(d.openedTs)}</div>${esc(d.reason)}</div><label>החלטה ${sel('decision', TR().decisions, f.decision, 'בחרו…')}</label>${ta('note', 'נימוק ההחלטה (חובה)', f.note)}`; }
   return `<div class="card" style="border:2px solid var(--blue)"><h3 style="margin:0 0 8px">${title}</h3><div style="display:flex;flex-direction:column;gap:10px">${body}<div class="row"><button class="btn" data-act="cfSave">${btn}</button>${f.type === 'periodic' && nextMissing(k, c.id) ? `<button class="btn sec" data-act="cfSaveNext">שמירה ומעבר ל${esc(candOf(k, nextMissing(k, c.id)).name)} ←</button>` : ''}<button class="btn sec" data-act="cfCancel">ביטול</button></div></div></div>`;
 }
 function drawer(k, id) {
@@ -126,7 +125,6 @@ Object.assign(ACTIONS, {
       if (f.type === 'daily') { if (f.level == null) { toast('בחרו איך היה היום', true); return; } await api('daily', { corps: k, id: f.id, level: f.level, att: f.att, text: f.text }); toast('המעקב היומי נשמר'); }
       if (f.type === 'periodic') { const r = await api('periodic', { corps: k, id: f.id, lv: f.lv, rec: f.rec, strong: f.strong, improve: f.improve, plan: f.plan }); toast(r.opened ? 'הסטטוס נשמר ונפתחה בדיקת הדחה' : 'הסטטוס נשמר'); const nx = goNext && nextMissing(k, f.id); if (nx) { A.ui.cand = nx; A.ui.cf = null; ACTIONS.cfOpen({ t: 'periodic' }); return; } if (goNext) toast('הוזן סטטוס לכל הרשימה'); }
       if (f.type === 'open') { await api('dismiss-open', { corps: k, id: f.id, reason: f.reason }); toast('נפתחה בדיקת הדחה ל' + c.name); }
-      if (f.type === 'decide') { if (f.decision === TR().decisions[2] && !confirm('להדיח את ' + c.name + ' מההכשרה? ההחלטה נרשמת בתיק ואי אפשר לבטל אותה מהמערכת.')) return; await api('dismiss-decide', { corps: k, id: f.id, decision: f.decision, note: f.note }); toast('ההחלטה נשמרה: ' + f.decision); }
       A.ui.cf = null; rerender();
     } catch (x) { /* toast shown */ }
   },

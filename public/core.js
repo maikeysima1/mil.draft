@@ -134,7 +134,7 @@ function go(r) { location.hash = '#/' + r; }
 // corps shown on screens: users bound to a corps are fixed to it; others can switch
 function corpsKey() {
   if (A.me.corps) return A.me.corps;
-  return A.ui.corps || 'combat';
+  return A.ui.corps || Object.keys(A.cfg.corps)[0];
 }
 function corpsSwitcher() {
   if (A.me.corps) return `<span class="chip navy">${esc(cf(A.me.corps).corps)}</span>`;
@@ -154,7 +154,7 @@ function shell(inner) {
   const dark = document.documentElement.dataset.theme === 'dark';
   const k = A.me.corps || A.ui.corps;
   const scope = A.me.corps ? cf(A.me.corps).corps : 'כל המסלולים';
-  return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>MIL-DRAFT</span></div><nav class="nav">${nav}</nav>
+  return `<div class="app"><aside class="side"><div class="logo">${icon('shield', 26)}<span>MIL-TRACK</span></div><nav class="nav">${nav}</nav>
     <div class="side-foot"><div class="meta">אב־טיפוס לדמו · כל הנתונים פיקטיביים</div>
     <div class="usercard"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span class="uc-t"><b>${esc(A.me.title)}</b><small>${esc(A.me.unit)}</small></span></div>
     <div class="row" style="gap:6px"><span class="lbadge">שכבה ${R().layer} · ${esc(A.me.role)}</span></div></div></aside>
@@ -194,7 +194,7 @@ function loginView() {
   const s2 = org ? loginUnits(org).map((n) => `<button class="choice ${unit === n ? 'on' : ''}" data-act="lunit" data-v="${esc(n)}">${esc(n)}</button>`).join('') : '<div class="mut small">בחרו חיל תחילה</div>';
   const s3 = org && unit ? loginRoles(org, unit).map((x) => `<button class="user ${x.id === A.ui.sel ? 'on' : ''}" data-act="sel" data-id="${x.id}"><span class="avatar" style="${roleStyle(x.role)[0]}">${esc(x.initial)}</span><span class="u-t"><b>${esc(x.roleLabel)}</b><small>${esc(x.title)}</small></span><span class="pill ${roleStyle(x.role)[1]}">שכבה ${roleOf(x.role).layer}</span></button>`).join('') : '<div class="mut small">בחרו יחידה תחילה</div>';
   const target = o ? PAGES.find((p) => p.id === o.home).name : '';
-  return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-DRAFT</span></div>
+  return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-TRACK</span></div>
    <h1>מהגיוס ועד סיום ההכשרה – <em>תמונה אחת</em> של כל חייל/ת</h1>
    <p>מעקב אחרי חיילים בהכשרה שמועמדים ליחידות מיוחדות: גיוס המועמד, מעקב יומי, סטטוס תקופתי ובדיקת הדחה – עם תיק אחד לכל חייל/ת.</p>
    <div class="chips"><span>3 אירועים מרכזיים</span><span>מעקב יומי</span><span>6 שכבות סיווג</span></div>

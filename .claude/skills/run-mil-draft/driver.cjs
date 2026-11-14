@@ -54,7 +54,7 @@ async function main() {
       if (!isHttp) throw new Error('smoke needs the server build (http)');
       let bad = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + msg); if (!c) bad++; };
       await api('factory-reset', 'a1', {});
-      const cfg = (await api('config')).json, K = 'combat';
+      const cfg = (await api('config')).json, K = 'recon';
       for (const id of ['u3', 'u1', 'u4', 'h1', 'o1', 'a1']) { // nav items must match the role's page list
         const u = cfg.users.find((x) => x.id === id), { page, errs } = await session(browser, id);
         const nav = await page.locator('.nav a').count(); ok(nav === cfg.roles[u.role].pages.length, `${id} (${u.role}): ${nav} nav items, expected ${cfg.roles[u.role].pages.length}`);
@@ -91,7 +91,7 @@ async function main() {
       await api('dismiss-opinion', 'u3', { corps: K, id: t1.id, stance: 'להדיח', text: 'אחרי שבוע נוסף אין שיפור בתפקוד' });
       let ops = by(await st(), t1.id).dismiss.find((d) => d.status === 'פתוחה').opinions; ok(ops.length === 1 && ops[0].stance === 'להדיח', 'one position per person: saving again replaces it');
       await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' }, 'dismissal with only 1 position');
-      ok((await api('dismiss-opinion', 'e-combat-1', { corps: K, id: t1.id, stance: 'להדיח', text: 'לא עומד בקצב הצוות כבר חודש' })).status === 200, 'evaluator of team 1 writes a position on an own-team soldier');
+      ok((await api('dismiss-opinion', 'e-recon-1', { corps: K, id: t1.id, stance: 'להדיח', text: 'לא עומד בקצב הצוות כבר חודש' })).status === 200, 'evaluator of team 1 writes a position on an own-team soldier');
       ok((await api('dismiss-decide', 'u3', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' })).status === 200, 'training commander decides after 2 positions: dismissed');
       ok(by(await st(), t1.id).tstatus === 'הודח/ה', 'soldier status is now dismissed');
       await deny('u3', 'daily', { corps: K, id: t1.id, level: 1 }, 'daily entry for a dismissed soldier');
@@ -100,10 +100,10 @@ async function main() {
       ok((await api('dismiss-decide', 'u3', { corps: K, id: t3.id, decision: 'נשאר/ת במעקב', note: 'שיפור אחרי שיחה, ממשיך במעקב' })).status === 200 && by(await st(), t3.id).tstatus === 'במעקב', 'review closed: stays in follow-up');
       ok((await api('complete', 'u3', { corps: K, id: s2.id })).status === 200 && by(await st(), s2.id).tstatus === 'סיים/ה הכשרה', 'training commander marks training as completed');
       // dismissal -> automatic move one level down by the system's needs (same track); only the training commander decides
-      const I = 'intel', sti = async () => (await api('state', 'a1')).json.corps[I], i0 = await sti(), sp = i0.cands.find((x) => x.unit === 'שייטת 13' && x.tstatus === 'בהכשרה');
+      const I = 'special', sti = async () => (await api('state', 'a1')).json.corps[I], i0 = await sti(), sp = i0.cands.find((x) => x.unit === 'שייטת 13' && x.tstatus === 'בהכשרה');
       await api('dismiss-open', 'u3', { corps: I, id: sp.id, reason: 'בדיקה: אי עמידה ברף המסלול' });
       await api('dismiss-opinion', 'u3', { corps: I, id: sp.id, stance: 'להדיח', text: 'לא עומד ברף לאורך זמן' });
-      await api('dismiss-opinion', 'e-intel-' + sp.group, { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }).then(async (r) => { if (r.status !== 200) await api('dismiss-opinion', 'u5', { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }); });
+      await api('dismiss-opinion', 'e-special-' + sp.group, { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }).then(async (r) => { if (r.status !== 200) await api('dismiss-opinion', 'u5', { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }); });
       await deny('a1', 'dismiss-decide', { corps: I, id: sp.id, decision: 'הודח/ה', note: 'ניסיון החלטה של מנהל מערכת' }, 'admin deciding a dismissal (only the training commander may)');
       const dz = await api('dismiss-decide', 'u3', { corps: I, id: sp.id, decision: 'הודח/ה', note: 'הוחלט לאחר שמיעת כל הנימוקים' }), i1 = await sti(), sp1 = i1.cands.find((x) => x.id === sp.id);
       ok(dz.json.movedTo === 'דובדבן' && sp1.unit === 'דובדבן' && sp1.tstatus === 'בהכשרה' && sp1.transfers.length === 1, 'dismissed from a tier-1 unit: moved automatically to the tier-2 unit with the largest open need (דובדבן)');
@@ -129,6 +129,12 @@ async function main() {
       // favorites (personal follow list) are private
       await api('fav', 'u1', { corps: K, id: t3.id, on: true });
       ok(((await api('state', 'u1')).json.corps[K].favs.u1 || []).length === 1 && Object.keys((await api('state', 'u3')).json.corps[K].favs || {}).length === 0, 'personal follow list is private to its owner');
+      // the server sends every role only what it may see
+      const sn = async (u) => (await api('state', u)).json, hqS = await sn('h1'), evS = await sn('u4'), shS = await sn('u1'), noS = await sn(''), full = await sn('a1');
+      ok(hqS.corps[K].cands.length === full.corps[K].cands.length && hqS.corps[K].cands.every((c) => !c.name && !/^C-/.test(c.id) && !(c.daily || []).some((e) => e.text || e.by) && !(c.dismiss || []).length) && hqS.log.length === 0 && !JSON.stringify(hqS).includes(full.corps[K].cands[0].name), 'ראש מטה receives anonymous rows only: no names, notes, dismissal reasons or log');
+      ok(evS.corps[K].cands.length > 0 && evS.corps[K].cands.every((c) => c.group === 3) && evS.corps[I].cands.length === 0 && evS.log.length === 0, 'evaluator receives only the own team of the own track');
+      ok(shS.corps[K].cands.length === full.corps[K].cands.length && shS.corps[I].cands.length === 0 && shS.log.every((l) => !l.corps || l.corps === K), 'שלישות receives the own track only');
+      ok(Object.values(noS.corps).every((c) => c.cands.length === 0) && noS.log.length === 0, 'an unknown user receives no soldier data');
       await deny('u1', 'settings', { period: 'חציון' }, 'שלישות changing settings');
       ok((await api('settings', 'a1', { period: 'חציון' })).status === 200 && /חציון/.test((await api('state', 'a1')).json.period.label), 'admin switches the periodic status to half-year');
       await api('settings', 'a1', { period: 'רבעון' });
@@ -164,14 +170,14 @@ async function main() {
       ok((await cm.page.evaluate(() => A.ui.cand)) === nextId && await cm.page.locator('#cf-plan').count() === 1 && !!by(await st(), firstId).reviews.find((r) => r.period === ps.period.key), '"save and next" saves and opens the next soldier without a status');
       await cm.page.click('[data-act=cfCancel]'); await cm.page.keyboard.press('Escape');
       // "my day" (evaluator) and the automatic weekly summary (commander)
-      const td = await session(browser, 'e-combat-2'); ok(await td.page.evaluate(() => location.hash) === '#/today' && /היום שלי – צוות 2/.test(await td.page.locator('main h1').innerText()), 'evaluator lands on "my day" for the own team');
-      const pend0 = await td.page.evaluate(() => visible('combat').filter(isActive).filter((x) => !myToday(x)).length), tid = await td.page.locator('[data-act=tdLv]').first().getAttribute('data-id');
+      const td = await session(browser, 'e-recon-2'); ok(await td.page.evaluate(() => location.hash) === '#/today' && /היום שלי – צוות 2/.test(await td.page.locator('main h1').innerText()), 'evaluator lands on "my day" for the own team');
+      const pend0 = await td.page.evaluate(() => visible('recon').filter(isActive).filter((x) => !myToday(x)).length), tid = await td.page.locator('[data-act=tdLv]').first().getAttribute('data-id');
       await td.page.locator(`[data-act=tdLv][data-id="${tid}"][data-v="1"]`).first().click(); await td.page.waitForTimeout(600);
-      const tdE = by(await st(), tid).daily.filter((e) => e.byId === 'e-combat-2'); ok(tdE.length === 1 && tdE[0].level === 1 && (await td.page.evaluate(() => visible('combat').filter(isActive).filter((x) => !myToday(x)).length)) === pend0 - 1, 'one tap on "my day" saves the daily entry and shortens the waiting list');
+      const tdE = by(await st(), tid).daily.filter((e) => e.byId === 'e-recon-2'); ok(tdE.length === 1 && tdE[0].level === 1 && (await td.page.evaluate(() => visible('recon').filter(isActive).filter((x) => !myToday(x)).length)) === pend0 - 1, 'one tap on "my day" saves the daily entry and shortens the waiting list');
       ok(!(await td.page.locator('main').innerText()).includes(t1.name) || t1.group === 2, '"my day" shows only the evaluator\'s own team');
       await go(cm.page, 'weekly'); const wt = await cm.page.locator('main').innerText();
       ok(/סיכום שבועי/.test(wt) && /איך זה מחושב/.test(wt) && /בלי רישום השבוע/.test(wt), 'weekly summary renders with its calculation rule');
-      const wk = await cm.page.evaluate(() => { const w = weekly('combat', ''); return { act: w.act.length, covered: w.covered, none: w.none.length, cmp: w.compared, bad: w.down.concat(w.up).filter((r) => r.a.length < 2 || r.b.length < 2).length, txt: weeklyText('combat', '') }; });
+      const wk = await cm.page.evaluate(() => { const w = weekly('recon', ''); return { act: w.act.length, covered: w.covered, none: w.none.length, cmp: w.compared, bad: w.down.concat(w.up).filter((r) => r.a.length < 2 || r.b.length < 2).length, txt: weeklyText('recon', '') }; });
       ok(wk.covered + wk.none === wk.act && wk.bad === 0, 'weekly summary: every active soldier is either covered or listed as "no entry"; trends need 2+ entries in each week');
       ok(wk.txt.split('\n').length >= 8 && /חדר הדחה/.test(wk.txt), 'weekly summary is available as plain text');
       await deny('u4', 'settings', { period: 'חציון' }, 'evaluator changing settings'); await go(td.page, 'weekly'); ok(await td.page.evaluate(() => location.hash) !== '#/weekly', 'the weekly summary is not open to evaluators');

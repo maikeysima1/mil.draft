@@ -28,14 +28,14 @@ class Client {
   r = await adm.call('POST', '/api/admin/reset-password', { id: 'u1' }); const tmp = r.json.password; ok(r.status === 200 && tmp && tmp.length >= 12, 'admin issues a temporary password');
   const u1 = new Client(); r = await u1.login('u1', tmp); ok(r.status === 200 && r.json.mustChange === true, 'temporary password forces a change');
   ok((await u1.call('GET', '/api/state')).status === 403, 'state blocked until the password is changed');
-  ok((await u1.call('POST', '/api/pick', { corps: 'combat', id: 'C-2101' })).status === 403, 'actions blocked until the password is changed');
+  ok((await u1.call('POST', '/api/pick', { corps: 'recon', id: 'C-2101' })).status === 403, 'actions blocked until the password is changed');
   r = await u1.call('POST', '/api/change-password', { old: tmp, next: 'short1' }); ok(r.status === 400, 'weak password rejected (' + r.json.error + ')');
   r = await u1.call('POST', '/api/change-password', { old: 'not-the-old-one1', next: 'GoodPass-2026x' }); ok(r.status === 400, 'wrong current password rejected');
   r = await u1.call('POST', '/api/change-password', { old: tmp, next: 'GoodPass-2026x' }); ok(r.status === 200, 'password changed');
   ok((await u1.call('GET', '/api/state')).status === 200, 'state available after the change');
   ok((await u1.call('GET', '/api/admin/users')).status === 403 && (await u1.call('GET', '/api/admin/audit')).status === 403, 'שלישות cannot read the user list or the security log');
   ok((await u1.call('POST', '/api/admin/reset-password', { id: 'a1' })).status === 403, 'שלישות cannot reset passwords');
-  ok((await u1.call('POST', '/api/settings', { corps: 'combat', rounds: 2 })).status >= 400, 'role permissions still enforced server-side');
+  ok((await u1.call('POST', '/api/settings', { corps: 'recon', rounds: 2 })).status >= 400, 'role permissions still enforced server-side');
   // reset revokes sessions
   await adm.call('POST', '/api/admin/reset-password', { id: 'u1' }); ok((await u1.call('GET', '/api/state')).status === 401, 'an admin reset revokes the user\'s existing session');
   // logout
@@ -48,7 +48,7 @@ class Client {
   ok(r.status === 423, 'account locks after 5 failed attempts (even with the right password) -> ' + r.status);
   const au = (await adm.call('GET', '/api/admin/audit')).json.events; ok(au.some((e) => e.ev === 'login' && !e.ok) && au.some((e) => e.ev === 'login' && e.ok) && au.some((e) => e.ev === 'admin-reset-password'), 'security log records failed/successful logins and admin resets');
   // sensitive reads / exports are written to the security log
-  await adm.login('a1', ADMIN_PW); await adm.call('POST', '/api/audit-event', { ev: 'view-candidate', corps: 'combat', what: 'C-2101' }); await adm.call('POST', '/api/audit-event', { ev: 'export', corps: 'combat', what: 'results xlsx' });
+  await adm.login('a1', ADMIN_PW); await adm.call('POST', '/api/audit-event', { ev: 'view-candidate', corps: 'recon', what: 'C-2101' }); await adm.call('POST', '/api/audit-event', { ev: 'export', corps: 'recon', what: 'results xlsx' });
   ok((await adm.call('POST', '/api/audit-event', { ev: 'delete-everything' })).status === 400, 'unknown audit events are refused');
   const au2 = (await adm.call('GET', '/api/admin/audit')).json.events; ok(au2.some((e) => e.ev === 'view-candidate' && /C-2101/.test(e.detail)) && au2.some((e) => e.ev === 'export'), 'candidate views and exports are in the security log');
   // rate limit (last: it locks this IP out for 10 minutes)

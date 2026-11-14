@@ -1,7 +1,7 @@
 {
   "name": "mil-draft",
   "version": "1.0.0",
-  "description": "MIL-DRAFT – draft room for assigning candidates to units",
+  "description": "MIL-TRACK – training follow-up for special-unit candidates",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
