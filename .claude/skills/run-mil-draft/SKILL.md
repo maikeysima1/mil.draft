@@ -6,6 +6,8 @@ description: Run, start, build, test, screenshot, and drive MIL-DRAFT (Hebrew/RT
 MIL-DRAFT is a zero-dependency Node server (`server.js`, serves `public/`, JSON API + SSE) with a vanilla-JS RTL UI. There is no desktop window: the app is driven by headless Chromium through `.claude/skills/run-mil-draft/driver.cjs` (Playwright; `chromium-cli` is not installed here) plus `curl` for the API.
 All paths below are relative to the repo root (the directory that contains `server.js`).
 
+> **The main app is now the training follow-up system** (intake, daily entries, periodic status, dismissal room, weekly summary) - the draft was archived (branch `archive-draft-v1`, page `draft-experiment.html`). Routes: `today`, `dash`, `weekly`, `roster`, `daily`, `periodic`, `dismiss`, `intake`, `eval`, `log`, `settings`. There is no `flow` command and no draft API; `smoke` covers the current model. Notes below that mention the draft (picks, turn clock, board, compare) are historical.
+
 ## Prerequisites
 
 - Node >= 18 (verified on 22). **No `npm install`**: there are no runtime dependencies (`xlsx` is vendored in `public/xlsx.min.js`).
