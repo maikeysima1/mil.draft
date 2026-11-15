@@ -209,7 +209,7 @@ function moveTrack(k, c, k2, unit) {
   c.prevIds = (c.prevIds || []).concat([c.id]); c.prevRole = c.role; c.id = cf2.prefix + max; c.role = cf2.roles[0]; c.skills = cf2.skills[c.role] || []; c.stats = stats; c.lv = cf2.traits.map(() => null);
   c.unit = unit; c.target = ''; c.tstatus = 'בהכשרה'; dst.cands.push(c);
 }
-const logAct = (k, text) => { state.log.push({ ts: Date.now(), corps: k, text }); if (state.log.length > 1500) state.log.shift(); };
+const logAct = (k, text) => { const e = { ts: Date.now(), corps: k, text }; state.log.push(e); if (state.log.length > 1500) state.log.shift(); if (typeof onLog === 'function') onLog(e); }; // onLog: the host may keep the full history (the database does)
 // training fields of a soldier who enters the system (event 1: intake)
 function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; return c; }
 // demo history so the screens are not empty: a few daily entries, last period's status, and three soldiers in / after a dismissal review
@@ -410,23 +410,116 @@ function apiHandle(p, b, user) {
   }
   if (p === 'factory-reset') {
     if (!canDo(user, 'factory', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לאפס את המערכת');
-    const fresh = freshState(); state.corps = fresh.corps; state.settings = fresh.settings; state.log = []; save(); return { ok: true };
+    const fresh = freshState(); state.corps = fresh.corps; state.settings = fresh.settings; state.log = []; if (typeof onReset === 'function') onReset(); save(); return { ok: true };
   }
   if (p === 'audit-event') return { ok: true };
   throw new Error('פעולה לא מוכרת');
 }
 // ---------- end shared ----------
 
-let state;
-try { state = openJson(fs.readFileSync(DATA_FILE, 'utf8')); if (state.schema !== SCHEMA) state = null; } catch (e) { if (/DATA_KEY|authenticate/i.test(e.message)) { console.error('FATAL: cannot read ' + DATA_FILE + ' (' + e.message + ') - refusing to start with an empty state'); process.exit(1); } state = null; }
-let saveTimer = null;
-function save() {
-  state.version++;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { try { fs.writeFileSync(DATA_FILE, sealJson(state), { mode: 0o600 }); } catch (e) { console.error('save failed', e.message); } }, 200);
-  broadcast();
+// ---------- storage ----------
+// SQLite (built into Node >= 22.13, no dependency): one row per soldier, the full activity log, daily backups. Every save is one transaction.
+// Falls back to the JSON file (data/state.json) on older Node versions or with STORAGE=json.
+// With DATA_KEY the row contents are stored encrypted (AES-256-GCM), like the JSON file was.
+let sqlite = null;
+try { if (process.env.STORAGE !== 'json') { const w = process.emitWarning; process.emitWarning = (m, ...a) => (/SQLite is an experimental/.test(String(m)) ? undefined : w.call(process, m, ...a)); sqlite = require('node:sqlite'); } } catch (e) { sqlite = null; }
+const DB_FILE = path.join(DATA_DIR, 'mil.db'), BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const fatal = (what, e) => { console.error('FATAL: cannot read ' + what + ' (' + e.message + ') - refusing to start with an empty state'); process.exit(1); };
+// Data upgrades: when SCHEMA grows, add an entry here that changes the loaded state in place. Stored data is upgraded, never wiped.
+//   10: (st) => { Object.values(st.corps).forEach((c) => c.cands.forEach((x) => { x.newField = x.newField || null; })); },
+const DATA_MIGRATIONS = {};
+// fills whatever the current code expects and stored data may lack (new units, new tracks, new arrays). Runs on every load.
+function normalize(st) {
+  st.settings = Object.assign({ period: 'רבעון' }, st.settings); st.log = st.log || []; st.version = st.version || 1; st.corps = st.corps || {};
+  Object.keys(C.corps).forEach((k) => {
+    const c = st.corps[k] || (st.corps[k] = { cands: [], favs: {}, needs: {} }); c.cands = c.cands || []; c.favs = c.favs || {}; c.needs = c.needs || {};
+    C.corps[k].units.forEach((u) => { if (c.needs[u.name] == null) c.needs[u.name] = u.need || 0; });
+    c.cands.forEach((x) => { x.daily = x.daily || []; x.reviews = x.reviews || []; x.dismiss = x.dismiss || []; if (!x.tstatus) x.tstatus = 'בהכשרה'; });
+  });
+  return st;
 }
-if (!state) { state = freshState(); try { fs.writeFileSync(DATA_FILE, sealJson(state), { mode: 0o600 }); } catch (e) { console.error('save failed', e.message); } }
+function upgrade(st, from) {
+  if (from > SCHEMA) throw new Error('the stored data (version ' + from + ') is newer than this server (version ' + SCHEMA + ')');
+  for (let v = from + 1; v <= SCHEMA; v++) if (DATA_MIGRATIONS[v]) DATA_MIGRATIONS[v](st);
+  st.schema = SCHEMA; return normalize(st);
+}
+function jsonStore() {
+  let timer = null;
+  return {
+    kind: 'json', load() { try { const st = openJson(fs.readFileSync(DATA_FILE, 'utf8')); return st && st.schema ? st : null; } catch (e) { if (/DATA_KEY|authenticate/i.test(e.message)) fatal(DATA_FILE, e); return null; } },
+    save(st, now) { const w = () => { try { fs.writeFileSync(DATA_FILE, sealJson(st), { mode: 0o600 }); } catch (e) { console.error('save failed', e.message); } }; clearTimeout(timer); if (now) w(); else timer = setTimeout(w, 200); },
+    onLog() {}, reset() {}, backup() {},
+  };
+}
+function sqliteStore() {
+  const db = new sqlite.DatabaseSync(DB_FILE); try { fs.chmodSync(DB_FILE, 0o600); } catch (e) { /* ignore */ }
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
+  // table layout changes go here, one step per entry; user_version remembers how many ran
+  const DDL = [
+    `CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+     CREATE TABLE soldiers (corps TEXT NOT NULL, id TEXT NOT NULL, pos INTEGER NOT NULL, data TEXT NOT NULL, updated_ts INTEGER NOT NULL, PRIMARY KEY (corps, id));
+     CREATE TABLE corps_state (corps TEXT PRIMARY KEY, data TEXT NOT NULL);
+     CREATE TABLE log (n INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, corps TEXT, data TEXT NOT NULL);
+     CREATE INDEX log_ts ON log (ts);`,
+  ];
+  const tx = (fn) => { db.exec('BEGIN IMMEDIATE'); try { fn(); db.exec('COMMIT'); } catch (e) { try { db.exec('ROLLBACK'); } catch (x) { /* ignore */ } throw e; } };
+  let uv = db.prepare('PRAGMA user_version').get().user_version;
+  for (; uv < DDL.length; uv++) tx(() => { db.exec(DDL[uv]); db.exec('PRAGMA user_version = ' + (uv + 1)); });
+  const q = { meta: db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'), getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
+    up: db.prepare('INSERT INTO soldiers (corps, id, pos, data, updated_ts) VALUES (?, ?, ?, ?, ?) ON CONFLICT(corps, id) DO UPDATE SET pos = excluded.pos, data = excluded.data, updated_ts = excluded.updated_ts'), del: db.prepare('DELETE FROM soldiers WHERE corps = ? AND id = ?'),
+    cs: db.prepare('INSERT INTO corps_state (corps, data) VALUES (?, ?) ON CONFLICT(corps) DO UPDATE SET data = excluded.data'), log: db.prepare('INSERT INTO log (ts, corps, data) VALUES (?, ?, ?)') };
+  const last = new Map(), lastCs = new Map(), pending = []; let lastMeta = '';
+  const meta = (k) => { const r = q.getMeta.get(k); return r ? r.value : null; };
+  return {
+    kind: 'sqlite',
+    load() {
+      const dv = meta('data_version'); if (dv == null) return null;
+      try {
+        const st = { schema: +dv, version: +(meta('version') || 1), settings: openJson(meta('settings') || '{}'), corps: {}, log: [] };
+        db.prepare('SELECT corps, id, pos, data FROM soldiers ORDER BY corps, pos').all().forEach((r) => { const c = openJson(r.data); (st.corps[r.corps] || (st.corps[r.corps] = { cands: [] })).cands.push(c); last.set(r.corps + '|' + r.id, r.pos + '|' + JSON.stringify(c)); });
+        db.prepare('SELECT corps, data FROM corps_state').all().forEach((r) => { const d = openJson(r.data); Object.assign(st.corps[r.corps] || (st.corps[r.corps] = { cands: [] }), d); lastCs.set(r.corps, JSON.stringify(d)); });
+        st.log = db.prepare('SELECT ts, corps, data FROM (SELECT * FROM log ORDER BY n DESC LIMIT 1500) ORDER BY n').all().map((r) => ({ ts: r.ts, corps: r.corps, text: openJson(r.data).t }));
+        return st;
+      } catch (e) { fatal(DB_FILE, e); }
+    },
+    save(st) { // only what changed is written, in one transaction
+      try {
+        tx(() => {
+          const seen = new Set(), now = Date.now();
+          Object.keys(st.corps).forEach((k) => {
+            st.corps[k].cands.forEach((c, pos) => { const key = k + '|' + c.id, plain = pos + '|' + JSON.stringify(c); seen.add(key); if (last.get(key) !== plain) { q.up.run(k, c.id, pos, sealJson(c), now); last.set(key, plain); } });
+            const d = { favs: st.corps[k].favs || {}, needs: st.corps[k].needs || {} }, ds = JSON.stringify(d); if (lastCs.get(k) !== ds) { q.cs.run(k, sealJson(d)); lastCs.set(k, ds); }
+          });
+          Array.from(last.keys()).forEach((key) => { if (!seen.has(key)) { const i = key.indexOf('|'); q.del.run(key.slice(0, i), key.slice(i + 1)); last.delete(key); } });
+          const m = JSON.stringify([st.settings, SCHEMA]); if (m !== lastMeta) { q.meta.run('settings', sealJson(st.settings)); q.meta.run('data_version', String(SCHEMA)); lastMeta = m; }
+          q.meta.run('version', String(st.version));
+          pending.splice(0).forEach((e) => q.log.run(e.ts, e.corps || null, sealJson({ t: e.text })));
+        });
+      } catch (e) { console.error('save failed', e.message); }
+    },
+    onLog(e) { pending.push(e); },
+    reset() { pending.length = 0; try { db.exec('DELETE FROM log'); } catch (e) { console.error('reset failed', e.message); } },
+    backup() { // one consistent copy per day, the last 7 are kept
+      try {
+        fs.mkdirSync(BACKUP_DIR, { recursive: true }); const f = path.join(BACKUP_DIR, 'mil-' + dayKey(Date.now()) + '.db');
+        if (!fs.existsSync(f)) { db.exec("VACUUM INTO '" + f.replace(/'/g, "''") + "'"); try { fs.chmodSync(f, 0o600); } catch (e) { /* ignore */ } }
+        fs.readdirSync(BACKUP_DIR).filter((n) => /^mil-\d{4}-\d{2}-\d{2}\.db$/.test(n)).sort().slice(0, -7).forEach((n) => fs.unlinkSync(path.join(BACKUP_DIR, n)));
+      } catch (e) { console.error('backup failed', e.message); }
+    },
+  };
+}
+const store = sqlite ? sqliteStore() : jsonStore();
+function onLog(e) { store.onLog(e); }
+function onReset() { store.reset(); }
+let state = store.load();
+if (!state && store.kind === 'sqlite' && fs.existsSync(DATA_FILE)) { // first run on the database: carry over the JSON file of the same data version
+  const old = jsonStore().load(); if (old && old.schema === SCHEMA) { state = old; (state.log || []).forEach(onLog); console.log('imported ' + DATA_FILE + ' into ' + DB_FILE); try { fs.renameSync(DATA_FILE, DATA_FILE + '.imported'); } catch (e) { /* ignore */ } }
+}
+try { state = state ? upgrade(state, state.schema) : null; } catch (e) { fatal(store.kind === 'sqlite' ? DB_FILE : DATA_FILE, e); }
+const firstRun = !state; if (firstRun) state = normalize(freshState());
+function save() { state.version++; store.save(state); broadcast(); }
+store.save(state, true); store.backup(); setInterval(() => store.backup(), 6 * 3600e3).unref();
+console.log('storage: ' + (store.kind === 'sqlite' ? DB_FILE : DATA_FILE + ' (JSON file' + (process.env.STORAGE === 'json' ? '' : ' - this Node version has no built-in SQLite') + ')') + (firstRun ? ' - new, demo data' : ''));
 
 // ---------- SSE ----------
 const clients = new Set();

@@ -30,7 +30,7 @@ After editing anything in `public/`, `server.js` or `config.js`, rebuild and cop
 Start the server (fresh state), wait for it, drive it, stop it:
 
 ```bash
-rm -f data/state.json                                   # state persists here between runs
+rm -rf data/mil.db* data/backups                        # state persists here between runs (SQLite)
 (PORT=3000 node server.js > /tmp/mil-server.log 2>&1 &)
 timeout 20 bash -c 'until curl -sf http://localhost:3000/healthz >/dev/null; do sleep 0.3; done'
 
@@ -70,6 +70,8 @@ curl -s -X POST localhost:3000/api/factory-reset -H 'Content-Type: application/j
 There is no unit-test suite; the test is `node $D smoke` against a fresh server (expect `ALL PASSED`). `bash scripts/ci.sh` does everything CI does (checks `index.html` is current, starts a server on a temp data dir, runs smoke); GitHub Actions runs it on every push (`.github/workflows/test.yml`).
 
 ## Gotchas
+
+- **Storage is SQLite now** (`data/mil.db` + `-wal`/`-shm`, daily copies in `data/backups/`; Node >= 22.13). Reset with `rm -rf data/mil.db* data/backups` (not `data/state.json`), or `POST /api/factory-reset` as `a1`. `STORAGE=json` forces the old JSON file. `node scripts/db-test.cjs [port]` tests persistence, upgrade, import, backup and encryption.
 
 - **Auth mode** (`AUTH=1 ADMIN_PASSWORD=... DATA_DIR=<tmp>`): `X-User` is ignored, so the driver's `shot/flow/smoke` (which log in by clicking a user) do not work there. Use `node scripts/auth-test.cjs http://localhost:PORT <adminPassword>` instead; `bash scripts/ci.sh` runs both modes.
 

@@ -726,7 +726,7 @@ function moveTrack(k, c, k2, unit) {
   c.prevIds = (c.prevIds || []).concat([c.id]); c.prevRole = c.role; c.id = cf2.prefix + max; c.role = cf2.roles[0]; c.skills = cf2.skills[c.role] || []; c.stats = stats; c.lv = cf2.traits.map(() => null);
   c.unit = unit; c.target = ''; c.tstatus = 'בהכשרה'; dst.cands.push(c);
 }
-const logAct = (k, text) => { state.log.push({ ts: Date.now(), corps: k, text }); if (state.log.length > 1500) state.log.shift(); };
+const logAct = (k, text) => { const e = { ts: Date.now(), corps: k, text }; state.log.push(e); if (state.log.length > 1500) state.log.shift(); if (typeof onLog === 'function') onLog(e); }; // onLog: the host may keep the full history (the database does)
 // training fields of a soldier who enters the system (event 1: intake)
 function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; return c; }
 // demo history so the screens are not empty: a few daily entries, last period's status, and three soldiers in / after a dismissal review
@@ -927,7 +927,7 @@ function apiHandle(p, b, user) {
   }
   if (p === 'factory-reset') {
     if (!canDo(user, 'factory', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לאפס את המערכת');
-    const fresh = freshState(); state.corps = fresh.corps; state.settings = fresh.settings; state.log = []; save(); return { ok: true };
+    const fresh = freshState(); state.corps = fresh.corps; state.settings = fresh.settings; state.log = []; if (typeof onReset === 'function') onReset(); save(); return { ok: true };
   }
   if (p === 'audit-event') return { ok: true };
   throw new Error('פעולה לא מוכרת');
