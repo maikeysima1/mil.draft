@@ -168,7 +168,7 @@ Object.assign(ACTIONS, {
   exfld: (d, t) => { A.ui.form.extra[d.f] = t.type === 'checkbox' ? t.checked : t.value; if (t.tagName === 'SELECT' || t.type === 'checkbox') rerender(); },
   regroup: async (d, t) => {
     const k = corpsKey(), c = candOf(k, d.id), g = +t.value; if (!c || g === c.group) return;
-    if (!confirm(`להעביר את ${c.name} לצוות ${g}?`)) { rerender(); return; }
+    if (!(await ask({ title: `להעביר את ${c.name} לצוות ${g}?`, body: 'המגבש/ת של הצוות החדש יראה את התיק, והמגבש/ת הנוכחי/ת לא.', ok: 'העברה לצוות ' + g }))) { rerender(); return; }
     try { await api('regroup', { corps: k, id: d.id, group: g }); A.ui.evalCand = null; A.ui.form = null; toast(`${c.name} הועבר/ה לצוות ${g}`); rerender(); } catch (e) { rerender(); }
   },
   grp: (d, t) => { A.ui.group = Number(t.value); A.ui.evalCand = null; A.ui.form = null; rerender(); },
@@ -350,7 +350,7 @@ Object.assign(ACTIONS, {
   admLoad: async () => {
     try { const [u, a] = await Promise.all([fetch('/api/admin/users', { headers: HDR() }), fetch('/api/admin/audit', { headers: HDR() })]); if (!u.ok || !a.ok) return; A.ui.adm = { users: (await u.json()).users, audit: (await a.json()).events }; rerender(); } catch (e) { /* offline */ }
   },
-  admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!confirm('להנפיק סיסמה זמנית חדשה ל' + u.title + '? הסיסמה הקיימת (אם יש) תבוטל והמשתמש/ת ינותק/תנותק.')) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
+  admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!(await ask({ title: 'להנפיק סיסמה זמנית ל' + u.title + '?', body: 'הסיסמה הקיימת (אם יש) תבוטל, וההתחברות הנוכחית של המשתמש תנותק.', ok: 'הנפקת סיסמה' }))) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
   tempClose: () => { A.ui.tempPw = null; rerender(); },
 });
 

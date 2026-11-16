@@ -153,7 +153,7 @@ async function main() {
       ok(await cm.page.locator('.room').count() >= 1 && /נימוקים נדרשים/.test(await cm.page.locator('.room').first().innerText()), 'dismissal room lists the open candidates with the positions counter');
       const rc = cm.page.locator('#room-' + nc.id); await rc.locator('[data-act=opStance]').nth(1).click(); await cm.page.waitForTimeout(300);
       await cm.page.fill('#op-' + nc.id, 'נימוק שנכתב מתוך חדר ההדחה'); await cm.page.locator('#room-' + nc.id + ' [data-act=opSave]').click(); await cm.page.waitForTimeout(600);
-      ok(/הנימוק נרשם/.test(await cm.page.locator('#toast').innerText()) && await cm.page.locator('#room-' + nc.id + ' .opn').count() === 1, 'position written from the dismissal room and listed there');
+      ok(/נרשם/.test(await cm.page.locator('#toast').innerText()) && await cm.page.locator('#room-' + nc.id + ' .opn').count() === 1, 'position written from the dismissal room and listed there');
       ok(await cm.page.locator('#room-' + nc.id + ' select[data-f=decision] option[disabled]').count() === 1, '"הודח/ה" is disabled in the room until enough positions exist');
       // periodic screen: deadline, priority order, structured summary, continuous entry
       const ps = (await api('state', 'u3')).json; ok(ps.period.daysLeft >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(ps.period.end), 'period carries its end date and the days left');
@@ -182,6 +182,13 @@ async function main() {
       ok(wk.txt.split('\n').length >= 8 && /חדר הדחה/.test(wk.txt), 'weekly summary is available as plain text');
       await deny('u4', 'settings', { period: 'חציון' }, 'evaluator changing settings'); await go(td.page, 'weekly'); ok(await td.page.evaluate(() => location.hash) !== '#/weekly', 'the weekly summary is not open to evaluators');
       ok(td.errs.length === 0, 'no page errors on "my day" ' + td.errs.join('|'));
+      // confirmation dialog names its action; cancelling changes nothing
+      const dz2 = (await st()).find((x) => x.tstatus === 'בהכשרה' && !(x.dismiss || []).some((q) => q.status === 'פתוחה')); await go(cm.page, 'roster'); await cm.page.fill('#rf-q', dz2.id); await cm.page.waitForTimeout(400); await cm.page.locator('tr.clk .clink').first().click(); await cm.page.waitForSelector('.drawer');
+      await cm.page.click('[data-act=complete]'); await cm.page.waitForSelector('[role=alertdialog]');
+      ok(/סימון סיום/.test(await cm.page.locator('#ask-ok').innerText()) && /חזרה/.test(await cm.page.locator('[role=alertdialog]').innerText()), 'confirmation dialog: buttons are named after the action');
+      await cm.page.click('[role=alertdialog] [data-act=askNo]'); await cm.page.waitForTimeout(300); ok(by(await st(), dz2.id).tstatus === 'בהכשרה' && await cm.page.locator('[role=alertdialog]').count() === 0, 'cancelling the dialog changes nothing');
+      await cm.page.keyboard.press('Escape');
+      const em = await api('daily', 'u4', { corps: K, id: by(await st(), s2.id).id, level: 1 }); ok(em.status >= 400 && /צוות/.test(em.json.error), 'error message says why and what is allowed: ' + em.json.error);
       const hq = await session(browser, 'h1'); ok(await hq.page.locator('.clink').count() === 0 && /מספרים מסכמים בלבד/.test(await hq.page.locator('main').innerText()), 'ראש מטה sees totals only, no names');
       ok(ev.errs.length + cm.errs.length + hq.errs.length === 0, 'no page errors in the UI flows ' + ev.errs.concat(cm.errs, hq.errs).join('|'));
       console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); process.exitCode = bad ? 1 : 0;

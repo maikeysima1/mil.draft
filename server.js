@@ -264,10 +264,12 @@ function makeSnapshot(userId) {
 // every state-changing action. Throws Error(hebrew message) on a refused action; returns the response object.
 function apiHandle(p, b, user) {
   const k = b.corps, T = C.TR;
-  const needCorps = () => { if (!C.corps[k]) throw new Error('חיל לא מוכר'); if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('אין הרשאה לחיל זה'); };
-  const allow = (action, msg) => { needCorps(); if (!canDo(user, action, k)) throw new Error(msg || 'הפעולה לא זמינה לתפקיד שלך'); };
+  const OOPS = 'משהו השתבש – רעננו את הדף ונסו שוב';
+  const needCorps = () => { if (!C.corps[k]) throw new Error(OOPS); if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('התפקיד שלך מוגבל למסלול ' + (C.corps[user.corps] ? C.corps[user.corps].corps : 'אחר')); };
+  const whoCan = (action) => Object.keys(C.ROLES).filter((r) => C.ROLES[r].can.includes(action)).join(' / ');
+  const allow = (action, msg) => { needCorps(); if (!canDo(user, action, k)) throw new Error(msg || 'הפעולה שמורה ל' + whoCan(action)); };
   const cst = C.corps[k] ? state.corps[k] : null, cf = C.corps[k] ? cfg(k) : null;
-  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה'); if (user.role === 'מגבש/ת' && c.group !== user.group) throw new Error('החייל/ת אינו/ה בצוות שלך'); return c; };
+  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (user.role === 'מגבש/ת' && c.group !== user.group) throw new Error(c.name + ' בצוות ' + c.group + '. אפשר לפעול רק על חיילי צוות ' + user.group); return c; };
   const mustBeActive = (c) => { if (!isActive(c)) throw new Error(c.name + ' כבר אינו/ה בהכשרה (' + c.tstatus + ')'); };
   const text = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 
@@ -288,18 +290,18 @@ function apiHandle(p, b, user) {
   }
   if (p === 'regroup') {
     allow('regroup', 'אין הרשאה להעביר חיילים בין צוותים'); const c = soldier(b.id);
-    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('צוות לא תקין');
+    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות (1–4)');
     const from = c.group; c.group = g; logAct(k, `${user.title} העביר/ה את ${c.name} מצוות ${from} לצוות ${g}`); save(); return { ok: true };
   }
   // ---- event 1: intake (גיוס המועמד) ----
   if (p === 'intake') {
     allow('intake', 'רק שלישות או מנהל/ת מערכת מגייסים מועמדים למערכת');
-    const name = text(b.name, 60); if (name.length < 2) throw new Error('חסר שם');
+    const name = text(b.name, 60); if (name.length < 2) throw new Error('יש למלא שם');
     if (cst.cands.some((c) => c.name === name)) throw new Error(name + ' כבר קיים/ת במערכת');
-    if (!cf.roles.includes(b.role)) throw new Error('תפקיד לא מוכר');
+    if (!cf.roles.includes(b.role)) throw new Error('יש לבחור תפקיד');
     const unit = user.role === 'שלישות' ? user.unit : b.unit; if (!cf.units.some((u) => u.name === unit)) throw new Error('יש לבחור יחידה');
     if (!C.TARGETS[k].includes(b.target)) throw new Error('יש לבחור את היחידה המיוחדת שאליה החייל/ת מועמד/ת');
-    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('צוות לא תקין');
+    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות (1–4)');
     const c = intakeFields(newCand(cf, cst, name, b.role, g, 'גיוס'), unit, b.target, user.title);
     applyUpdate(cf, c, { med: b.med, profile: b.profile, stats: b.stats || {}, photo: b.photo });
     logAct(k, `${user.title} גייס/ה את ${c.name} (${c.role}) ל${unit} · מועמד/ת ל${b.target}`); save(); return { ok: true, id: c.id };
@@ -367,8 +369,8 @@ function apiHandle(p, b, user) {
   // the dismissal room: one reasoned position per person per review (saving again replaces it)
   if (p === 'dismiss-opinion') {
     allow('opine', 'נימוק בחדר ההדחה נרשם ע״י מפקד/ת הכשרה או מגבש/ת הצוות'); const c = soldier(b.id), d = openDismiss(c);
-    if (!d) throw new Error('אין בדיקת הדחה פתוחה ל' + c.name);
-    if (!T.stances.includes(b.stance)) throw new Error('יש לבחור עמדה');
+    if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה. בדיקה נפתחת מתיק החייל/ת');
+    if (!T.stances.includes(b.stance)) throw new Error('יש לבחור עמדה: ' + T.stances.join(' / '));
     const txt = text(b.text, 1000); if (txt.length < 10) throw new Error('יש לנמק את העמדה (לפחות 10 תווים)');
     d.opinions = d.opinions || []; const o = { byId: user.id, by: user.title, stance: b.stance, text: txt, ts: Date.now() }, i = d.opinions.findIndex((x) => x.byId === user.id);
     if (i >= 0) d.opinions[i] = o; else d.opinions.push(o);
@@ -376,8 +378,8 @@ function apiHandle(p, b, user) {
   }
   if (p === 'dismiss-decide') {
     allow('decide', 'הדחה והחלטה בבדיקה – רק באישור מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
-    if (!d) throw new Error('אין בדיקת הדחה פתוחה ל' + c.name);
-    if (!T.decisions.includes(b.decision)) throw new Error('יש לבחור החלטה');
+    if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה. בדיקה נפתחת מתיק החייל/ת');
+    if (!T.decisions.includes(b.decision)) throw new Error('יש לבחור החלטה: ' + T.decisions.join(' / '));
     const note = text(b.note, 1000); if (note.length < 10) throw new Error('יש לנמק את ההחלטה (לפחות 10 תווים)');
     const nOp = (d.opinions || []).length; if (b.decision === T.decisions[2] && nOp < T.minOpinions) throw new Error('אי אפשר להדיח לפני שנרשמו לפחות ' + T.minOpinions + ' נימוקים בחדר ההדחה (נרשמו ' + nOp + ')');
     Object.assign(d, { status: 'נסגרה', decision: b.decision, decidedBy: user.title, decidedTs: Date.now(), note });
@@ -399,13 +401,13 @@ function apiHandle(p, b, user) {
   }
   if (p === 'needs') { // open places per unit ("צורכי מערכת"), used to place dismissed soldiers
     needCorps(); if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת מעדכן/ת את צורכי היחידות');
-    if (!cf.units.some((u) => u.name === b.unit)) throw new Error('יחידה לא מוכרת');
-    const n = parseInt(b.need, 10); if (!(n >= 0 && n <= 99)) throw new Error('מספר לא תקין');
+    if (!cf.units.some((u) => u.name === b.unit)) throw new Error(OOPS);
+    const n = parseInt(b.need, 10); if (!(n >= 0 && n <= 99)) throw new Error('מספר המקומות הפתוחים צריך להיות בין 0 ל-99');
     cst.needs = cst.needs || {}; cst.needs[b.unit] = n; logAct(k, `${user.title} עדכנ/ה צורך פתוח ב${b.unit}: ${n}`); save(); return { ok: true };
   }
   if (p === 'settings') {
     if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לשנות הגדרות');
-    if (!T.periods.includes(b.period)) throw new Error('תקופה לא מוכרת');
+    if (!T.periods.includes(b.period)) throw new Error('יש לבחור תדירות: ' + T.periods.join(' / '));
     state.settings = Object.assign({}, state.settings, { period: b.period }); logAct(null, `${user.title} קבע/ה סטטוס תקופתי לפי ${b.period}`); save(); return { ok: true };
   }
   if (p === 'factory-reset') {
@@ -413,7 +415,7 @@ function apiHandle(p, b, user) {
     const fresh = freshState(); state.corps = fresh.corps; state.settings = fresh.settings; state.log = []; if (typeof onReset === 'function') onReset(); save(); return { ok: true };
   }
   if (p === 'audit-event') return { ok: true };
-  throw new Error('פעולה לא מוכרת');
+  throw new Error(OOPS);
 }
 // ---------- end shared ----------
 

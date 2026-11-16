@@ -223,6 +223,13 @@ function pwView(forced) {
 function auditEvent(ev, what) { try { fetch('/api/audit-event', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, HDR()), body: JSON.stringify({ ev, corps: A.me ? corpsKey() : '', what }) }).catch(() => {}); } catch (e) { /* never block the UI */ } }
 function auditView() { const id = A.ui.cand; if (!id || !A.me || id === A._viewed) { if (!id) A._viewed = null; return; } A._viewed = id; auditEvent('view-candidate', id); }
 
+// ---- confirmation dialog: says what will happen, and its buttons are named after the action (not "OK / Cancel") ----
+function ask(o) { return new Promise((resolve) => { A.ui.ask = Object.assign({ cancel: 'ביטול' }, o, { resolve }); rerender(); }); }
+function askModal() {
+  const a = A.ui.ask; if (!a) return '';
+  return `<div class="drawer-bg" style="align-items:center;z-index:90" data-act="askNo"><div class="modal" role="alertdialog" aria-labelledby="ask-t" aria-describedby="ask-b"><h2 id="ask-t" style="margin:0">${esc(a.title)}</h2>${a.body ? `<p id="ask-b" style="margin:0">${esc(a.body)}</p>` : ''}<div class="row"><button class="btn ${a.danger ? 'danger' : ''}" data-act="askOk" id="ask-ok">${esc(a.ok)}</button><button class="btn sec" data-act="askNo">${esc(a.cancel)}</button></div></div></div>`;
+}
+
 // ---- render loop ----
 const SCREENS = {}; // id -> fn(k) => html, registered by other files
 let renderQueued = false;
@@ -236,7 +243,7 @@ function render() {
   if (!page || !allowed(page)) { go(homeFor()); return; }
   const keep = captureFocus();
   const dr = A.ui.cand && canFile() ? drawer(corpsKey(), A.ui.cand) : ''; // the candidate card opens on top of any screen
-  app.innerHTML = (shell(SCREENS[r](corpsKey())) + dr).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
+  app.innerHTML = (shell(SCREENS[r](corpsKey())) + dr + askModal()).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
   restoreFocus(keep);
   if (SCREENS[r].after) SCREENS[r].after();
   auditView();
@@ -251,7 +258,7 @@ function restoreFocus(k) {
   const e = document.getElementById(k.id); if (!e) return;
   e.focus(); try { e.setSelectionRange(k.s, k.e); } catch (x) { /* not text */ }
 }
-function rerender(live) { if (live && (A.ui.editTh || A.ui.cmpOpen)) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
+function rerender(live) { if (live && A.ui.ask) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
 
 // ---- global actions ----
 const ACTIONS = {
@@ -268,6 +275,8 @@ const ACTIONS = {
     connectSSE(); await refresh(); go(homeFor()); render();
   },
   reload: () => location.reload(),
+  askOk: () => { const a = A.ui.ask; A.ui.ask = null; rerender(); if (a) a.resolve(true); },
+  askNo: () => { const a = A.ui.ask; A.ui.ask = null; rerender(); if (a) a.resolve(false); },
   theme: () => { localStorage.setItem('mil-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); rerender(); },
   logout: async () => { if (A.auth) { try { await api('logout', {}); } catch (x) { /* already out */ } } localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
   corps: (d) => { A.ui.corps = d.k; A.ui.cand = null; rerender(); },

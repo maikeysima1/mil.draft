@@ -415,6 +415,9 @@ details.tl summary{cursor:pointer}
 .pctx{background:var(--bg2);border-radius:12px;padding:10px 12px}
 .frow3{display:grid;grid-template-columns:minmax(120px,220px) 1fr 60px;gap:12px;align-items:center;padding:5px 0}
 .frow3 b{text-align:end;font-variant-numeric:tabular-nums}
+
+/* confirmation dialog */
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff;box-shadow:none}
 </style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 <script>try{localStorage.getItem('x')}catch(e){var _m={};Object.defineProperty(window,'localStorage',{value:{getItem:function(k){return k in _m?_m[k]:null},setItem:function(k,v){_m[k]=String(v)},removeItem:function(k){delete _m[k]}}})}</script>
@@ -781,10 +784,12 @@ function makeSnapshot(userId) {
 // every state-changing action. Throws Error(hebrew message) on a refused action; returns the response object.
 function apiHandle(p, b, user) {
   const k = b.corps, T = C.TR;
-  const needCorps = () => { if (!C.corps[k]) throw new Error('חיל לא מוכר'); if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('אין הרשאה לחיל זה'); };
-  const allow = (action, msg) => { needCorps(); if (!canDo(user, action, k)) throw new Error(msg || 'הפעולה לא זמינה לתפקיד שלך'); };
+  const OOPS = 'משהו השתבש – רעננו את הדף ונסו שוב';
+  const needCorps = () => { if (!C.corps[k]) throw new Error(OOPS); if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('התפקיד שלך מוגבל למסלול ' + (C.corps[user.corps] ? C.corps[user.corps].corps : 'אחר')); };
+  const whoCan = (action) => Object.keys(C.ROLES).filter((r) => C.ROLES[r].can.includes(action)).join(' / ');
+  const allow = (action, msg) => { needCorps(); if (!canDo(user, action, k)) throw new Error(msg || 'הפעולה שמורה ל' + whoCan(action)); };
   const cst = C.corps[k] ? state.corps[k] : null, cf = C.corps[k] ? cfg(k) : null;
-  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה'); if (user.role === 'מגבש/ת' && c.group !== user.group) throw new Error('החייל/ת אינו/ה בצוות שלך'); return c; };
+  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (user.role === 'מגבש/ת' && c.group !== user.group) throw new Error(c.name + ' בצוות ' + c.group + '. אפשר לפעול רק על חיילי צוות ' + user.group); return c; };
   const mustBeActive = (c) => { if (!isActive(c)) throw new Error(c.name + ' כבר אינו/ה בהכשרה (' + c.tstatus + ')'); };
   const text = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 
@@ -805,18 +810,18 @@ function apiHandle(p, b, user) {
   }
   if (p === 'regroup') {
     allow('regroup', 'אין הרשאה להעביר חיילים בין צוותים'); const c = soldier(b.id);
-    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('צוות לא תקין');
+    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות (1–4)');
     const from = c.group; c.group = g; logAct(k, `${user.title} העביר/ה את ${c.name} מצוות ${from} לצוות ${g}`); save(); return { ok: true };
   }
   // ---- event 1: intake (גיוס המועמד) ----
   if (p === 'intake') {
     allow('intake', 'רק שלישות או מנהל/ת מערכת מגייסים מועמדים למערכת');
-    const name = text(b.name, 60); if (name.length < 2) throw new Error('חסר שם');
+    const name = text(b.name, 60); if (name.length < 2) throw new Error('יש למלא שם');
     if (cst.cands.some((c) => c.name === name)) throw new Error(name + ' כבר קיים/ת במערכת');
-    if (!cf.roles.includes(b.role)) throw new Error('תפקיד לא מוכר');
+    if (!cf.roles.includes(b.role)) throw new Error('יש לבחור תפקיד');
     const unit = user.role === 'שלישות' ? user.unit : b.unit; if (!cf.units.some((u) => u.name === unit)) throw new Error('יש לבחור יחידה');
     if (!C.TARGETS[k].includes(b.target)) throw new Error('יש לבחור את היחידה המיוחדת שאליה החייל/ת מועמד/ת');
-    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('צוות לא תקין');
+    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות (1–4)');
     const c = intakeFields(newCand(cf, cst, name, b.role, g, 'גיוס'), unit, b.target, user.title);
     applyUpdate(cf, c, { med: b.med, profile: b.profile, stats: b.stats || {}, photo: b.photo });
     logAct(k, `${user.title} גייס/ה את ${c.name} (${c.role}) ל${unit} · מועמד/ת ל${b.target}`); save(); return { ok: true, id: c.id };
@@ -884,8 +889,8 @@ function apiHandle(p, b, user) {
   // the dismissal room: one reasoned position per person per review (saving again replaces it)
   if (p === 'dismiss-opinion') {
     allow('opine', 'נימוק בחדר ההדחה נרשם ע״י מפקד/ת הכשרה או מגבש/ת הצוות'); const c = soldier(b.id), d = openDismiss(c);
-    if (!d) throw new Error('אין בדיקת הדחה פתוחה ל' + c.name);
-    if (!T.stances.includes(b.stance)) throw new Error('יש לבחור עמדה');
+    if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה. בדיקה נפתחת מתיק החייל/ת');
+    if (!T.stances.includes(b.stance)) throw new Error('יש לבחור עמדה: ' + T.stances.join(' / '));
     const txt = text(b.text, 1000); if (txt.length < 10) throw new Error('יש לנמק את העמדה (לפחות 10 תווים)');
     d.opinions = d.opinions || []; const o = { byId: user.id, by: user.title, stance: b.stance, text: txt, ts: Date.now() }, i = d.opinions.findIndex((x) => x.byId === user.id);
     if (i >= 0) d.opinions[i] = o; else d.opinions.push(o);
@@ -893,8 +898,8 @@ function apiHandle(p, b, user) {
   }
   if (p === 'dismiss-decide') {
     allow('decide', 'הדחה והחלטה בבדיקה – רק באישור מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
-    if (!d) throw new Error('אין בדיקת הדחה פתוחה ל' + c.name);
-    if (!T.decisions.includes(b.decision)) throw new Error('יש לבחור החלטה');
+    if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה. בדיקה נפתחת מתיק החייל/ת');
+    if (!T.decisions.includes(b.decision)) throw new Error('יש לבחור החלטה: ' + T.decisions.join(' / '));
     const note = text(b.note, 1000); if (note.length < 10) throw new Error('יש לנמק את ההחלטה (לפחות 10 תווים)');
     const nOp = (d.opinions || []).length; if (b.decision === T.decisions[2] && nOp < T.minOpinions) throw new Error('אי אפשר להדיח לפני שנרשמו לפחות ' + T.minOpinions + ' נימוקים בחדר ההדחה (נרשמו ' + nOp + ')');
     Object.assign(d, { status: 'נסגרה', decision: b.decision, decidedBy: user.title, decidedTs: Date.now(), note });
@@ -916,13 +921,13 @@ function apiHandle(p, b, user) {
   }
   if (p === 'needs') { // open places per unit ("צורכי מערכת"), used to place dismissed soldiers
     needCorps(); if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת מעדכן/ת את צורכי היחידות');
-    if (!cf.units.some((u) => u.name === b.unit)) throw new Error('יחידה לא מוכרת');
-    const n = parseInt(b.need, 10); if (!(n >= 0 && n <= 99)) throw new Error('מספר לא תקין');
+    if (!cf.units.some((u) => u.name === b.unit)) throw new Error(OOPS);
+    const n = parseInt(b.need, 10); if (!(n >= 0 && n <= 99)) throw new Error('מספר המקומות הפתוחים צריך להיות בין 0 ל-99');
     cst.needs = cst.needs || {}; cst.needs[b.unit] = n; logAct(k, `${user.title} עדכנ/ה צורך פתוח ב${b.unit}: ${n}`); save(); return { ok: true };
   }
   if (p === 'settings') {
     if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לשנות הגדרות');
-    if (!T.periods.includes(b.period)) throw new Error('תקופה לא מוכרת');
+    if (!T.periods.includes(b.period)) throw new Error('יש לבחור תדירות: ' + T.periods.join(' / '));
     state.settings = Object.assign({}, state.settings, { period: b.period }); logAct(null, `${user.title} קבע/ה סטטוס תקופתי לפי ${b.period}`); save(); return { ok: true };
   }
   if (p === 'factory-reset') {
@@ -930,7 +935,7 @@ function apiHandle(p, b, user) {
     const fresh = freshState(); state.corps = fresh.corps; state.settings = fresh.settings; state.log = []; if (typeof onReset === 'function') onReset(); save(); return { ok: true };
   }
   if (p === 'audit-event') return { ok: true };
-  throw new Error('פעולה לא מוכרת');
+  throw new Error(OOPS);
 }
 
 let state = null;
@@ -1172,6 +1177,13 @@ function pwView(forced) {
 function auditEvent(ev, what) { try { fetch('/api/audit-event', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, HDR()), body: JSON.stringify({ ev, corps: A.me ? corpsKey() : '', what }) }).catch(() => {}); } catch (e) { /* never block the UI */ } }
 function auditView() { const id = A.ui.cand; if (!id || !A.me || id === A._viewed) { if (!id) A._viewed = null; return; } A._viewed = id; auditEvent('view-candidate', id); }
 
+// ---- confirmation dialog: says what will happen, and its buttons are named after the action (not "OK / Cancel") ----
+function ask(o) { return new Promise((resolve) => { A.ui.ask = Object.assign({ cancel: 'ביטול' }, o, { resolve }); rerender(); }); }
+function askModal() {
+  const a = A.ui.ask; if (!a) return '';
+  return `<div class="drawer-bg" style="align-items:center;z-index:90" data-act="askNo"><div class="modal" role="alertdialog" aria-labelledby="ask-t" aria-describedby="ask-b"><h2 id="ask-t" style="margin:0">${esc(a.title)}</h2>${a.body ? `<p id="ask-b" style="margin:0">${esc(a.body)}</p>` : ''}<div class="row"><button class="btn ${a.danger ? 'danger' : ''}" data-act="askOk" id="ask-ok">${esc(a.ok)}</button><button class="btn sec" data-act="askNo">${esc(a.cancel)}</button></div></div></div>`;
+}
+
 // ---- render loop ----
 const SCREENS = {}; // id -> fn(k) => html, registered by other files
 let renderQueued = false;
@@ -1185,7 +1197,7 @@ function render() {
   if (!page || !allowed(page)) { go(homeFor()); return; }
   const keep = captureFocus();
   const dr = A.ui.cand && canFile() ? drawer(corpsKey(), A.ui.cand) : ''; // the candidate card opens on top of any screen
-  app.innerHTML = (shell(SCREENS[r](corpsKey())) + dr).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
+  app.innerHTML = (shell(SCREENS[r](corpsKey())) + dr + askModal()).replace(/(\d+)\s?\/\s?(\d+)(?![^<]*>)/g, '<bdi dir="ltr">$1 / $2</bdi>'); // keep fractions readable in RTL
   restoreFocus(keep);
   if (SCREENS[r].after) SCREENS[r].after();
   auditView();
@@ -1200,7 +1212,7 @@ function restoreFocus(k) {
   const e = document.getElementById(k.id); if (!e) return;
   e.focus(); try { e.setSelectionRange(k.s, k.e); } catch (x) { /* not text */ }
 }
-function rerender(live) { if (live && (A.ui.editTh || A.ui.cmpOpen)) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
+function rerender(live) { if (live && A.ui.ask) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
 
 // ---- global actions ----
 const ACTIONS = {
@@ -1217,6 +1229,8 @@ const ACTIONS = {
     connectSSE(); await refresh(); go(homeFor()); render();
   },
   reload: () => location.reload(),
+  askOk: () => { const a = A.ui.ask; A.ui.ask = null; rerender(); if (a) a.resolve(true); },
+  askNo: () => { const a = A.ui.ask; A.ui.ask = null; rerender(); if (a) a.resolve(false); },
   theme: () => { localStorage.setItem('mil-theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); applyTheme(); rerender(); },
   logout: async () => { if (A.auth) { try { await api('logout', {}); } catch (x) { /* already out */ } } localStorage.removeItem('mil-user'); A.me = null; A.ui = {}; if (A.es) A.es.close(); location.hash = ''; render(); },
   corps: (d) => { A.ui.corps = d.k; A.ui.cand = null; rerender(); },
@@ -1378,7 +1392,7 @@ function drawer(k, id) {
    <div class="card"><h3 style="margin:0 0 6px">ציר זמן</h3>${timeline(k, c)}</div>
    <div class="card"><h3 style="margin:0 0 6px">מדדים</h3>${statList(k, c)}</div>
    <div class="card"><h3 style="margin:0 0 6px">רמות לפי תחום</h3>${traitLevels(k, c.lv)}</div>
-   <div class="card"><h3 style="margin:0 0 6px">סיכום המגבש/ת מהגיבוש</h3><div>${recPill(c.rec)}</div><p style="margin:6px 0">${esc(c.obs) || '<span class="mut">טרם הוזן</span>'}</p>${c.summary ? `<p class="mut" style="margin:0">${esc(c.summary)}</p>` : ''}</div>
+   <div class="card"><h3 style="margin:0 0 6px">סיכום המגבש/ת מהגיבוש</h3><div>${recPill(c.rec)}</div><p style="margin:6px 0">${esc(c.obs) || '<span class="mut">המגבש/ת עוד לא כתב/ה סיכום.</span>'}</p>${c.summary ? `<p class="mut" style="margin:0">${esc(c.summary)}</p>` : ''}</div>
    </aside></div>`;
 }
 Object.assign(ACTIONS, {
@@ -1404,7 +1418,7 @@ Object.assign(ACTIONS, {
       A.ui.cf = null; rerender();
     } catch (x) { /* toast shown */ }
   },
-  complete: async () => { const k = corpsKey(), c = candOf(k, A.ui.cand); if (!confirm('לסמן ש' + c.name + ' סיים/ה את ההכשרה? אחרי הסימון אי אפשר להזין לו/לה מעקב.')) return; try { await api('complete', { corps: k, id: c.id }); toast('סומן סיום הכשרה'); } catch (x) { /* toast shown */ } },
+  complete: async () => { const k = corpsKey(), c = candOf(k, A.ui.cand); if (!(await ask({ title: 'לסמן סיום הכשרה ל' + c.name + '?', body: 'אחרי הסימון אי אפשר להזין מעקב יומי, סטטוס או בדיקת הדחה.', ok: 'סימון סיום', cancel: 'חזרה' }))) return; try { await api('complete', { corps: k, id: c.id }); toast('סומן סיום הכשרה'); } catch (x) { /* toast shown */ } },
 });
 
 // ---- dashboard ----
@@ -1477,16 +1491,16 @@ function weeklyText(k, unit) {
 }
 SCREENS.weekly = (k) => {
   const c = cf(k), unit = c.units.some((u) => u.name === A.ui.wUnit) ? A.ui.wUnit : '', w = weekly(k, unit);
-  const names = (rows, fn) => rows.map((r) => `<div class="tl row spread"><b>${candLink(k, (r.x || r).id, (r.x || r).name)}</b><span class="mut small">${fn(r)}</span></div>`).join('') || '<span class="mut">אין.</span>';
+  const names = (rows, fn, empty) => rows.map((r) => `<div class="tl row spread"><b>${candLink(k, (r.x || r).id, (r.x || r).name)}</b><span class="mut small">${fn(r)}</span></div>`).join('') || `<span class="mut">${empty}</span>`;
   const kpi = (v, l, sub) => `<div class="kpi"><b>${v}</b><span>${l}</span>${sub ? `<div class="mut small">${sub}</div>` : ''}</div>`;
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">סיכום שבועי – ${esc(c.label)}</h1><div class="mut small">${fmtD(nowS() - 6 * 86400e3)}–${fmtD(nowS())} · נוצר אוטומטית מהמעקב היומי, מהסטטוסים ומחדר ההדחה</div></div>
     <div class="row no-print"><label>יחידה<select data-chg="wUnit"><option value="">כל היחידות</option>${c.units.map((u) => `<option ${u.name === unit ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label><button class="btn" data-act="wCopy">העתקה כטקסט</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">${kpi(w.act.length, 'בהכשרה')}${kpi(w.covered + ' / ' + w.act.length, 'חיילים עם רישום השבוע', w.entries + ' רישומים')}${kpi(w.down.length, 'ירדו')}${kpi(w.up.length, 'עלו')}${kpi(w.inRoom.length, 'בחדר ההדחה')}</div>
    <div class="demo-note">איך זה מחושב: "ירד" / "עלה" = הפרש של חצי רמה ומעלה בין ממוצע 7 הימים האחרונים לממוצע 7 הימים שלפניהם, ורק לחייל/ת עם שני רישומים לפחות בכל שבוע (${w.compared} מתוך ${w.act.length}). מי שאין לו/לה מספיק רישומים לא מופיע/ה בהשוואה. זה סיכום של מה שנרשם, לא הערכה של החייל/ת.</div>
-   <div class="grid g2"><div class="card"><h2>ירדו לעומת השבוע הקודם (${w.down.length})</h2>${names(w.down, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים')}</div>
-    <div class="card"><h2>עלו לעומת השבוע הקודם (${w.up.length})</h2>${names(w.up, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים')}</div></div>
-   <div class="grid g2"><div class="card"><h2>שני ימי "מתקשה" ומעלה (${w.low.length})</h2>${names(w.low, (r) => r.low + ' ימים מתוך ' + r.a.length + ' רישומים')}</div>
-    <div class="card"><h2>בלי רישום השבוע (${w.none.length})</h2><div class="mut small" style="margin-bottom:4px">אין מידע עליהם – לא "תקין".</div>${names(w.none.slice(0, 12), (r) => esc(r.x.unit) + ' · צוות ' + r.x.group)}${w.none.length > 12 ? `<div class="mut small">ועוד ${w.none.length - 12}</div>` : ''}</div></div>
+   <div class="grid g2"><div class="card"><h2>ירדו לעומת השבוע הקודם (${w.down.length})</h2>${names(w.down, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים', 'אף חייל/ת לא ירד/ה השבוע לפי הכלל.')}</div>
+    <div class="card"><h2>עלו לעומת השבוע הקודם (${w.up.length})</h2>${names(w.up, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים', 'אף חייל/ת לא עלה/תה השבוע לפי הכלל.')}</div></div>
+   <div class="grid g2"><div class="card"><h2>שני ימי "מתקשה" ומעלה (${w.low.length})</h2>${names(w.low, (r) => r.low + ' ימים מתוך ' + r.a.length + ' רישומים', 'לאף חייל/ת אין שני ימי "מתקשה" השבוע.')}</div>
+    <div class="card"><h2>בלי רישום השבוע (${w.none.length})</h2><div class="mut small" style="margin-bottom:4px">אין מידע עליהם – לא "תקין".</div>${names(w.none.slice(0, 12), (r) => esc(r.x.unit) + ' · צוות ' + r.x.group, 'לכל החיילים הפעילים יש רישום השבוע.')}${w.none.length > 12 ? `<div class="mut small">ועוד ${w.none.length - 12}</div>` : ''}</div></div>
    <div class="card"><h2>אירועים השבוע</h2><div class="row" style="gap:8px">${[['נפתחו בדיקות הדחה', w.ev.opened.length], ['הוחלטו בדיקות', w.ev.decided.length], ['הועברו יחידה', w.ev.moved.length], ['גויסו', w.ev.intake.length], ['סיימו הכשרה', w.ev.done.length], ['סטטוסים תקופתיים הוזנו', w.ev.status]].map(([l, n]) => `<span class="pill ${n ? 'p-blue' : 'p-gray'}">${l}: ${n}</span>`).join('')}</div>
     ${w.ev.decided.map((e) => `<div class="tl"><b>${candLink(k, e.x.id, e.x.name)}</b> – ${esc(e.d.decision)}${e.d.movedTo ? ' · עבר/ה ל' + esc(e.d.movedTo) : ''} <span class="mut small">${esc(e.d.decidedBy)}</span></div>`).join('')}${w.ev.opened.map((x) => `<div class="tl"><b>${candLink(k, x.id, x.name)}</b> – נפתחה בדיקת הדחה</div>`).join('')}
     <div class="mut small" style="margin-top:8px">סטטוס ${esc(A.S.period.label)}: חסרים ${w.missP} · נותרו ${A.S.period.daysLeft} ימים.</div></div>`;
@@ -1506,7 +1520,7 @@ SCREENS.roster = (k) => {
   const sel = (key, label, opts, val) => `<label>${label}<select data-chg="rf" data-f="${key}"><option value="">הכול</option>${opts.map((o) => `<option ${String(o) === String(val || '') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
   return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חיילים בהכשרה – ${esc(c.label)}</h1><div class="mut small">${rows.length} מתוך ${visible(k).length} · לחיצה על שם פותחת את התיק</div></div>
    <div class="card"><div class="filters"><label>חיפוש לפי שם / מספר<input type="search" id="rf-q" data-inp="rfq" value="${esc(f.q || '')}" placeholder="לדוגמה: כהן או C-2101" autocomplete="off" style="min-width:200px"></label>${sel('unit', 'יחידה', c.units.map((u) => u.name), f.unit)}${sel('st', 'סטטוס', ['פעילים'].concat(TR().statuses), f.st)}${sel('team', 'צוות', [1, 2, 3, 4], f.team)}${can('fav', k) ? `<label><input type="checkbox" id="rf-fav" data-chg="rf" data-f="fav" ${f.fav ? 'checked' : ''}> במעקב אישי שלי (${favList(k).length})</label>` : ''}</div>
-   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>תפקיד</th><th>יחידה</th><th>${esc(c.targetLabel)}</th><th>צוות</th><th>סטטוס</th><th>מעקב אחרון</th><th>${esc(A.S.period.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x); return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap">${avatar(x, 40)}<span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="display:block">${x.id}</bdi></span></span></td><td>${esc(x.role)}</td><td>${esc(x.unit || '—')}</td><td>${esc(x.target || '—')}</td><td>${x.group}</td><td>${stPill(x)}</td><td>${isActive(x) ? dailyPill(lastDaily(x)) : '<span class="mut">—</span>'}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (r ? `<span class="pill p-green">${esc(r.rec)}</span>` : '<span class="pill p-orange">חסר</span>')}</td><td>${can('fav', k) ? favBtn(k, x.id) : ''}</td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין חיילים לפי הסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
+   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>תפקיד</th><th>יחידה</th><th>${esc(c.targetLabel)}</th><th>צוות</th><th>סטטוס</th><th>מעקב אחרון</th><th>${esc(A.S.period.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x); return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap">${avatar(x, 40)}<span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="display:block">${x.id}</bdi></span></span></td><td>${esc(x.role)}</td><td>${esc(x.unit || '—')}</td><td>${esc(x.target || '—')}</td><td>${x.group}</td><td>${stPill(x)}</td><td>${isActive(x) ? dailyPill(lastDaily(x)) : '<span class="mut">—</span>'}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (r ? `<span class="pill p-green">${esc(r.rec)}</span>` : '<span class="pill p-orange">חסר</span>')}</td><td>${can('fav', k) ? favBtn(k, x.id) : ''}</td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
 };
 Object.assign(ACTIONS, {
   rf: (d, t) => { A.ui.rf = Object.assign({}, A.ui.rf, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); rerender(); },
@@ -1526,7 +1540,7 @@ SCREENS.daily = (k) => {
       <td><div class="seg">${TR().daily.map((w, j) => `<button type="button" class="${lvl === j ? 'on l' + j : ''}" data-act="ddLv" data-id="${x.id}" data-v="${j}">${esc(w)}</button>`).join('')}</div></td>
       <td><select data-chg="ddSet" data-f="att" data-id="${x.id}" aria-label="נוכחות">${TR().attend.map((o) => `<option ${o === (d.att || (m && m.att) || TR().attend[0]) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>
       <td><input type="text" id="dd-${x.id}" data-inp="ddSet" data-f="text" data-id="${x.id}" value="${esc(d.text != null ? d.text : (m ? m.text : ''))}" placeholder="לא חובה" style="min-width:220px;width:100%"></td>
-      <td>${dailyPill(prev)}</td></tr>`; }).join('') || '<tr><td colspan="5" class="mut">אין חיילים פעילים לפי הסינון</td></tr>'}</tbody></table></div>
+      <td>${dailyPill(prev)}</td></tr>`; }).join('') || '<tr><td colspan="5" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div>
    <div class="row" style="margin-top:12px"><button class="btn" data-act="ddSave" ${pending ? '' : 'disabled'}>${pending ? 'שמירת ' + pending + ' רישומים' : 'סמנו רמה כדי לשמור'}</button>${pending ? '<button class="btn sec" data-act="ddClear">ניקוי</button>' : ''}</div></div>`;
 };
 Object.assign(ACTIONS, {
@@ -1559,7 +1573,7 @@ SCREENS.periodic = (k) => {
    <div class="card"><div class="filters">${A.me.role === 'מגבש/ת' ? '' : sel('unit', 'יחידה', c.units.map((u) => u.name), f.unit) + sel('team', 'צוות', [1, 2, 3, 4], f.team)}<label><input type="checkbox" id="p-miss" data-chg="pf" data-f="miss" ${f.miss ? 'checked' : ''}> רק מי שחסר לו סטטוס (${missing})</label></div>
    <div class="mut small" style="margin-bottom:8px">הסדר: קודם מי שעוד לא הוזן, ובתוכם מי שבבדיקת הדחה, במעקב, או עם ימי "מתקשה" בשבועיים האחרונים.</div>
    <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>יחידה · צוות</th><th>סטטוס נוכחי</th><th>שבועיים אחרונים</th><th>תקופה קודמת</th><th>${esc(P.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x), pr = (x.reviews || []).filter((y) => y.period !== P.key).sort((a, b) => b.ts - a.ts)[0], w = (x.daily || []).filter((e) => daysAgo(e.ts) <= 14), wk = TR().daily.map((q, j) => w.filter((e) => e.level === j).length);
-     return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<b>${candLink(k, x.id, x.name)}</b></span></td><td>${esc(x.unit)} · ${x.group}</td><td>${stPill(x)}</td><td>${w.length ? TR().daily.map((q, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(q)}</span>` : '')).join(' ') : '<span class="mut small">אין רישום</span>'}</td><td>${pr ? `<span class="pill p-gray">${esc(pr.rec)}</span>` : '<span class="mut">—</span>'}</td><td>${r ? `<span class="pill ${r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red')}">${esc(r.rec)}</span> <span class="mut small">${fmtD(r.ts)}</span>` : '<span class="pill p-orange">חסר</span>'}</td><td>${edit ? `<button class="btn ${r ? 'sec' : ''} sm" data-act="pOpen" data-id="${x.id}">${r ? 'עדכון' : 'הזנה'}</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין חיילים לפי הסינון</td></tr>'}</tbody></table></div></div>`;
+     return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<b>${candLink(k, x.id, x.name)}</b></span></td><td>${esc(x.unit)} · ${x.group}</td><td>${stPill(x)}</td><td>${w.length ? TR().daily.map((q, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(q)}</span>` : '')).join(' ') : '<span class="mut small">אין רישום</span>'}</td><td>${pr ? `<span class="pill p-gray">${esc(pr.rec)}</span>` : '<span class="mut">—</span>'}</td><td>${r ? `<span class="pill ${r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red')}">${esc(r.rec)}</span> <span class="mut small">${fmtD(r.ts)}</span>` : '<span class="pill p-orange">חסר</span>'}</td><td>${edit ? `<button class="btn ${r ? 'sec' : ''} sm" data-act="pOpen" data-id="${x.id}">${r ? 'עדכון' : 'הזנה'}</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
 };
 // ---- dismissal room (חדר הדחה): every commander writes a reasoned position per candidate, then the decision is taken on that basis ----
 const STANCE_CLS = ['p-red', 'p-orange', 'p-green'];
@@ -1595,13 +1609,13 @@ Object.assign(ACTIONS, {
   opText: (d, t) => { const o = A.ui.op || (A.ui.op = {}); (o[d.id] || (o[d.id] = {})).text = t.value; },
   opSave: async (d) => {
     const k = corpsKey(), c = candOf(k, d.id), mine = (openDis(c).opinions || []).find((o) => o.byId === A.me.id), st = (A.ui.op || {})[d.id] || {};
-    try { await api('dismiss-opinion', { corps: k, id: d.id, stance: st.stance != null ? st.stance : (mine ? mine.stance : ''), text: st.text != null ? st.text : (mine ? mine.text : '') }); if (A.ui.op) delete A.ui.op[d.id]; toast('הנימוק נרשם'); rerender(); } catch (x) { /* toast shown */ }
+    try { await api('dismiss-opinion', { corps: k, id: d.id, stance: st.stance != null ? st.stance : (mine ? mine.stance : ''), text: st.text != null ? st.text : (mine ? mine.text : '') }); if (A.ui.op) delete A.ui.op[d.id]; toast('הנימוק שלך על ' + c.name + ' נרשם'); rerender(); } catch (x) { /* toast shown */ }
   },
   decSet: (d, t) => { const o = A.ui.dec || (A.ui.dec = {}); (o[d.id] || (o[d.id] = {}))[d.f] = t.value; },
   decSave: async (d) => {
     const k = corpsKey(), c = candOf(k, d.id), v = (A.ui.dec || {})[d.id] || {};
     const nu = placeTxt(k, nextPlace(k, c));
-    if (v.decision === TR().decisions[2] && !confirm('להדיח את ' + c.name + ' מ' + c.unit + '? ' + (nu ? 'החייל/ת יעבור/תעבור אוטומטית ל' + nu + '.' : 'החייל/ת ייצא/תצא מהמסלול ל' + cf(k).fallback + '.') + ' ההחלטה נרשמת בתיק ואי אפשר לבטל אותה מהמערכת.')) return;
+    if (v.decision === TR().decisions[2] && !(await ask({ title: 'להדיח את ' + c.name + ' מ' + c.unit + '?', body: (nu ? 'אחרי ההדחה: מעבר אוטומטי ל' + nu + '.' : 'אחרי ההדחה: יציאה מהמסלול ל' + cf(k).fallback + '.') + ' ההחלטה נרשמת בתיק ואי אפשר לבטל אותה.', ok: 'הדחה', cancel: 'חזרה', danger: true }))) return;
     try { const r = await api('dismiss-decide', { corps: k, id: d.id, decision: v.decision || '', note: v.note || '' }); if (A.ui.dec) delete A.ui.dec[d.id]; toast(r.movedTo ? c.name + ' הודח/ה והועבר/ה ל' + r.movedTo + (r.movedTrack ? ' (' + r.movedTrack + ')' : '') : (r.exitTo ? c.name + ' הודח/ה ויוצא/ת ל' + r.exitTo : 'ההחלטה נשמרה: ' + v.decision)); rerender(); } catch (x) { /* toast shown */ }
   },
 });
@@ -1639,7 +1653,7 @@ function exportSheets(k) {
 SCREENS.log = (k) => `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">יומן וייצוא – ${esc(cf(k).label)}</h1><div class="mut small">כל פעולה במערכת נרשמת כאן עם מי ומתי</div></div><div class="row no-print"><button class="btn" data-act="expAll">ייצוא Excel (5 גיליונות)</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
    <div class="card">${tbl(logRows(k))}</div>`;
 Object.assign(ACTIONS, {
-  expAll: () => { const k = corpsKey(); auditEvent('export', 'training xlsx'); downloadBook('training-' + k + '.xlsx', exportSheets(k)); toast('הקובץ הורד'); },
+  expAll: () => { const k = corpsKey(); auditEvent('export', 'training xlsx'); downloadBook('training-' + k + '.xlsx', exportSheets(k)); toast('training-' + k + '.xlsx הורד'); },
   expPrint: () => { auditEvent('export', 'log print'); window.print(); },
 });
 
@@ -1651,9 +1665,9 @@ SCREENS.settings = () => `<div><h1 style="font-size:28px;font-weight:800">הגד
    ${A.auth ? secCards() : ''}${A.ui.tempPw ? tempPwModal() : ''}`;
 SCREENS.settings.after = () => { if (A.auth && !A.ui.adm) ACTIONS.admLoad(); };
 Object.assign(ACTIONS, {
-  needSet: async (d, t) => { try { await api('needs', { corps: corpsKey(), unit: d.u, need: t.value }); toast('הצורך עודכן'); } catch (x) { /* toast shown */ } },
+  needSet: async (d, t) => { try { await api('needs', { corps: corpsKey(), unit: d.u, need: t.value }); toast('המקומות הפתוחים ב' + d.u + ' עודכנו ל-' + t.value); } catch (x) { /* toast shown */ } },
   stPeriod: async (d, t) => { try { await api('settings', { period: t.value }); toast('הסטטוס התקופתי יוזן לפי ' + t.value); } catch (x) { /* toast shown */ } },
-  factory: async () => { if (!confirm('לאפס את כל הנתונים בכל המסלולים לנתוני ההדגמה? כל מה שהוזן יימחק.')) return; try { await api('factory-reset', {}); toast('המערכת אופסה לנתוני ההדגמה'); } catch (x) { /* toast shown */ } },
+  factory: async () => { if (!(await ask({ title: 'לאפס את כל המסלולים לנתוני ההדגמה?', body: 'כל מה שהוזן יימחק, כולל יומן הפעילות. אי אפשר לשחזר.', ok: 'איפוס', danger: true }))) return; try { await api('factory-reset', {}); toast('המערכת אופסה לנתוני ההדגמה'); } catch (x) { /* toast shown */ } },
 });
 </script>
 <script>// Evaluator sheet, command overview, import
@@ -1826,7 +1840,7 @@ Object.assign(ACTIONS, {
   exfld: (d, t) => { A.ui.form.extra[d.f] = t.type === 'checkbox' ? t.checked : t.value; if (t.tagName === 'SELECT' || t.type === 'checkbox') rerender(); },
   regroup: async (d, t) => {
     const k = corpsKey(), c = candOf(k, d.id), g = +t.value; if (!c || g === c.group) return;
-    if (!confirm(`להעביר את ${c.name} לצוות ${g}?`)) { rerender(); return; }
+    if (!(await ask({ title: `להעביר את ${c.name} לצוות ${g}?`, body: 'המגבש/ת של הצוות החדש יראה את התיק, והמגבש/ת הנוכחי/ת לא.', ok: 'העברה לצוות ' + g }))) { rerender(); return; }
     try { await api('regroup', { corps: k, id: d.id, group: g }); A.ui.evalCand = null; A.ui.form = null; toast(`${c.name} הועבר/ה לצוות ${g}`); rerender(); } catch (e) { rerender(); }
   },
   grp: (d, t) => { A.ui.group = Number(t.value); A.ui.evalCand = null; A.ui.form = null; rerender(); },
@@ -2008,7 +2022,7 @@ Object.assign(ACTIONS, {
   admLoad: async () => {
     try { const [u, a] = await Promise.all([fetch('/api/admin/users', { headers: HDR() }), fetch('/api/admin/audit', { headers: HDR() })]); if (!u.ok || !a.ok) return; A.ui.adm = { users: (await u.json()).users, audit: (await a.json()).events }; rerender(); } catch (e) { /* offline */ }
   },
-  admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!confirm('להנפיק סיסמה זמנית חדשה ל' + u.title + '? הסיסמה הקיימת (אם יש) תבוטל והמשתמש/ת ינותק/תנותק.')) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
+  admReset: async (d) => { const u = A.ui.adm.users.find((x) => x.id === d.id); if (!(await ask({ title: 'להנפיק סיסמה זמנית ל' + u.title + '?', body: 'הסיסמה הקיימת (אם יש) תבוטל, וההתחברות הנוכחית של המשתמש תנותק.', ok: 'הנפקת סיסמה' }))) return; try { const r = await api('admin/reset-password', { id: d.id }); A.ui.tempPw = { title: u.title, pw: r.password }; await ACTIONS.admLoad(); rerender(); } catch (x) { /* toast shown */ } },
   tempClose: () => { A.ui.tempPw = null; rerender(); },
 });
 

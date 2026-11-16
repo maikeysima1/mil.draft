@@ -102,7 +102,7 @@ function drawer(k, id) {
    <div class="card"><h3 style="margin:0 0 6px">ציר זמן</h3>${timeline(k, c)}</div>
    <div class="card"><h3 style="margin:0 0 6px">מדדים</h3>${statList(k, c)}</div>
    <div class="card"><h3 style="margin:0 0 6px">רמות לפי תחום</h3>${traitLevels(k, c.lv)}</div>
-   <div class="card"><h3 style="margin:0 0 6px">סיכום המגבש/ת מהגיבוש</h3><div>${recPill(c.rec)}</div><p style="margin:6px 0">${esc(c.obs) || '<span class="mut">טרם הוזן</span>'}</p>${c.summary ? `<p class="mut" style="margin:0">${esc(c.summary)}</p>` : ''}</div>
+   <div class="card"><h3 style="margin:0 0 6px">סיכום המגבש/ת מהגיבוש</h3><div>${recPill(c.rec)}</div><p style="margin:6px 0">${esc(c.obs) || '<span class="mut">המגבש/ת עוד לא כתב/ה סיכום.</span>'}</p>${c.summary ? `<p class="mut" style="margin:0">${esc(c.summary)}</p>` : ''}</div>
    </aside></div>`;
 }
 Object.assign(ACTIONS, {
@@ -128,7 +128,7 @@ Object.assign(ACTIONS, {
       A.ui.cf = null; rerender();
     } catch (x) { /* toast shown */ }
   },
-  complete: async () => { const k = corpsKey(), c = candOf(k, A.ui.cand); if (!confirm('לסמן ש' + c.name + ' סיים/ה את ההכשרה? אחרי הסימון אי אפשר להזין לו/לה מעקב.')) return; try { await api('complete', { corps: k, id: c.id }); toast('סומן סיום הכשרה'); } catch (x) { /* toast shown */ } },
+  complete: async () => { const k = corpsKey(), c = candOf(k, A.ui.cand); if (!(await ask({ title: 'לסמן סיום הכשרה ל' + c.name + '?', body: 'אחרי הסימון אי אפשר להזין מעקב יומי, סטטוס או בדיקת הדחה.', ok: 'סימון סיום', cancel: 'חזרה' }))) return; try { await api('complete', { corps: k, id: c.id }); toast('סומן סיום הכשרה'); } catch (x) { /* toast shown */ } },
 });
 
 // ---- dashboard ----
@@ -201,16 +201,16 @@ function weeklyText(k, unit) {
 }
 SCREENS.weekly = (k) => {
   const c = cf(k), unit = c.units.some((u) => u.name === A.ui.wUnit) ? A.ui.wUnit : '', w = weekly(k, unit);
-  const names = (rows, fn) => rows.map((r) => `<div class="tl row spread"><b>${candLink(k, (r.x || r).id, (r.x || r).name)}</b><span class="mut small">${fn(r)}</span></div>`).join('') || '<span class="mut">אין.</span>';
+  const names = (rows, fn, empty) => rows.map((r) => `<div class="tl row spread"><b>${candLink(k, (r.x || r).id, (r.x || r).name)}</b><span class="mut small">${fn(r)}</span></div>`).join('') || `<span class="mut">${empty}</span>`;
   const kpi = (v, l, sub) => `<div class="kpi"><b>${v}</b><span>${l}</span>${sub ? `<div class="mut small">${sub}</div>` : ''}</div>`;
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">סיכום שבועי – ${esc(c.label)}</h1><div class="mut small">${fmtD(nowS() - 6 * 86400e3)}–${fmtD(nowS())} · נוצר אוטומטית מהמעקב היומי, מהסטטוסים ומחדר ההדחה</div></div>
     <div class="row no-print"><label>יחידה<select data-chg="wUnit"><option value="">כל היחידות</option>${c.units.map((u) => `<option ${u.name === unit ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label><button class="btn" data-act="wCopy">העתקה כטקסט</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">${kpi(w.act.length, 'בהכשרה')}${kpi(w.covered + ' / ' + w.act.length, 'חיילים עם רישום השבוע', w.entries + ' רישומים')}${kpi(w.down.length, 'ירדו')}${kpi(w.up.length, 'עלו')}${kpi(w.inRoom.length, 'בחדר ההדחה')}</div>
    <div class="demo-note">איך זה מחושב: "ירד" / "עלה" = הפרש של חצי רמה ומעלה בין ממוצע 7 הימים האחרונים לממוצע 7 הימים שלפניהם, ורק לחייל/ת עם שני רישומים לפחות בכל שבוע (${w.compared} מתוך ${w.act.length}). מי שאין לו/לה מספיק רישומים לא מופיע/ה בהשוואה. זה סיכום של מה שנרשם, לא הערכה של החייל/ת.</div>
-   <div class="grid g2"><div class="card"><h2>ירדו לעומת השבוע הקודם (${w.down.length})</h2>${names(w.down, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים')}</div>
-    <div class="card"><h2>עלו לעומת השבוע הקודם (${w.up.length})</h2>${names(w.up, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים')}</div></div>
-   <div class="grid g2"><div class="card"><h2>שני ימי "מתקשה" ומעלה (${w.low.length})</h2>${names(w.low, (r) => r.low + ' ימים מתוך ' + r.a.length + ' רישומים')}</div>
-    <div class="card"><h2>בלי רישום השבוע (${w.none.length})</h2><div class="mut small" style="margin-bottom:4px">אין מידע עליהם – לא "תקין".</div>${names(w.none.slice(0, 12), (r) => esc(r.x.unit) + ' · צוות ' + r.x.group)}${w.none.length > 12 ? `<div class="mut small">ועוד ${w.none.length - 12}</div>` : ''}</div></div>
+   <div class="grid g2"><div class="card"><h2>ירדו לעומת השבוע הקודם (${w.down.length})</h2>${names(w.down, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים', 'אף חייל/ת לא ירד/ה השבוע לפי הכלל.')}</div>
+    <div class="card"><h2>עלו לעומת השבוע הקודם (${w.up.length})</h2>${names(w.up, (r) => 'ממוצע ' + f1w(r.bv) + ' ← ' + f1w(r.av) + ' · ' + r.a.length + ' רישומים', 'אף חייל/ת לא עלה/תה השבוע לפי הכלל.')}</div></div>
+   <div class="grid g2"><div class="card"><h2>שני ימי "מתקשה" ומעלה (${w.low.length})</h2>${names(w.low, (r) => r.low + ' ימים מתוך ' + r.a.length + ' רישומים', 'לאף חייל/ת אין שני ימי "מתקשה" השבוע.')}</div>
+    <div class="card"><h2>בלי רישום השבוע (${w.none.length})</h2><div class="mut small" style="margin-bottom:4px">אין מידע עליהם – לא "תקין".</div>${names(w.none.slice(0, 12), (r) => esc(r.x.unit) + ' · צוות ' + r.x.group, 'לכל החיילים הפעילים יש רישום השבוע.')}${w.none.length > 12 ? `<div class="mut small">ועוד ${w.none.length - 12}</div>` : ''}</div></div>
    <div class="card"><h2>אירועים השבוע</h2><div class="row" style="gap:8px">${[['נפתחו בדיקות הדחה', w.ev.opened.length], ['הוחלטו בדיקות', w.ev.decided.length], ['הועברו יחידה', w.ev.moved.length], ['גויסו', w.ev.intake.length], ['סיימו הכשרה', w.ev.done.length], ['סטטוסים תקופתיים הוזנו', w.ev.status]].map(([l, n]) => `<span class="pill ${n ? 'p-blue' : 'p-gray'}">${l}: ${n}</span>`).join('')}</div>
     ${w.ev.decided.map((e) => `<div class="tl"><b>${candLink(k, e.x.id, e.x.name)}</b> – ${esc(e.d.decision)}${e.d.movedTo ? ' · עבר/ה ל' + esc(e.d.movedTo) : ''} <span class="mut small">${esc(e.d.decidedBy)}</span></div>`).join('')}${w.ev.opened.map((x) => `<div class="tl"><b>${candLink(k, x.id, x.name)}</b> – נפתחה בדיקת הדחה</div>`).join('')}
     <div class="mut small" style="margin-top:8px">סטטוס ${esc(A.S.period.label)}: חסרים ${w.missP} · נותרו ${A.S.period.daysLeft} ימים.</div></div>`;
@@ -230,7 +230,7 @@ SCREENS.roster = (k) => {
   const sel = (key, label, opts, val) => `<label>${label}<select data-chg="rf" data-f="${key}"><option value="">הכול</option>${opts.map((o) => `<option ${String(o) === String(val || '') ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
   return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חיילים בהכשרה – ${esc(c.label)}</h1><div class="mut small">${rows.length} מתוך ${visible(k).length} · לחיצה על שם פותחת את התיק</div></div>
    <div class="card"><div class="filters"><label>חיפוש לפי שם / מספר<input type="search" id="rf-q" data-inp="rfq" value="${esc(f.q || '')}" placeholder="לדוגמה: כהן או C-2101" autocomplete="off" style="min-width:200px"></label>${sel('unit', 'יחידה', c.units.map((u) => u.name), f.unit)}${sel('st', 'סטטוס', ['פעילים'].concat(TR().statuses), f.st)}${sel('team', 'צוות', [1, 2, 3, 4], f.team)}${can('fav', k) ? `<label><input type="checkbox" id="rf-fav" data-chg="rf" data-f="fav" ${f.fav ? 'checked' : ''}> במעקב אישי שלי (${favList(k).length})</label>` : ''}</div>
-   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>תפקיד</th><th>יחידה</th><th>${esc(c.targetLabel)}</th><th>צוות</th><th>סטטוס</th><th>מעקב אחרון</th><th>${esc(A.S.period.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x); return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap">${avatar(x, 40)}<span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="display:block">${x.id}</bdi></span></span></td><td>${esc(x.role)}</td><td>${esc(x.unit || '—')}</td><td>${esc(x.target || '—')}</td><td>${x.group}</td><td>${stPill(x)}</td><td>${isActive(x) ? dailyPill(lastDaily(x)) : '<span class="mut">—</span>'}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (r ? `<span class="pill p-green">${esc(r.rec)}</span>` : '<span class="pill p-orange">חסר</span>')}</td><td>${can('fav', k) ? favBtn(k, x.id) : ''}</td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין חיילים לפי הסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
+   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>תפקיד</th><th>יחידה</th><th>${esc(c.targetLabel)}</th><th>צוות</th><th>סטטוס</th><th>מעקב אחרון</th><th>${esc(A.S.period.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x); return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap">${avatar(x, 40)}<span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="display:block">${x.id}</bdi></span></span></td><td>${esc(x.role)}</td><td>${esc(x.unit || '—')}</td><td>${esc(x.target || '—')}</td><td>${x.group}</td><td>${stPill(x)}</td><td>${isActive(x) ? dailyPill(lastDaily(x)) : '<span class="mut">—</span>'}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (r ? `<span class="pill p-green">${esc(r.rec)}</span>` : '<span class="pill p-orange">חסר</span>')}</td><td>${can('fav', k) ? favBtn(k, x.id) : ''}</td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
 };
 Object.assign(ACTIONS, {
   rf: (d, t) => { A.ui.rf = Object.assign({}, A.ui.rf, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); rerender(); },
@@ -250,7 +250,7 @@ SCREENS.daily = (k) => {
       <td><div class="seg">${TR().daily.map((w, j) => `<button type="button" class="${lvl === j ? 'on l' + j : ''}" data-act="ddLv" data-id="${x.id}" data-v="${j}">${esc(w)}</button>`).join('')}</div></td>
       <td><select data-chg="ddSet" data-f="att" data-id="${x.id}" aria-label="נוכחות">${TR().attend.map((o) => `<option ${o === (d.att || (m && m.att) || TR().attend[0]) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></td>
       <td><input type="text" id="dd-${x.id}" data-inp="ddSet" data-f="text" data-id="${x.id}" value="${esc(d.text != null ? d.text : (m ? m.text : ''))}" placeholder="לא חובה" style="min-width:220px;width:100%"></td>
-      <td>${dailyPill(prev)}</td></tr>`; }).join('') || '<tr><td colspan="5" class="mut">אין חיילים פעילים לפי הסינון</td></tr>'}</tbody></table></div>
+      <td>${dailyPill(prev)}</td></tr>`; }).join('') || '<tr><td colspan="5" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div>
    <div class="row" style="margin-top:12px"><button class="btn" data-act="ddSave" ${pending ? '' : 'disabled'}>${pending ? 'שמירת ' + pending + ' רישומים' : 'סמנו רמה כדי לשמור'}</button>${pending ? '<button class="btn sec" data-act="ddClear">ניקוי</button>' : ''}</div></div>`;
 };
 Object.assign(ACTIONS, {
@@ -283,7 +283,7 @@ SCREENS.periodic = (k) => {
    <div class="card"><div class="filters">${A.me.role === 'מגבש/ת' ? '' : sel('unit', 'יחידה', c.units.map((u) => u.name), f.unit) + sel('team', 'צוות', [1, 2, 3, 4], f.team)}<label><input type="checkbox" id="p-miss" data-chg="pf" data-f="miss" ${f.miss ? 'checked' : ''}> רק מי שחסר לו סטטוס (${missing})</label></div>
    <div class="mut small" style="margin-bottom:8px">הסדר: קודם מי שעוד לא הוזן, ובתוכם מי שבבדיקת הדחה, במעקב, או עם ימי "מתקשה" בשבועיים האחרונים.</div>
    <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>יחידה · צוות</th><th>סטטוס נוכחי</th><th>שבועיים אחרונים</th><th>תקופה קודמת</th><th>${esc(P.label)}</th><th></th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x), pr = (x.reviews || []).filter((y) => y.period !== P.key).sort((a, b) => b.ts - a.ts)[0], w = (x.daily || []).filter((e) => daysAgo(e.ts) <= 14), wk = TR().daily.map((q, j) => w.filter((e) => e.level === j).length);
-     return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<b>${candLink(k, x.id, x.name)}</b></span></td><td>${esc(x.unit)} · ${x.group}</td><td>${stPill(x)}</td><td>${w.length ? TR().daily.map((q, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(q)}</span>` : '')).join(' ') : '<span class="mut small">אין רישום</span>'}</td><td>${pr ? `<span class="pill p-gray">${esc(pr.rec)}</span>` : '<span class="mut">—</span>'}</td><td>${r ? `<span class="pill ${r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red')}">${esc(r.rec)}</span> <span class="mut small">${fmtD(r.ts)}</span>` : '<span class="pill p-orange">חסר</span>'}</td><td>${edit ? `<button class="btn ${r ? 'sec' : ''} sm" data-act="pOpen" data-id="${x.id}">${r ? 'עדכון' : 'הזנה'}</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין חיילים לפי הסינון</td></tr>'}</tbody></table></div></div>`;
+     return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<b>${candLink(k, x.id, x.name)}</b></span></td><td>${esc(x.unit)} · ${x.group}</td><td>${stPill(x)}</td><td>${w.length ? TR().daily.map((q, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(q)}</span>` : '')).join(' ') : '<span class="mut small">אין רישום</span>'}</td><td>${pr ? `<span class="pill p-gray">${esc(pr.rec)}</span>` : '<span class="mut">—</span>'}</td><td>${r ? `<span class="pill ${r.rec === TR().periodRec[0] ? 'p-green' : (r.rec === TR().periodRec[1] ? 'p-orange' : 'p-red')}">${esc(r.rec)}</span> <span class="mut small">${fmtD(r.ts)}</span>` : '<span class="pill p-orange">חסר</span>'}</td><td>${edit ? `<button class="btn ${r ? 'sec' : ''} sm" data-act="pOpen" data-id="${x.id}">${r ? 'עדכון' : 'הזנה'}</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
 };
 // ---- dismissal room (חדר הדחה): every commander writes a reasoned position per candidate, then the decision is taken on that basis ----
 const STANCE_CLS = ['p-red', 'p-orange', 'p-green'];
@@ -319,13 +319,13 @@ Object.assign(ACTIONS, {
   opText: (d, t) => { const o = A.ui.op || (A.ui.op = {}); (o[d.id] || (o[d.id] = {})).text = t.value; },
   opSave: async (d) => {
     const k = corpsKey(), c = candOf(k, d.id), mine = (openDis(c).opinions || []).find((o) => o.byId === A.me.id), st = (A.ui.op || {})[d.id] || {};
-    try { await api('dismiss-opinion', { corps: k, id: d.id, stance: st.stance != null ? st.stance : (mine ? mine.stance : ''), text: st.text != null ? st.text : (mine ? mine.text : '') }); if (A.ui.op) delete A.ui.op[d.id]; toast('הנימוק נרשם'); rerender(); } catch (x) { /* toast shown */ }
+    try { await api('dismiss-opinion', { corps: k, id: d.id, stance: st.stance != null ? st.stance : (mine ? mine.stance : ''), text: st.text != null ? st.text : (mine ? mine.text : '') }); if (A.ui.op) delete A.ui.op[d.id]; toast('הנימוק שלך על ' + c.name + ' נרשם'); rerender(); } catch (x) { /* toast shown */ }
   },
   decSet: (d, t) => { const o = A.ui.dec || (A.ui.dec = {}); (o[d.id] || (o[d.id] = {}))[d.f] = t.value; },
   decSave: async (d) => {
     const k = corpsKey(), c = candOf(k, d.id), v = (A.ui.dec || {})[d.id] || {};
     const nu = placeTxt(k, nextPlace(k, c));
-    if (v.decision === TR().decisions[2] && !confirm('להדיח את ' + c.name + ' מ' + c.unit + '? ' + (nu ? 'החייל/ת יעבור/תעבור אוטומטית ל' + nu + '.' : 'החייל/ת ייצא/תצא מהמסלול ל' + cf(k).fallback + '.') + ' ההחלטה נרשמת בתיק ואי אפשר לבטל אותה מהמערכת.')) return;
+    if (v.decision === TR().decisions[2] && !(await ask({ title: 'להדיח את ' + c.name + ' מ' + c.unit + '?', body: (nu ? 'אחרי ההדחה: מעבר אוטומטי ל' + nu + '.' : 'אחרי ההדחה: יציאה מהמסלול ל' + cf(k).fallback + '.') + ' ההחלטה נרשמת בתיק ואי אפשר לבטל אותה.', ok: 'הדחה', cancel: 'חזרה', danger: true }))) return;
     try { const r = await api('dismiss-decide', { corps: k, id: d.id, decision: v.decision || '', note: v.note || '' }); if (A.ui.dec) delete A.ui.dec[d.id]; toast(r.movedTo ? c.name + ' הודח/ה והועבר/ה ל' + r.movedTo + (r.movedTrack ? ' (' + r.movedTrack + ')' : '') : (r.exitTo ? c.name + ' הודח/ה ויוצא/ת ל' + r.exitTo : 'ההחלטה נשמרה: ' + v.decision)); rerender(); } catch (x) { /* toast shown */ }
   },
 });
@@ -363,7 +363,7 @@ function exportSheets(k) {
 SCREENS.log = (k) => `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">יומן וייצוא – ${esc(cf(k).label)}</h1><div class="mut small">כל פעולה במערכת נרשמת כאן עם מי ומתי</div></div><div class="row no-print"><button class="btn" data-act="expAll">ייצוא Excel (5 גיליונות)</button><button class="btn sec" data-act="expPrint">הדפסה / PDF</button></div></div>
    <div class="card">${tbl(logRows(k))}</div>`;
 Object.assign(ACTIONS, {
-  expAll: () => { const k = corpsKey(); auditEvent('export', 'training xlsx'); downloadBook('training-' + k + '.xlsx', exportSheets(k)); toast('הקובץ הורד'); },
+  expAll: () => { const k = corpsKey(); auditEvent('export', 'training xlsx'); downloadBook('training-' + k + '.xlsx', exportSheets(k)); toast('training-' + k + '.xlsx הורד'); },
   expPrint: () => { auditEvent('export', 'log print'); window.print(); },
 });
 
@@ -375,7 +375,7 @@ SCREENS.settings = () => `<div><h1 style="font-size:28px;font-weight:800">הגד
    ${A.auth ? secCards() : ''}${A.ui.tempPw ? tempPwModal() : ''}`;
 SCREENS.settings.after = () => { if (A.auth && !A.ui.adm) ACTIONS.admLoad(); };
 Object.assign(ACTIONS, {
-  needSet: async (d, t) => { try { await api('needs', { corps: corpsKey(), unit: d.u, need: t.value }); toast('הצורך עודכן'); } catch (x) { /* toast shown */ } },
+  needSet: async (d, t) => { try { await api('needs', { corps: corpsKey(), unit: d.u, need: t.value }); toast('המקומות הפתוחים ב' + d.u + ' עודכנו ל-' + t.value); } catch (x) { /* toast shown */ } },
   stPeriod: async (d, t) => { try { await api('settings', { period: t.value }); toast('הסטטוס התקופתי יוזן לפי ' + t.value); } catch (x) { /* toast shown */ } },
-  factory: async () => { if (!confirm('לאפס את כל הנתונים בכל המסלולים לנתוני ההדגמה? כל מה שהוזן יימחק.')) return; try { await api('factory-reset', {}); toast('המערכת אופסה לנתוני ההדגמה'); } catch (x) { /* toast shown */ } },
+  factory: async () => { if (!(await ask({ title: 'לאפס את כל המסלולים לנתוני ההדגמה?', body: 'כל מה שהוזן יימחק, כולל יומן הפעילות. אי אפשר לשחזר.', ok: 'איפוס', danger: true }))) return; try { await api('factory-reset', {}); toast('המערכת אופסה לנתוני ההדגמה'); } catch (x) { /* toast shown */ } },
 });
