@@ -265,10 +265,6 @@ details.tbl summary{cursor:pointer;color:var(--mut);font-size:13px}
 .gb:hover i,.gb:focus-visible i{filter:brightness(1.15)}
 
 /* favorites */
-.favbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--mut);display:inline-flex;align-items:center;justify-content:center;flex:none;transition:.15s}
-.favbtn:hover{color:var(--red);border-color:var(--red)}
-.favbtn.on{color:var(--red);background:var(--red-l);border-color:color-mix(in srgb,var(--red) 40%,transparent)}
-.favbtn.lg{width:42px;height:42px}
 .favmark{color:var(--red);display:inline-flex;vertical-align:middle}
 .cell.dim{opacity:.32}
 .cell.favcell{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--red) 55%,transparent)}
@@ -414,3 +410,11 @@ details.tl summary{cursor:pointer}
 
 /* confirmation dialog */
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff;box-shadow:none}
+/* missing data in the evaluator sheet: the field itself is marked until it is filled in */
+.need{background:var(--orange-l);box-shadow:inset 0 0 0 2px var(--orange);border-radius:10px;padding:4px 8px}
+.need input,.need select,.need textarea{border-color:var(--orange)}
+label.need,div.need{color:var(--navy)}
+/* roster: clickable status pill and export bar */
+.pill.linkpill{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.clk{cursor:pointer}
+.room.flash{box-shadow:0 0 0 3px var(--blue),var(--sh);transition:box-shadow .3s}

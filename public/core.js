@@ -114,11 +114,8 @@ function avatar(x, size) {
   return `<svg class="avatar-img" width="${size || 40}" height="${size || 40}" viewBox="0 0 100 100" role="img" aria-label="תמונה להמחשה בלבד" style="border-radius:50%;flex:none"><rect width="100" height="100" fill="${bg}"/>${hairBack}<path d="M14 100q2-22 36-22t36 22z" fill="#4A5D3A"/><rect x="43" y="66" width="14" height="14" rx="5" fill="${skin}"/><ellipse cx="50" cy="52" rx="19" ry="22" fill="${skin}"/><ellipse cx="31" cy="54" rx="3.5" ry="5" fill="${skin}"/><ellipse cx="69" cy="54" rx="3.5" ry="5" fill="${skin}"/><g fill="${hair}">${hairTop}</g><circle cx="43" cy="53" r="2.4" fill="#222"/><circle cx="57" cy="53" r="2.4" fill="#222"/><path d="M39 ${brow ? 46 : 47}h8M53 ${brow ? 46 : 47}h8" stroke="${hair}" stroke-width="2.2" stroke-linecap="round"/>${m}</svg>`;
 }
 const R = () => A.cfg.roles[A.me.role];
-// favorites (private, per user): ♥ marks candidates a unit/commander wants to keep an eye on
-const favList = (k) => (cs(k).favs && A.me && cs(k).favs[A.me.id]) || [];
-const isFav = (k, id) => favList(k).includes(id);
-const heartIcon = (on, s) => `<svg class="ic" width="${s || 18}" height="${s || 18}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.heart}</svg>`;
-const favBtn = (k, id, cls) => { const on = isFav(k, id), t = on ? 'הסר מהמעקב האישי' : 'הוסף למעקב אישי'; return `<button class="favbtn ${on ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" data-tip="${t}" aria-pressed="${on}" aria-label="${t}">${heartIcon(on)}</button>`; };
+const teamOnly = () => !!A.me && R().scope === 'group'; // evaluator, מ״מ, מ״כ: only the own team
+const teamList = () => A.cfg.teams || [1, 2];
 // a candidate's name as a link to the candidate card (plain text for roles that cannot open candidate files)
 const candLink = (k, id, name) => (canFile() ? `<a href="#/room" class="clink" data-act="openCand" data-id="${esc(id)}" data-k="${esc(k)}" title="פתיחת תיק החייל/ת">${esc(name)}</a>` : esc(name));
 const roleOf = (name) => A.cfg.roles[name];
@@ -165,20 +162,20 @@ function shell(inner) {
 
 // ---- login ----
 // three steps: חיל ← יחידה ← תפקיד (users carry org / orgUnit / roleLabel from the server)
-const ROLE_ORDER = ['שלישות', 'מפקד/ת הכשרה', 'מגבש/ת', 'ראש מטה', 'מנהל/ת מערכת', 'צופה/ת'];
+const ROLE_ORDER = ['שלישות', 'מפקד/ת הכשרה', 'מ״פ', 'מ״מ', 'מ״כ', 'מגבש/ת', 'ראש מטה', 'מנהל/ת מערכת', 'צופה/ת'];
 function loginUnits(org) { // a corps: its units in draft order, then its evaluation event; HR / dev: in config order
   const names = []; A.cfg.users.filter((u) => u.org === org).forEach((u) => { if (!names.includes(u.orgUnit)) names.push(u.orgUnit); });
   const corps = A.cfg.corps[org], idx = (n) => { const i = corps ? corps.units.findIndex((x) => x.name === n) : -1; return i < 0 ? 999 : i; };
   return corps ? names.sort((a, b) => idx(a) - idx(b)) : names;
 }
-// under every unit of a corps: the unit's שלישות, the training commander and the evaluators (teams 1-4) of that corps
-const loginRoles = (org, unit) => A.cfg.users.filter((u) => u.org === org && (u.orgUnit === unit || (u.role === 'מגבש/ת' && A.cfg.corps[org]))).sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || (a.group || 0) - (b.group || 0));
+// under every unit of a corps: the unit's שלישות, the training commander, the training staff (מ״פ / מ״מ / מ״כ) and the evaluators of that corps
+const loginRoles = (org, unit) => A.cfg.users.filter((u) => u.org === org && (u.orgUnit === unit || ((u.role === 'מגבש/ת' || roleOf(u.role).staff) && A.cfg.corps[org]))).sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || (a.group || 0) - (b.group || 0));
 function loginAuto() { // skip steps that have a single option
   const org = A.ui.lorg; if (!org) return;
   const units = loginUnits(org); if (!A.ui.lunit && units.length === 1) A.ui.lunit = units[0];
   if (A.ui.lunit && !A.ui.sel) { const rs = loginRoles(org, A.ui.lunit); if (rs.length === 1) A.ui.sel = rs[0].id; }
 }
-const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', opine: 'נימוק בחדר ההדחה', decide: 'החלטה בהדחה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', fav: 'מעקב אישי', settings: 'הגדרות', factory: 'איפוס מערכת' };
+const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', opine: 'נימוק בחדר ההדחה', decide: 'החלטה בהדחה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', evalmini: 'עדכון מדדים', attend: 'סטטוס הגעה', settings: 'הגדרות', factory: 'איפוס מערכת' };
 function layerMatrix(selRole) {
   const rows = Object.keys(A.cfg.roles).sort((a, b) => roleOf(a).layer - roleOf(b).layer);
   return `<div class="card matrix"><h2>שכבות סיווג והרשאות</h2><div class="mut small" style="margin-bottom:10px">כל שכבה רואה ומפעילה רק את מה שנקבע לה (העמודות: חדר בחירה, לוח, דף מגבש, תמונת מצב, ייבוא). השרת בודק כל פעולה מחדש.</div>

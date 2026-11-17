@@ -32,11 +32,17 @@ const USERS = [
   { id: 'u6', title: 'שלישות קורס טיס – שלב בסיסי', unit: 'קורס טיס – שלב בסיסי', corps: 'pilot', role: 'שלישות', initial: 'ש' },
 ];
 const canDo = C.canDo;
-// one evaluator per team (צוות 1..4) in every corps: "מגבש צוות 1 אחראי על צוות 1" and so on
-const TEAMS = [1, 2, 3, 4];
-const LEGACY_EVAL = { 'recon|3': 'u4', 'special|2': 'u5', 'pilot|1': 'u7' };
+// one evaluator per team (C.TEAMS: צוות 1..2) in every corps: "מגבש צוות 1 אחראי על צוות 1" and so on
+const TEAMS = C.TEAMS, TEAM_TXT = '(1–' + TEAMS.length + ')';
+const LEGACY_EVAL = { 'recon|2': 'u4', 'special|2': 'u5', 'pilot|1': 'u7' };
 const CORPS_SHORT_S = {}; Object.keys(C.corps).forEach((k) => { CORPS_SHORT_S[k] = C.corps[k].short; });
 Object.keys(C.corps).forEach((k) => TEAMS.forEach((g) => USERS.push({ id: LEGACY_EVAL[k + '|' + g] || 'e-' + k + '-' + g, title: 'מגבש/ת צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: 'מגבש/ת', initial: 'מג' })));
+// training staff (סגל הכשרה) in every corps: one מ״פ for the whole track, and one מ״מ and one מ״כ per team
+const STAFF_INI = { 'מ״פ': 'מפ', 'מ״מ': 'ממ', 'מ״כ': 'מכ' };
+Object.keys(C.corps).forEach((k) => {
+  USERS.push({ id: 'p-' + k, title: 'מ״פ · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, role: 'מ״פ', initial: STAFF_INI['מ״פ'] });
+  ['מ״מ', 'מ״כ'].forEach((r) => TEAMS.forEach((g) => USERS.push({ id: (r === 'מ״מ' ? 'm-' : 'k-') + k + '-' + g, title: r + ' צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: r, initial: STAFF_INI[r] })));
+});
 // extra evaluator-sheet values (kept separate from the 5 traits that drive the radar)
 function makeExtra(cf, role, lv, rec, rnd2) {
   const sum = lv.reduce((a, b) => a + b, 0), others = cf.roles.filter((r) => r !== role);
@@ -122,7 +128,7 @@ const INITIALS = { 'מפקד/ת הכשרה': 'מה', 'ראש מטה': 'רמ', '�
 // the training commander is also a role under every unit (same permissions as before: scope = all corps)
 Object.keys(C.corps).forEach((k) => C.corps[k].units.map((u) => u.name).concat([C.corps[k].eventName]).forEach((unit, i) => USERS.push({ id: 'c-' + k + '-' + i, title: 'מפקד/ת הכשרה · ' + unit, unit, corps: null, role: 'מפקד/ת הכשרה', initial: 'מה', org: k, orgUnit: unit, roleLabel: 'מפקד/ת הכשרה' })));
 // login structure for corps users: חיל ← יחידה ← תפקיד
-USERS.forEach((u) => { if (u.org) return; u.org = u.corps; u.orgUnit = u.unit; u.roleLabel = u.role === 'מגבש/ת' ? 'מגבש/ת צוות ' + u.group : u.role; });
+USERS.forEach((u) => { if (u.org) return; u.org = u.corps; u.orgUnit = u.unit; u.roleLabel = u.group ? u.role + ' צוות ' + u.group : u.role; });
 const userById = (id) => USERS.find((u) => u.id === id);
 
 // ---------- seed data ----------
@@ -161,10 +167,10 @@ function seedCands() {
         rec: sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2]), med,
         profile: med === C.MEDS[0] ? (rnd() < 0.75 ? 97 : 82) : (med === C.MEDS[1] ? 72 : 64),
         area: C.AREAS[Math.floor(rnd() * C.AREAS.length)], pref: cf.units[Math.floor(rnd() * cf.units.length)].name,
-        group: 1 + (i % 4), skills: cf.skills[role] || [],
+        group: 1 + (i % TEAMS.length), skills: cf.skills[role] || [],
         obs: cf.obs[role] + ' ' + cf.good[top] + (lv[weak] < 2 ? ' ' + cf.weak[weak] : ''),
         extra: makeExtra(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2]), rnd2),
-        summary: makeSummary(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2])), evaluated: true, evalBy: 'מגבש/ת צוות ' + (1 + (i % 4)), source: 'מאגר קיים',
+        summary: makeSummary(cf, role, lv, sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2])), evaluated: true, evalBy: 'מגבש/ת צוות ' + (1 + (i % TEAMS.length)), source: 'מאגר קיים',
       });
       { const cd = out[key][out[key].length - 1]; cd.wish = makeWish(cf, role, cd.pref, rnd2, cd.extra.motivation); }
       n++;
@@ -176,7 +182,7 @@ function seedCands() {
 // ---------- training model + api (shared with the standalone build) ----------
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-const SCHEMA = 9;
+const SCHEMA = 10;
 const DAY = 86400e3;
 const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ts)); // YYYY-MM-DD, Israel time
 // current review period: quarter (רבעון) or half-year (חציון)
@@ -269,13 +275,24 @@ function apiHandle(p, b, user) {
   const whoCan = (action) => Object.keys(C.ROLES).filter((r) => C.ROLES[r].can.includes(action)).join(' / ');
   const allow = (action, msg) => { needCorps(); if (!canDo(user, action, k)) throw new Error(msg || 'הפעולה שמורה ל' + whoCan(action)); };
   const cst = C.corps[k] ? state.corps[k] : null, cf = C.corps[k] ? cfg(k) : null;
-  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (user.role === 'מגבש/ת' && c.group !== user.group) throw new Error(c.name + ' בצוות ' + c.group + '. אפשר לפעול רק על חיילי צוות ' + user.group); return c; };
+  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (C.ROLES[user.role].scope === 'group' && c.group !== user.group) throw new Error(c.name + ' בצוות ' + c.group + '. אפשר לפעול רק על חיילי צוות ' + user.group); return c; };
   const mustBeActive = (c) => { if (!isActive(c)) throw new Error(c.name + ' כבר אינו/ה בהכשרה (' + c.tstatus + ')'); };
   const text = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 
   if (p === 'eval') {
-    allow('eval', 'רק מגבש/ת מזינ/ה דף מגבש'); const c = soldier(b.id);
-    applyEval(cf, c, b, user.title); logAct(k, `${user.title} עדכנ/ה דף מגבש של ${c.name}`); save(); return { ok: true, cand: c };
+    needCorps(); const full = canDo(user, 'eval', k);
+    if (!full && !canDo(user, 'evalmini', k)) throw new Error('הפעולה שמורה ל' + whoCan('eval'));
+    const c = soldier(b.id);
+    // a squad commander (מ״כ) may update only the measured values; everything else is the platoon / company commander's
+    if (full) applyEval(cf, c, b, user.title); else if (!applyEval(cf, c, { stats: b.stats || {} }, user.title)) throw new Error('לא הוזנו מדדים לעדכון');
+    logAct(k, `${user.title} עדכנ/ה ${full ? 'דף מגבש' : 'מדדים'} של ${c.name}`); save(); return { ok: true, cand: c };
+  }
+  // arrival status for today (סטטוס הגעה) – the basic update that the squad commander may also make
+  if (p === 'attend') {
+    allow('attend', 'אין הרשאה לעדכן סטטוס הגעה'); const c = soldier(b.id); mustBeActive(c);
+    if (!T.attend.includes(b.att)) throw new Error('יש לבחור סטטוס הגעה: ' + T.attend.join(' / '));
+    c.arrive = { d: dayKey(Date.now()), v: b.att, ts: Date.now(), by: user.title, byId: user.id };
+    logAct(k, `${user.title} עדכנ/ה סטטוס הגעה של ${c.name}: ${b.att}`); save(); return { ok: true };
   }
   if (p === 'eval-bulk') {
     allow('evalbulk', 'אין הרשאה להעלות נתוני מגבש');
@@ -290,7 +307,7 @@ function apiHandle(p, b, user) {
   }
   if (p === 'regroup') {
     allow('regroup', 'אין הרשאה להעביר חיילים בין צוותים'); const c = soldier(b.id);
-    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות (1–4)');
+    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות ' + TEAM_TXT);
     const from = c.group; c.group = g; logAct(k, `${user.title} העביר/ה את ${c.name} מצוות ${from} לצוות ${g}`); save(); return { ok: true };
   }
   // ---- event 1: intake (גיוס המועמד) ----
@@ -301,7 +318,7 @@ function apiHandle(p, b, user) {
     if (!cf.roles.includes(b.role)) throw new Error('יש לבחור תפקיד');
     const unit = user.role === 'שלישות' ? user.unit : b.unit; if (!cf.units.some((u) => u.name === unit)) throw new Error('יש לבחור יחידה');
     if (!C.TARGETS[k].includes(b.target)) throw new Error('יש לבחור את היחידה המיוחדת שאליה החייל/ת מועמד/ת');
-    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות (1–4)');
+    const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות ' + TEAM_TXT);
     const c = intakeFields(newCand(cf, cst, name, b.role, g, 'גיוס'), unit, b.target, user.title);
     applyUpdate(cf, c, { med: b.med, profile: b.profile, stats: b.stats || {}, photo: b.photo });
     logAct(k, `${user.title} גייס/ה את ${c.name} (${c.role}) ל${unit} · מועמד/ת ל${b.target}`); save(); return { ok: true, id: c.id };
@@ -317,15 +334,10 @@ function apiHandle(p, b, user) {
       const name = text(r.name, 60); if (!name || used.has(name) || !cf.roles.includes(r.role)) { skipped++; return; }
       used.add(name);
       const unit = user.role === 'שלישות' ? user.unit : (cf.units.some((u) => u.name === r.unit) ? r.unit : ''); // unknown stays unknown
-      const c = intakeFields(newCand(cf, cst, name, r.role, 1 + (cst.cands.length % 4), 'ייבוא'), unit, C.TARGETS[k].includes(r.target) ? r.target : '', user.title);
+      const c = intakeFields(newCand(cf, cst, name, r.role, 1 + (cst.cands.length % TEAMS.length), 'ייבוא'), unit, C.TARGETS[k].includes(r.target) ? r.target : '', user.title);
       applyUpdate(cf, c, r); added++;
     });
     logAct(k, `${user.title} גייס/ה ${added} מועמדים מקובץ`); save(); return { ok: true, added, skipped };
-  }
-  if (p === 'fav') {
-    allow('fav', 'אין הרשאה לסמן מעקב אישי'); soldier(b.id);
-    cst.favs = cst.favs || {}; const set = new Set(cst.favs[user.id] || []); if (b.on) set.add(b.id); else set.delete(b.id); cst.favs[user.id] = Array.from(set);
-    save(); return { ok: true };
   }
   // ---- daily follow-up: one entry per author per soldier per day (a second save the same day replaces the first) ----
   if (p === 'daily') {
@@ -429,7 +441,10 @@ const DB_FILE = path.join(DATA_DIR, 'mil.db'), BACKUP_DIR = path.join(DATA_DIR, 
 const fatal = (what, e) => { console.error('FATAL: cannot read ' + what + ' (' + e.message + ') - refusing to start with an empty state'); process.exit(1); };
 // Data upgrades: when SCHEMA grows, add an entry here that changes the loaded state in place. Stored data is upgraded, never wiped.
 //   10: (st) => { Object.values(st.corps).forEach((c) => c.cands.forEach((x) => { x.newField = x.newField || null; })); },
-const DATA_MIGRATIONS = {};
+const DATA_MIGRATIONS = {
+  // 10: four teams per track became two (צוות 3 -> 1, צוות 4 -> 2); the personal follow list (♥) was removed
+  10: (st) => { Object.values(st.corps || {}).forEach((c) => { (c.cands || []).forEach((x) => { if (x.group > TEAMS.length) x.group = ((x.group - 1) % TEAMS.length) + 1; }); c.favs = {}; }); },
+};
 // fills whatever the current code expects and stored data may lack (new units, new tracks, new arrays). Runs on every load.
 function normalize(st) {
   st.settings = Object.assign({ period: 'רבעון' }, st.settings); st.log = st.log || []; st.version = st.version || 1; st.corps = st.corps || {};
@@ -614,7 +629,7 @@ http.createServer(async (req, res) => {
       let lines = []; try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-150); } catch (e) { /* none yet */ }
       return json(res, 200, { events: lines.map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean).reverse() });
     }
-    if (p === '/api/config') return json(res, 200, { orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+    if (p === '/api/config') return json(res, 200, { teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
     if (p === '/api/state') { const gu = gate(); if (!gu) return; return json(res, 200, snapshot(AUTH ? gu.id : req.headers['x-user'])); }
     if (p === '/api/events') {
       const gu = gate(); if (!gu) return;

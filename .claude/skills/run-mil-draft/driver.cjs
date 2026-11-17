@@ -55,7 +55,7 @@ async function main() {
       let bad = 0; const ok = (c, msg) => { console.log((c ? 'PASS ' : 'FAIL ') + msg); if (!c) bad++; };
       await api('factory-reset', 'a1', {});
       const cfg = (await api('config')).json, K = 'recon';
-      for (const id of ['u3', 'u1', 'u4', 'h1', 'o1', 'a1']) { // nav items must match the role's page list
+      for (const id of ['u3', 'u1', 'u4', 'p-recon', 'm-recon-1', 'k-recon-1', 'h1', 'o1', 'a1']) { // nav items must match the role's page list
         const u = cfg.users.find((x) => x.id === id), { page, errs } = await session(browser, id);
         const nav = await page.locator('.nav a').count(); ok(nav === cfg.roles[u.role].pages.length, `${id} (${u.role}): ${nav} nav items, expected ${cfg.roles[u.role].pages.length}`);
         for (const r of cfg.roles[u.role].pages) { await go(page, r); if (!(await page.evaluate((r) => location.hash === '#/' + r, r))) ok(false, `${id}: page ${r} did not open`); }
@@ -63,11 +63,13 @@ async function main() {
       }
       const st = async (u) => (await api('state', u || 'a1')).json.corps[K].cands, by = (cs, id) => cs.find((x) => x.id === id);
       const deny = async (u, p, b, label) => { const r = await api(p, u, b); ok(r.status >= 400, `${label} denied (${r.status})`); };
-      const all = await st(), act = all.filter((x) => x.tstatus === 'בהכשרה'), t3 = act.find((x) => x.group === 3), t1 = act.find((x) => x.group === 1), s2 = act.filter((x) => x.group === 2)[0];
+      const all = await st(), act = all.filter((x) => x.tstatus === 'בהכשרה'), t3 = act.find((x) => x.group === 2), t1 = act.find((x) => x.group === 1), s2 = act.filter((x) => x.group === 1)[1]; // u4 = evaluator of team 2
       ok(all.every((x) => x.unit && x.target && x.intakeTs), 'every seeded soldier has a unit, a target and an intake date');
+      ok(all.every((x) => cfg.teams.includes(x.group)) && cfg.teams.length === 2 && Object.keys(cfg.corps).every((k) => cfg.users.filter((u) => u.role === 'מגבש/ת' && u.corps === k).length === 2), 'two teams and two evaluators per track');
+      ok(Object.keys(cfg.corps).every((k) => ['מ״פ', 'מ״מ', 'מ״כ'].every((r) => cfg.users.some((u) => u.role === r && u.corps === k))), 'training staff (מ״פ / מ״מ / מ״כ) exists in every track');
       // daily follow-up
-      ok((await api('daily', 'u4', { corps: K, id: t3.id, level: 2, text: 'בדיקה' })).status === 200, 'evaluator of team 3 writes a daily entry for a team-3 soldier');
-      await deny('u4', 'daily', { corps: K, id: t1.id, level: 1 }, 'evaluator of team 3 on a team-1 soldier');
+      ok((await api('daily', 'u4', { corps: K, id: t3.id, level: 2, text: 'בדיקה' })).status === 200, 'evaluator of team 2 writes a daily entry for a team-2 soldier');
+      await deny('u4', 'daily', { corps: K, id: t1.id, level: 1 }, 'evaluator of team 2 on a team-1 soldier');
       await deny('u1', 'daily', { corps: K, id: t1.id, level: 1 }, 'שלישות writing a daily entry');
       await deny('o1', 'daily', { corps: K, id: t1.id, level: 1 }, 'observer writing a daily entry');
       await api('daily', 'u4', { corps: K, id: t3.id, level: 0, text: 'עדכון' });
@@ -85,7 +87,7 @@ async function main() {
       // dismissal room: reasoned positions first, then the decision
       await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' }, 'dismissal before 2 positions were written in the room');
       await deny('u1', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'נימוק ארוך מספיק לבדיקה' }, 'שלישות writing a position in the dismissal room');
-      await deny('u4', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'נימוק ארוך מספיק לבדיקה' }, 'evaluator of team 3 writing a position on a team-1 soldier');
+      await deny('u4', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'נימוק ארוך מספיק לבדיקה' }, 'evaluator of team 2 writing a position on a team-1 soldier');
       await deny('u3', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'קצר' }, 'position without a real reason');
       await api('dismiss-opinion', 'u3', { corps: K, id: t1.id, stance: 'להשאיר במעקב', text: 'עדיין רואה פוטנציאל לשיפור' });
       await api('dismiss-opinion', 'u3', { corps: K, id: t1.id, stance: 'להדיח', text: 'אחרי שבוע נוסף אין שיפור בתפקוד' });
@@ -126,13 +128,30 @@ async function main() {
       const inr = await api('intake', 'u1', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], target: cfg.TARGETS[K][0], group: 1 });
       const nc = by(await st(), inr.json.id); ok(inr.status === 200 && nc.unit === 'גדס״ר גבעתי' && nc.tstatus === 'בהכשרה' && nc.profile == null && nc.lv.every((v) => v == null), 'שלישות intake: own unit, in training, unknown data stays unknown');
       await deny('u2', 'intake', { corps: K, name: 'בדיקה ב.', role: cfg.corps[K].roles[0], target: cfg.TARGETS[K][0], group: 1 }, 'שלישות of another track doing intake here');
-      // favorites (personal follow list) are private
-      await api('fav', 'u1', { corps: K, id: t3.id, on: true });
-      ok(((await api('state', 'u1')).json.corps[K].favs.u1 || []).length === 1 && Object.keys((await api('state', 'u3')).json.corps[K].favs || {}).length === 0, 'personal follow list is private to its owner');
+      await deny('u1', 'fav', { corps: K, id: t3.id, on: true }, 'removed personal follow list (♥)');
+      // training staff: מ״מ / מ״פ fill in the data; מ״כ only measured values and arrival status
+      const kc = 'k-recon-2', mm = 'm-recon-2', st0 = by(await st(), t3.id), sk = cfg.corps[K].stats[0].k, otherRec = cfg.RECS.find((r) => r !== st0.rec);
+      ok((await api('eval', kc, { corps: K, id: t3.id, stats: { [sk]: 77 }, rec: otherRec, obs: 'לא אמור להישמר' })).status === 200, 'מ״כ updates a measured value of an own-team soldier');
+      const st1 = by(await st(), t3.id); ok(st1.stats[sk] === 77 && st1.rec === st0.rec && st1.obs === st0.obs, 'מ״כ: only the measured value changed, the evaluator data did not');
+      await deny(kc, 'eval', { corps: K, id: t3.id, rec: otherRec }, 'מ״כ changing the recommendation only');
+      await deny(kc, 'daily', { corps: K, id: t3.id, level: 1 }, 'מ״כ writing a daily entry');
+      await deny(kc, 'periodic', { corps: K, id: t3.id, rec: 'ממשיך/ה', plan: 'להמשיך במסלול הרגיל' }, 'מ״כ writing a periodic status');
+      await deny(kc, 'dismiss-open', { corps: K, id: t3.id, reason: 'סיבה ארוכה מספיק לבדיקה' }, 'מ״כ opening a dismissal review');
+      ok((await api('attend', kc, { corps: K, id: t3.id, att: 'חסר/ה' })).status === 200 && by(await st(), t3.id).arrive.v === 'חסר/ה', 'מ״כ updates the arrival status');
+      await deny(kc, 'attend', { corps: K, id: s2.id, att: 'נוכח/ת' }, 'מ״כ of team 2 on a team-1 soldier');
+      ok((await api('eval', mm, { corps: K, id: t3.id, rec: otherRec })).status === 200 && by(await st(), t3.id).rec === otherRec, 'מ״מ fills in the evaluator-sheet data');
+      ok((await api('daily', mm, { corps: K, id: t3.id, level: 1 })).status === 200, 'מ״מ writes a daily entry for an own-team soldier');
+      await deny(mm, 'daily', { corps: K, id: s2.id, level: 1 }, 'מ״מ of team 2 on a team-1 soldier');
+      await deny(mm, 'dismiss-decide', { corps: K, id: t3.id, decision: 'נשאר/ת בהכשרה', note: 'נימוק ארוך מספיק לבדיקה' }, 'מ״מ deciding a dismissal');
+      const t1b = (await st()).find((x) => x.group === 1 && x.tstatus === 'בהכשרה'), pd = await api('daily', 'p-recon', { corps: K, id: t1b.id, level: 2 });
+      ok(pd.status === 200, 'מ״פ writes a daily entry on any team of the track ' + (pd.json.error || ''));
+      const pS = (await api('state', 'p-recon')).json, kS = (await api('state', kc)).json;
+      ok(pS.corps[K].cands.length === (await st()).length && pS.corps[I].cands.length === 0, 'מ״פ receives the own track only');
+      ok(kS.corps[K].cands.length > 0 && kS.corps[K].cands.every((c) => c.group === 2) && kS.log.length === 0, 'מ״כ receives only the own team');
       // the server sends every role only what it may see
       const sn = async (u) => (await api('state', u)).json, hqS = await sn('h1'), evS = await sn('u4'), shS = await sn('u1'), noS = await sn(''), full = await sn('a1');
       ok(hqS.corps[K].cands.length === full.corps[K].cands.length && hqS.corps[K].cands.every((c) => !c.name && !/^C-/.test(c.id) && !(c.daily || []).some((e) => e.text || e.by) && !(c.dismiss || []).length) && hqS.log.length === 0 && !JSON.stringify(hqS).includes(full.corps[K].cands[0].name), 'ראש מטה receives anonymous rows only: no names, notes, dismissal reasons or log');
-      ok(evS.corps[K].cands.length > 0 && evS.corps[K].cands.every((c) => c.group === 3) && evS.corps[I].cands.length === 0 && evS.log.length === 0, 'evaluator receives only the own team of the own track');
+      ok(evS.corps[K].cands.length > 0 && evS.corps[K].cands.every((c) => c.group === 2) && evS.corps[I].cands.length === 0 && evS.log.length === 0, 'evaluator receives only the own team of the own track');
       ok(shS.corps[K].cands.length === full.corps[K].cands.length && shS.corps[I].cands.length === 0 && shS.log.every((l) => !l.corps || l.corps === K), 'שלישות receives the own track only');
       ok(Object.values(noS.corps).every((c) => c.cands.length === 0) && noS.log.length === 0, 'an unknown user receives no soldier data');
       await deny('u1', 'settings', { period: 'חציון' }, 'שלישות changing settings');
@@ -141,7 +160,7 @@ async function main() {
       await deny('u1', 'pick', { corps: K, id: t3.id }, 'removed draft action');
       // UI flows
       const ev = await session(browser, 'u4'); await go(ev.page, 'daily');
-      ok(!(await ev.page.locator('main').innerText()).includes(t1.name) || t1.group === 3, 'evaluator sees only the own team in the daily screen');
+      ok(!(await ev.page.locator('main').innerText()).includes(t1.name) || t1.group === 2, 'evaluator sees only the own team in the daily screen');
       await ev.page.locator('[data-act=ddLv][data-v="1"]').nth(1).click(); await ev.page.waitForTimeout(300); await ev.page.click('[data-act=ddSave]'); await ev.page.waitForTimeout(600);
       ok(/נשמרו 1/.test(await ev.page.locator('#toast').innerText()), 'daily quick entry saved from the screen');
       const cm = await session(browser, 'u3'); await go(cm.page, 'roster');
@@ -155,6 +174,20 @@ async function main() {
       await cm.page.fill('#op-' + nc.id, 'נימוק שנכתב מתוך חדר ההדחה'); await cm.page.locator('#room-' + nc.id + ' [data-act=opSave]').click(); await cm.page.waitForTimeout(600);
       ok(/נרשם/.test(await cm.page.locator('#toast').innerText()) && await cm.page.locator('#room-' + nc.id + ' .opn').count() === 1, 'position written from the dismissal room and listed there');
       ok(await cm.page.locator('#room-' + nc.id + ' select[data-f=decision] option[disabled]').count() === 1, '"הודח/ה" is disabled in the room until enough positions exist');
+      // roster: filters per sub-topic, Excel export of the filtered rows, no ♥
+      await go(cm.page, 'roster'); await cm.page.fill('#rf-q', ''); await cm.page.waitForTimeout(300);
+      const role0 = cfg.corps[K].roles[0]; await cm.page.selectOption('select[data-f=role]', role0); await cm.page.waitForTimeout(300);
+      const rr = await cm.page.evaluate(() => { const k = corpsKey(), rows = rosterList(k), aoa = rosterAoa(k, rows); return { n: rows.length, roles: Array.from(new Set(rows.map((x) => x.role))), aoa: aoa.length, cols: aoa[0].length }; });
+      ok(rr.n > 0 && rr.roles.length === 1 && rr.roles[0] === role0 && rr.aoa === rr.n + 1 && rr.cols > 15, 'roster role filter + Excel rows match the filtered list (' + rr.n + ' rows, ' + rr.cols + ' columns)');
+      ok(await cm.page.locator('[data-act=rosterXlsx]').count() === 1 && await cm.page.locator('select[data-f=target]').count() === 1 && await cm.page.locator('.favbtn').count() === 0, 'roster has the export button and the track filter, and no ♥');
+      const [dl] = await Promise.all([cm.page.waitForEvent('download'), cm.page.click('[data-act=rosterXlsx]')]); ok(/\.xlsx$/.test(dl.suggestedFilename()), 'roster export downloads ' + dl.suggestedFilename());
+      await cm.page.click('[data-act=rfClear]'); await cm.page.waitForTimeout(300);
+      const dzR = (await st()).find((x) => x.tstatus === "בהכשרה" && !(x.dismiss || []).some((q) => q.status === "פתוחה") && x.id !== nc.id);
+      await cm.page.fill('#rf-q', dzR.id); await cm.page.waitForTimeout(300); await cm.page.locator('tr.clk .clink').first().click(); await cm.page.waitForSelector('.drawer');
+      await cm.page.click('.drawer [data-act=goOpen]'); await cm.page.waitForSelector('#room-open');
+      ok(await cm.page.evaluate(() => location.hash) === '#/dismiss', 'the dismissal-review button in the soldier file goes straight to the dismissal room');
+      await cm.page.fill('#open-reason', 'בדיקה שנפתחה ישירות מחדר ההדחה'); await cm.page.click('[data-act=openSave]'); await cm.page.waitForTimeout(600);
+      ok(await cm.page.locator('#room-' + dzR.id).count() === 1 && by(await st(), dzR.id).tstatus === 'בבדיקת הדחה', 'the review opened in the room and the soldier is listed there');
       // periodic screen: deadline, priority order, structured summary, continuous entry
       const ps = (await api('state', 'u3')).json; ok(ps.period.daysLeft >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(ps.period.end), 'period carries its end date and the days left');
       await deny('u3', 'periodic', { corps: K, id: nc.id, rec: 'ממשיך/ה', strong: 'חוזקה כלשהי בתקופה' }, 'structured status without "המלצה להמשך"');
@@ -170,11 +203,11 @@ async function main() {
       ok((await cm.page.evaluate(() => A.ui.cand)) === nextId && await cm.page.locator('#cf-plan').count() === 1 && !!by(await st(), firstId).reviews.find((r) => r.period === ps.period.key), '"save and next" saves and opens the next soldier without a status');
       await cm.page.click('[data-act=cfCancel]'); await cm.page.keyboard.press('Escape');
       // "my day" (evaluator) and the automatic weekly summary (commander)
-      const td = await session(browser, 'e-recon-2'); ok(await td.page.evaluate(() => location.hash) === '#/today' && /היום שלי – צוות 2/.test(await td.page.locator('main h1').innerText()), 'evaluator lands on "my day" for the own team');
+      const td = await session(browser, 'e-recon-1'); ok(await td.page.evaluate(() => location.hash) === '#/today' && /היום שלי – צוות 1/.test(await td.page.locator('main h1').innerText()), 'evaluator lands on "my day" for the own team');
       const pend0 = await td.page.evaluate(() => visible('recon').filter(isActive).filter((x) => !myToday(x)).length), tid = await td.page.locator('[data-act=tdLv]').first().getAttribute('data-id');
       await td.page.locator(`[data-act=tdLv][data-id="${tid}"][data-v="1"]`).first().click(); await td.page.waitForTimeout(600);
-      const tdE = by(await st(), tid).daily.filter((e) => e.byId === 'e-recon-2'); ok(tdE.length === 1 && tdE[0].level === 1 && (await td.page.evaluate(() => visible('recon').filter(isActive).filter((x) => !myToday(x)).length)) === pend0 - 1, 'one tap on "my day" saves the daily entry and shortens the waiting list');
-      ok(!(await td.page.locator('main').innerText()).includes(t1.name) || t1.group === 2, '"my day" shows only the evaluator\'s own team');
+      const tdE = by(await st(), tid).daily.filter((e) => e.byId === 'e-recon-1'); ok(tdE.length === 1 && tdE[0].level === 1 && (await td.page.evaluate(() => visible('recon').filter(isActive).filter((x) => !myToday(x)).length)) === pend0 - 1, 'one tap on "my day" saves the daily entry and shortens the waiting list');
+      ok(!(await td.page.locator('main').innerText()).includes(t1.name) || t1.group === 1, '"my day" shows only the evaluator\'s own team');
       await go(cm.page, 'weekly'); const wt = await cm.page.locator('main').innerText();
       ok(/סיכום שבועי/.test(wt) && /איך זה מחושב/.test(wt) && /בלי רישום השבוע/.test(wt), 'weekly summary renders with its calculation rule');
       const wk = await cm.page.evaluate(() => { const w = weekly('recon', ''); return { act: w.act.length, covered: w.covered, none: w.none.length, cmp: w.compared, bad: w.down.concat(w.up).filter((r) => r.a.length < 2 || r.b.length < 2).length, txt: weeklyText('recon', '') }; });
