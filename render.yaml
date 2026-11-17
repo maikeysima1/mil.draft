@@ -1,12 +1,32 @@
-# Render Blueprint – deploy with: New + > Blueprint > pick this repo
+# Render Blueprint – deploy with: New + > Blueprint > pick this repo.
+# Default: free plan, login with personal passwords (AUTH=1). On the free plan the disk is temporary: the database and all passwords
+# except the admin's are lost on every restart. For data that must survive, use the paid block at the bottom.
 services:
   - type: web
-    name: mil-draft
+    name: mil-track
     runtime: node
     plan: free
     buildCommand: echo "no build step"
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
-      - key: ACCESS_CODE        # optional: shared code required to open the app (set a value in the Render dashboard)
+      - key: NODE_VERSION       # the built-in SQLite needs Node 22.13+
+        value: "22"
+      - key: AUTH               # personal passwords, signed session cookie, lockout, security log
+        value: "1"
+      - key: TRUST_PROXY        # Render sits in front of the app: take the client address from the proxy header
+        value: "1"
+      - key: ADMIN_PASSWORD     # first password of the admin user (a1): at least 10 characters, letters and digits. You type it in the dashboard.
         sync: false
+      - key: DATA_KEY           # encrypts the database rows and the password file at rest. Generated once by Render - keep a copy.
+        generateValue: true
+      - key: ACCESS_CODE        # optional: one shared code asked before the login screen
+        sync: false
+# --- data that survives restarts (paid): change "plan: free" to "plan: starter" and add these lines under the service ---
+#    disk:
+#      name: mil-track-data
+#      mountPath: /var/data
+#      sizeGB: 1
+#   and add under envVars:
+#      - key: DATA_DIR
+#        value: /var/data

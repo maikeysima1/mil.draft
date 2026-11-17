@@ -13,6 +13,8 @@
 - `cyber-experiment.html` ו-`draft-experiment.html` הם תוצרי בנייה מועתקים; עורכים אותם רק בענף שלהם. `training-experiment.html` מפנה ל-`index.html` כדי שקישורים ישנים ימשיכו לעבוד.
 
 ## הרצה
+הרצה כאפליקציה שלמה (מחשב, Render או Docker): [`DEPLOY.md`](DEPLOY.md).
+
     npm start            # http://localhost:3000   (PORT=... לשינוי פורט)
 
 אין תלויות הרצה (Node בלבד). הגרסה העצמאית (`index.html`, GitHub Pages) רצה כולה בדפדפן ושומרת נתונים במכשיר.

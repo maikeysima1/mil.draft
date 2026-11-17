@@ -1,0 +1,13 @@
+.git
+.github
+.claude
+data
+dist
+docs
+scripts
+cyber
+*.html
+!public/index.html
+*.md
+Dockerfile
+docker-compose.yml
