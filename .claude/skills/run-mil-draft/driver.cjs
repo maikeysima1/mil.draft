@@ -126,9 +126,6 @@ async function main() {
       const inr = await api('intake', 'u1', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], target: cfg.TARGETS[K][0], group: 1 });
       const nc = by(await st(), inr.json.id); ok(inr.status === 200 && nc.unit === 'גדס״ר גבעתי' && nc.tstatus === 'בהכשרה' && nc.profile == null && nc.lv.every((v) => v == null), 'שלישות intake: own unit, in training, unknown data stays unknown');
       await deny('u2', 'intake', { corps: K, name: 'בדיקה ב.', role: cfg.corps[K].roles[0], target: cfg.TARGETS[K][0], group: 1 }, 'שלישות of another track doing intake here');
-      // favorites (personal follow list) are private
-      await api('fav', 'u1', { corps: K, id: t3.id, on: true });
-      ok(((await api('state', 'u1')).json.corps[K].favs.u1 || []).length === 1 && Object.keys((await api('state', 'u3')).json.corps[K].favs || {}).length === 0, 'personal follow list is private to its owner');
       // the server sends every role only what it may see
       const sn = async (u) => (await api('state', u)).json, hqS = await sn('h1'), evS = await sn('u4'), shS = await sn('u1'), noS = await sn(''), full = await sn('a1');
       ok(hqS.corps[K].cands.length === full.corps[K].cands.length && hqS.corps[K].cands.every((c) => !c.name && !/^C-/.test(c.id) && !(c.daily || []).some((e) => e.text || e.by) && !(c.dismiss || []).length) && hqS.log.length === 0 && !JSON.stringify(hqS).includes(full.corps[K].cands[0].name), 'ראש מטה receives anonymous rows only: no names, notes, dismissal reasons or log');
@@ -138,7 +135,6 @@ async function main() {
       await deny('u1', 'settings', { period: 'חציון' }, 'שלישות changing settings');
       ok((await api('settings', 'a1', { period: 'חציון' })).status === 200 && /חציון/.test((await api('state', 'a1')).json.period.label), 'admin switches the periodic status to half-year');
       await api('settings', 'a1', { period: 'רבעון' });
-      await deny('u1', 'pick', { corps: K, id: t3.id }, 'removed draft action');
       // UI flows
       const ev = await session(browser, 'u4'); await go(ev.page, 'daily');
       ok(!(await ev.page.locator('main').innerText()).includes(t1.name) || t1.group === 3, 'evaluator sees only the own team in the daily screen');
@@ -189,6 +185,51 @@ async function main() {
       await cm.page.click('[role=alertdialog] [data-act=askNo]'); await cm.page.waitForTimeout(300); ok(by(await st(), dz2.id).tstatus === 'בהכשרה' && await cm.page.locator('[role=alertdialog]').count() === 0, 'cancelling the dialog changes nothing');
       await cm.page.keyboard.press('Escape');
       const em = await api('daily', 'u4', { corps: K, id: by(await st(), s2.id).id, level: 1 }); ok(em.status >= 400 && /צוות/.test(em.json.error), 'error message says why and what is allowed: ' + em.json.error);
+      // ---- training staff: מ״כ / מ״מ / מ״פ ----
+      const U0 = 'גדס״ר גולני', teamSoldier = (await st()).find((x) => x.unit === U0 && x.group === 1 && x.tstatus === 'בהכשרה'), otherTeam = (await st()).find((x) => x.unit === U0 && x.group === 2 && x.tstatus === 'בהכשרה'), otherUnit = (await st()).find((x) => x.unit !== U0 && x.tstatus === 'בהכשרה');
+      const sqS = (await api('state', 'sq-recon-0-1')).json.corps[K].cands, plS = (await api('state', 'pl-recon-0-1')).json.corps[K].cands, cpS = (await api('state', 'cp-recon-0')).json.corps[K].cands;
+      ok(sqS.length > 0 && sqS.every((x) => x.unit === U0 && x.group === 1), 'מ״כ receives only the own team of the own unit');
+      ok(cpS.length > sqS.length && cpS.every((x) => x.unit === U0) && new Set(cpS.map((x) => x.group)).size > 1, 'מ״פ receives the whole own unit and nothing else');
+      ok(plS.length === sqS.length, 'מ״מ receives the own team');
+      const sk = cfg.corps[K].stats[0].k;
+      ok((await api('attend', 'sq-recon-0-1', { corps: K, id: teamSoldier.id, att: 'נוכח/ת' })).status === 200, 'מ״כ enters attendance for the own team');
+      ok((await api('stats', 'sq-recon-0-1', { corps: K, id: teamSoldier.id, stats: { [sk]: 12.5 } })).status === 200 && by(await st(), teamSoldier.id).stats[sk] === 12.5, 'מ״כ enters a measured value');
+      await deny('sq-recon-0-1', 'stats', { corps: K, id: teamSoldier.id, stats: {} }, 'measured data without any new value');
+      await deny('sq-recon-0-1', 'daily', { corps: K, id: teamSoldier.id, level: 1 }, 'מ״כ writing a daily entry (minimal editing only)');
+      await deny('sq-recon-0-1', 'periodic', { corps: K, id: teamSoldier.id, rec: 'ממשיך/ה', plan: 'המשך כרגיל בתקופה הבאה' }, 'מ״כ writing a periodic status');
+      await deny('sq-recon-0-1', 'dismiss-open', { corps: K, id: teamSoldier.id, reason: 'סיבה ארוכה מספיק לבדיקה' }, 'מ״כ opening a dismissal review');
+      await deny('sq-recon-0-1', 'attend', { corps: K, id: otherTeam.id, att: 'נוכח/ת' }, 'מ״כ entering attendance for another team');
+      ok((await api('daily', 'pl-recon-0-1', { corps: K, id: teamSoldier.id, level: 1, att: 'חסר/ה' })).status === 200 && (by(await st(), teamSoldier.id).attendance.slice(-1)[0] || {}).att === 'חסר/ה', 'מ״מ writes the daily entry, and the arrival status follows it');
+      await deny('pl-recon-0-1', 'daily', { corps: K, id: otherTeam.id, level: 1 }, 'מ״מ writing for another team');
+      await deny('cp-recon-0', 'daily', { corps: K, id: otherUnit.id, level: 1 }, 'מ״פ writing for another unit');
+      ok((await api('daily', 'cp-recon-0', { corps: K, id: otherTeam.id, level: 1 })).status === 200, 'מ״פ writes for any team of the own unit');
+      await deny('cp-recon-0', 'dismiss-decide', { corps: K, id: teamSoldier.id, decision: 'הודח/ה', note: 'ניסיון החלטה של מפקד פלוגה' }, 'מ״פ deciding a dismissal (training commander only)');
+      const sqp = await session(browser, 'sq-recon-0-1'); ok(await sqp.page.evaluate(() => location.hash) === '#/data' && await sqp.page.locator('.nav a').count() === 2, 'מ״כ lands on the measured-data screen and has two screens');
+      const inp = sqp.page.locator('#st-' + teamSoldier.id + '-' + sk); await inp.fill('11:30'.length ? '13.7' : ''); await inp.blur(); await sqp.page.waitForTimeout(600);
+      ok(by(await st(), teamSoldier.id).stats[sk] === 13.7, 'a value typed in the data screen is saved when leaving the field');
+      await sqp.page.locator(`[data-act=atSet][data-id="${teamSoldier.id}"][data-v="פטור רפואי"]`).click(); await sqp.page.waitForTimeout(500);
+      ok((by(await st(), teamSoldier.id).attendance.slice(-1)[0] || {}).att === 'פטור רפואי', 'attendance buttons save');
+      ok(await sqp.page.locator('.need').count() >= 0 && sqp.errs.length === 0, 'no page errors on the data screen ' + sqp.errs.join('|'));
+      // ---- click-through: from the soldier file straight to the dismissal room ----
+      const dz3 = (await st()).find((x) => x.tstatus === 'בהכשרה' && !(x.dismiss || []).some((q) => q.status === 'פתוחה') && x.id !== teamSoldier.id);
+      await go(cm.page, 'roster'); await cm.page.fill('#rf-q', dz3.id); await cm.page.waitForTimeout(400); await cm.page.locator('tr.clk .clink').first().click(); await cm.page.waitForSelector('.drawer');
+      await cm.page.click('[data-act=goOpenDis]'); await cm.page.waitForSelector('#open-dis'); ok(await cm.page.evaluate(() => location.hash) === '#/dismiss' && /פתיחת בדיקת הדחה/.test(await cm.page.locator('#open-dis').innerText()), 'opening a dismissal review from the soldier file leads straight to the dismissal room');
+      await cm.page.fill('#od-reason', 'שלושה ימים רצופים של קושי בעומס'); await cm.page.click('[data-act=odSave]'); await cm.page.waitForTimeout(700);
+      ok(!!(by(await st(), dz3.id).dismiss || []).find((q) => q.status === 'פתוחה') && await cm.page.locator('#room-' + dz3.id).count() === 1, 'the review is opened from the room and its card appears there');
+      // ---- dashboard breakdown + click-through cards ----
+      await go(cm.page, 'dash'); ok(await cm.page.locator('tr.srow2').count() > 5 && /צוות/.test(await cm.page.locator('tr.srow2.tmrow').first().innerText()), 'dashboard: inside every unit, rows per company and per team');
+      await cm.page.locator('.kpi.klink').nth(1).click(); await cm.page.waitForTimeout(400); ok(await cm.page.evaluate(() => location.hash) === '#/roster' && await cm.page.evaluate(() => (A.ui.rf || {}).st) === 'במעקב', 'clicking the dashboard card opens the roster filtered by that status');
+      // ---- roster filters + Excel export ----
+      await cm.page.evaluate(() => { A.ui.rf = {}; rerender(); }); await cm.page.waitForTimeout(300);
+      const tgt = cfg.TARGETS[K][0]; await cm.page.selectOption('select[data-f=target]', tgt); await cm.page.selectOption('select[data-f=role]', cfg.corps[K].roles[0]); await cm.page.waitForTimeout(300);
+      const filtered = await cm.page.evaluate(() => rosterList(corpsKey()).length), allN = (await st()).length; ok(filtered > 0 && filtered < allN && await cm.page.evaluate((t) => rosterList(corpsKey()).every((x) => x.target === t), tgt), 'roster filters by company and role together');
+      const [dl] = await Promise.all([cm.page.waitForEvent('download'), cm.page.click('[data-act=rosterXlsx]')]); ok(/^soldiers-recon\.xlsx$/.test(dl.suggestedFilename()), 'roster exports to Excel (' + dl.suggestedFilename() + ')');
+      ok(await cm.page.evaluate(() => { const e = rosterExport(corpsKey(), rosterList(corpsKey())); return e.main.length - 1 === rosterList(corpsKey()).length && e.main[0].includes('נתונים חסרים') && e.daily.length > 1 && e.per.length > 1; }), 'the export holds the filtered soldiers with all columns, daily entries and periodic statuses');
+      ok(await cm.page.locator('.favbtn, .favtoggle').count() === 0, 'the favorites heart is gone');
+      // ---- evaluator sheet: missing data stands out ----
+      const evp = await session(browser, 'e-recon-1'); await go(evp.page, 'eval'); ok(await evp.page.locator('.list-item.needs').count() >= 1, 'evaluator sheet: soldiers with missing data stand out in the list');
+      await evp.page.locator(`.list-item[data-id="${nc.id}"]`).click(); await evp.page.waitForTimeout(400); const nNeed = await evp.page.locator('.evgrid .need').count(); ok(nNeed >= 3 && /חסר בתיק/.test(await evp.page.locator('main').innerText()), 'evaluator sheet: the fields to fill are colored (' + nNeed + ')');
+      await evp.page.locator('#st-' + sk).fill('12.5'); await evp.page.waitForTimeout(200); ok(await evp.page.evaluate((id) => document.getElementById(id).classList.contains('need'), 'st-' + sk) === false, 'a filled field loses its color');
       const hq = await session(browser, 'h1'); ok(await hq.page.locator('.clink').count() === 0 && /מספרים מסכמים בלבד/.test(await hq.page.locator('main').innerText()), 'ראש מטה sees totals only, no names');
       ok(ev.errs.length + cm.errs.length + hq.errs.length === 0, 'no page errors in the UI flows ' + ev.errs.concat(cm.errs, hq.errs).join('|'));
       console.log(bad ? `\n${bad} FAILED` : '\nALL PASSED'); process.exitCode = bad ? 1 : 0;

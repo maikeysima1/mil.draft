@@ -70,6 +70,7 @@ function parseStat(s, raw) {
 // ---- permissions / routing ----
 const PAGES = [
   { id: 'today', name: 'היום שלי', icon: 'check' },
+  { id: 'data', name: 'מדדים והגעה', icon: 'clip' },
   { id: 'dash', name: 'תמונת מצב', icon: 'chart' },
   { id: 'weekly', name: 'סיכום שבועי', icon: 'cal' },
   { id: 'roster', name: 'חיילים בהכשרה', icon: 'users' },
@@ -98,7 +99,6 @@ const ICONS = {
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
   check: '<path d="m5 12 5 5 9-10"/>',
-  heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
 };
 const icon = (n, s) => `<svg class="ic" width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 // generic, fictitious avatar: deterministic cartoon face drawn from the candidate id (illustration only, not a real photo)
@@ -114,11 +114,6 @@ function avatar(x, size) {
   return `<svg class="avatar-img" width="${size || 40}" height="${size || 40}" viewBox="0 0 100 100" role="img" aria-label="תמונה להמחשה בלבד" style="border-radius:50%;flex:none"><rect width="100" height="100" fill="${bg}"/>${hairBack}<path d="M14 100q2-22 36-22t36 22z" fill="#4A5D3A"/><rect x="43" y="66" width="14" height="14" rx="5" fill="${skin}"/><ellipse cx="50" cy="52" rx="19" ry="22" fill="${skin}"/><ellipse cx="31" cy="54" rx="3.5" ry="5" fill="${skin}"/><ellipse cx="69" cy="54" rx="3.5" ry="5" fill="${skin}"/><g fill="${hair}">${hairTop}</g><circle cx="43" cy="53" r="2.4" fill="#222"/><circle cx="57" cy="53" r="2.4" fill="#222"/><path d="M39 ${brow ? 46 : 47}h8M53 ${brow ? 46 : 47}h8" stroke="${hair}" stroke-width="2.2" stroke-linecap="round"/>${m}</svg>`;
 }
 const R = () => A.cfg.roles[A.me.role];
-// favorites (private, per user): ♥ marks candidates a unit/commander wants to keep an eye on
-const favList = (k) => (cs(k).favs && A.me && cs(k).favs[A.me.id]) || [];
-const isFav = (k, id) => favList(k).includes(id);
-const heartIcon = (on, s) => `<svg class="ic" width="${s || 18}" height="${s || 18}" viewBox="0 0 24 24" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.heart}</svg>`;
-const favBtn = (k, id, cls) => { const on = isFav(k, id), t = on ? 'הסר מהמעקב האישי' : 'הוסף למעקב אישי'; return `<button class="favbtn ${on ? 'on' : ''} ${cls || ''}" data-act="fav" data-id="${id}" data-tip="${t}" aria-pressed="${on}" aria-label="${t}">${heartIcon(on)}</button>`; };
 // a candidate's name as a link to the candidate card (plain text for roles that cannot open candidate files)
 const candLink = (k, id, name) => (canFile() ? `<a href="#/room" class="clink" data-act="openCand" data-id="${esc(id)}" data-k="${esc(k)}" title="פתיחת תיק החייל/ת">${esc(name)}</a>` : esc(name));
 const roleOf = (name) => A.cfg.roles[name];
@@ -127,7 +122,7 @@ const homeFor = () => R().home;
 // can the current user run `action` on corps k (mirrors the server's canDo)
 const can = (action, k) => !!A.me && R().can.includes(action) && (R().scope === 'all' || A.me.corps === k);
 const canFile = () => !!A.me && (R().pages.includes('roster') || R().pages.includes('daily')); // may open candidate files
-const SCOPE_TXT = { all: 'כל המסלולים', corps: 'החיל שלו/ה', group: 'הצוות שלו/ה' };
+const SCOPE_TXT = { all: 'כל המסלולים', corps: 'המסלול שלו/ה', group: 'הצוות שלו/ה', team: 'הצוות שלו/ה ביחידה', unit: 'היחידה שלו/ה' };
 function route() { return (location.hash.replace('#/', '') || '').split('?')[0]; }
 function go(r) { location.hash = '#/' + r; }
 
@@ -178,7 +173,7 @@ function loginAuto() { // skip steps that have a single option
   const units = loginUnits(org); if (!A.ui.lunit && units.length === 1) A.ui.lunit = units[0];
   if (A.ui.lunit && !A.ui.sel) { const rs = loginRoles(org, A.ui.lunit); if (rs.length === 1) A.ui.sel = rs[0].id; }
 }
-const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', opine: 'נימוק בחדר ההדחה', decide: 'החלטה בהדחה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', fav: 'מעקב אישי', settings: 'הגדרות', factory: 'איפוס מערכת' };
+const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', opine: 'נימוק בחדר ההדחה', decide: 'החלטה בהדחה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', stats: 'נתוני מדידה', attend: 'סטטוס הגעה', settings: 'הגדרות', factory: 'איפוס מערכת' };
 function layerMatrix(selRole) {
   const rows = Object.keys(A.cfg.roles).sort((a, b) => roleOf(a).layer - roleOf(b).layer);
   return `<div class="card matrix"><h2>שכבות סיווג והרשאות</h2><div class="mut small" style="margin-bottom:10px">כל שכבה רואה ומפעילה רק את מה שנקבע לה (העמודות: חדר בחירה, לוח, דף מגבש, תמונת מצב, ייבוא). השרת בודק כל פעולה מחדש.</div>

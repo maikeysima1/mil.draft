@@ -32,6 +32,8 @@ const USERS = [
   { id: 'u6', title: 'שלישות קורס טיס – שלב בסיסי', unit: 'קורס טיס – שלב בסיסי', corps: 'pilot', role: 'שלישות', initial: 'ש' },
 ];
 const canDo = C.canDo;
+// who may see which soldier (the server filters by this; the screens only show what arrives)
+const canSee = (user, c, k) => { const R = C.ROLES[user.role]; if (R.scope === 'all') return true; if (user.corps !== k) return false; if (R.scope === 'corps') return true; if (R.scope === 'group') return c.group === user.group; if (R.scope === 'team') return c.unit === user.unit && c.group === user.group; if (R.scope === 'unit') return c.unit === user.unit; return false; };
 // one evaluator per team (צוות 1..4) in every corps: "מגבש צוות 1 אחראי על צוות 1" and so on
 const TEAMS = [1, 2, 3, 4];
 const LEGACY_EVAL = { 'recon|3': 'u4', 'special|2': 'u5', 'pilot|1': 'u7' };
@@ -121,6 +123,11 @@ const INITIALS = { 'מפקד/ת הכשרה': 'מה', 'ראש מטה': 'רמ', '�
  ['a1', 'dev', 'צוות פיתוח', 'מנהל/ת מערכת'], ['o1', 'dev', 'צוות פיתוח', 'צופה/ת']].forEach(([id, org, unit, role]) => USERS.push({ id, title: role + ' · ' + unit, unit, corps: null, role, initial: INITIALS[role], org, orgUnit: unit, roleLabel: role }));
 // the training commander is also a role under every unit (same permissions as before: scope = all corps)
 Object.keys(C.corps).forEach((k) => C.corps[k].units.map((u) => u.name).concat([C.corps[k].eventName]).forEach((unit, i) => USERS.push({ id: 'c-' + k + '-' + i, title: 'מפקד/ת הכשרה · ' + unit, unit, corps: null, role: 'מפקד/ת הכשרה', initial: 'מה', org: k, orgUnit: unit, roleLabel: 'מפקד/ת הכשרה' })));
+// training staff under every unit: מ״פ (1), מ״מ and מ״כ per team (1-4)
+Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
+  USERS.push({ id: 'cp-' + k + '-' + i, title: 'מ״פ · ' + u.name, unit: u.name, corps: k, role: 'מ״פ', initial: 'פ', org: k, orgUnit: u.name, roleLabel: 'מ״פ' });
+  TEAMS.forEach((g) => { USERS.push({ id: 'pl-' + k + '-' + i + '-' + g, title: 'מ״מ צוות ' + g + ' · ' + u.name, unit: u.name, corps: k, group: g, role: 'מ״מ', initial: 'מ', org: k, orgUnit: u.name, roleLabel: 'מ״מ צוות ' + g }); USERS.push({ id: 'sq-' + k + '-' + i + '-' + g, title: 'מ״כ צוות ' + g + ' · ' + u.name, unit: u.name, corps: k, group: g, role: 'מ״כ', initial: 'כ', org: k, orgUnit: u.name, roleLabel: 'מ״כ צוות ' + g }); });
+}));
 // login structure for corps users: חיל ← יחידה ← תפקיד
 USERS.forEach((u) => { if (u.org) return; u.org = u.corps; u.orgUnit = u.unit; u.roleLabel = u.role === 'מגבש/ת' ? 'מגבש/ת צוות ' + u.group : u.role; });
 const userById = (id) => USERS.find((u) => u.id === id);
@@ -176,7 +183,7 @@ function seedCands() {
 // ---------- training model + api (shared with the standalone build) ----------
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-const SCHEMA = 9;
+const SCHEMA = 10;
 const DAY = 86400e3;
 const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ts)); // YYYY-MM-DD, Israel time
 // current review period: quarter (רבעון) or half-year (חציון)
@@ -205,13 +212,15 @@ function moveTrack(k, c, k2, unit) {
   const src = state.corps[k], dst = state.corps[k2], cf2 = cfg(k2), cf1 = cfg(k);
   const max = dst.cands.reduce((m, x) => Math.max(m, parseInt(x.id.slice(cf2.prefix.length), 10) || 0), 0) + 1, stats = {};
   cf2.stats.forEach((s2) => { const s1 = cf1.stats.find((x) => x.l === s2.l && x.u === s2.u); stats[s2.k] = s1 && c.stats[s1.k] != null ? c.stats[s1.k] : null; });
-  src.cands = src.cands.filter((x) => x.id !== c.id); Object.keys(src.favs || {}).forEach((u) => { src.favs[u] = src.favs[u].filter((id) => id !== c.id); });
+  src.cands = src.cands.filter((x) => x.id !== c.id); 
   c.prevIds = (c.prevIds || []).concat([c.id]); c.prevRole = c.role; c.id = cf2.prefix + max; c.role = cf2.roles[0]; c.skills = cf2.skills[c.role] || []; c.stats = stats; c.lv = cf2.traits.map(() => null);
   c.unit = unit; c.target = ''; c.tstatus = 'בהכשרה'; dst.cands.push(c);
 }
+// one attendance record per soldier per day (the last one written wins); the daily form writes it too
+function setAttend(c, att, user) { const d = dayKey(Date.now()), e = { d, att, by: user.title, byId: user.id, ts: Date.now() }, i = c.attendance.findIndex((x) => x.d === d); if (i >= 0) c.attendance[i] = e; else c.attendance.push(e); if (c.attendance.length > 400) c.attendance.shift(); }
 const logAct = (k, text) => { const e = { ts: Date.now(), corps: k, text }; state.log.push(e); if (state.log.length > 1500) state.log.shift(); if (typeof onLog === 'function') onLog(e); }; // onLog: the host may keep the full history (the database does)
 // training fields of a soldier who enters the system (event 1: intake)
-function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; return c; }
+function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.attendance = []; c.reviews = []; c.dismiss = []; return c; }
 // demo history so the screens are not empty: a few daily entries, last period's status, and three soldiers in / after a dismissal review
 function seedTraining(k, cands) {
   const cf = cfg(k), now = Date.now(); let s = 5 + k.length;
@@ -223,7 +232,7 @@ function seedTraining(k, cands) {
     for (let d = 24; d >= 1; d--) { // the last weeks, with gaps like real life (today is left empty on purpose)
       if (rnd() < (d > 4 ? 0.4 : 0.2)) continue;
       const lvl = Math.max(0, Math.min(2, base + (rnd() < 0.25 ? -1 : (rnd() > 0.8 ? 1 : 0)))), att = rnd() < 0.06 ? C.TR.attend[2] : C.TR.attend[0];
-      c.daily.push({ d: dayKey(now - d * DAY), ts: now - d * DAY, by: ev, byId: 'seed', level: lvl, att, text: lvl === 2 ? cf.good[top] : (lvl === 0 ? cf.weak[weak] : 'יום אימונים רגיל, עמד/ה במשימות.') });
+      c.attendance.push({ d: dayKey(now - d * DAY), att, by: ev, byId: 'seed', ts: now - d * DAY }); c.daily.push({ d: dayKey(now - d * DAY), ts: now - d * DAY, by: ev, byId: 'seed', level: lvl, att, text: lvl === 2 ? cf.good[top] : (lvl === 0 ? cf.weak[weak] : 'יום אימונים רגיל, עמד/ה במשימות.') });
     }
     if (i % 5 !== 4) c.reviews.push({ period: prev.key, label: prev.label, ts: now - (60 + Math.floor(rnd() * 20)) * DAY, by: 'מפקד/ת הכשרה · ' + c.unit, lv: c.lv.slice(), rec: sum <= 4 ? C.TR.periodRec[1] : C.TR.periodRec[0], summary: (cf.traits.filter((t, j) => c.lv[j] === 2).length ? 'חוזקות: ' + cf.traits.filter((t, j) => c.lv[j] === 2).join(', ') + '. ' : 'תפקוד תקין ברוב התחומים. ') + (cf.traits.filter((t, j) => c.lv[j] === 0).length ? 'לחיזוק: ' + cf.traits.filter((t, j) => c.lv[j] === 0).join(', ') + '.' : 'אין תחום חריג לחיזוק.') });
     if (sum <= 4 && c.reviews.length) c.tstatus = 'במעקב';
@@ -237,13 +246,13 @@ function seedTraining(k, cands) {
 function freshState() {
   const cands = seedCands();
   const st = { corps: {}, log: [], version: 1, schema: SCHEMA, settings: { period: 'רבעון' } };
-  Object.keys(C.corps).forEach((k) => { const needs = {}; C.corps[k].units.forEach((u) => { needs[u.name] = u.need || 0; }); st.corps[k] = { cands: seedTraining(k, cands[k]), favs: {}, needs }; });
+  Object.keys(C.corps).forEach((k) => { const needs = {}; C.corps[k].units.forEach((u) => { needs[u.name] = u.need || 0; }); st.corps[k] = { cands: seedTraining(k, cands[k]), needs }; });
   return st;
 }
 // What a client receives - decided on the server, by role. The screen is not the security boundary:
 //   scope 'all' with file access (admin, training commander) -> everything
 //   scope 'corps' (שלישות)                                   -> the own track only
-//   scope 'group' (evaluator)                                 -> the own team in the own track only, no activity log
+//   scope 'group' / 'team' / 'unit' (evaluator, מ״מ / מ״כ, מ״פ) -> only the soldiers of the own team / own team in the own unit / own unit; no activity log
 //   no file access (ראש מטה, observer)                        -> anonymous rows with just what the totals need: no names, notes, reasons or log
 //   unknown user                                              -> nothing
 // Favorites are private: every client only gets its own list.
@@ -251,14 +260,14 @@ function makeSnapshot(userId) {
   const now = Date.now(), user = userById(userId), R = user ? C.ROLES[user.role] : null, today = dayKey(now), per = periodOf(now, periodType());
   const files = !!R && (R.pages.includes('roster') || R.pages.includes('daily'));
   const o = { version: state.version, serverNow: now, today, period: per, settings: { period: periodType() }, corps: {}, log: [] };
-  const anon = (c, i) => ({ id: 'x' + i, name: '', unit: c.unit, group: c.group, tstatus: c.tstatus, lv: [], stats: {}, daily: (c.daily || []).some((e) => e.d === today) ? [{ d: today, ts: now, level: 1 }] : [], reviews: (c.reviews || []).some((r) => r.period === per.key) ? [{ period: per.key, ts: now }] : [], dismiss: [], transfers: (c.transfers || []).map(() => ({})) });
+  const anon = (c, i) => ({ id: 'x' + i, name: '', unit: c.unit, target: c.target, group: c.group, tstatus: c.tstatus, attendance: [], lv: [], stats: {}, daily: (c.daily || []).some((e) => e.d === today) ? [{ d: today, ts: now, level: 1 }] : [], reviews: (c.reviews || []).some((r) => r.period === per.key) ? [{ period: per.key, ts: now }] : [], dismiss: [], transfers: (c.transfers || []).map(() => ({})) });
   Object.keys(C.corps).forEach((k) => {
-    const cst = state.corps[k], f = cst.favs || {}, mine = userId && f[userId] ? { [userId]: f[userId] } : {};
+    const cst = state.corps[k];
     let cands = [];
-    if (R && (R.scope === 'all' || user.corps === k)) cands = !files ? cst.cands.map(anon) : (R.scope === 'group' ? cst.cands.filter((c) => c.group === user.group) : cst.cands);
-    o.corps[k] = { cands, favs: files ? mine : {}, needs: cst.needs || {} };
+    if (R && (R.scope === 'all' || user.corps === k)) cands = !files ? cst.cands.map(anon) : cst.cands.filter((c) => canSee(user, c, k));
+    o.corps[k] = { cands, needs: cst.needs || {} };
   });
-  if (R && files && R.scope !== 'group') o.log = state.log.filter((l) => R.scope === 'all' || !l.corps || l.corps === user.corps).slice(-400).reverse();
+  if (R && files && ['all', 'corps'].includes(R.scope)) o.log = state.log.filter((l) => R.scope === 'all' || !l.corps || l.corps === user.corps).slice(-400).reverse();
   return o;
 }
 // every state-changing action. Throws Error(hebrew message) on a refused action; returns the response object.
@@ -269,7 +278,7 @@ function apiHandle(p, b, user) {
   const whoCan = (action) => Object.keys(C.ROLES).filter((r) => C.ROLES[r].can.includes(action)).join(' / ');
   const allow = (action, msg) => { needCorps(); if (!canDo(user, action, k)) throw new Error(msg || 'הפעולה שמורה ל' + whoCan(action)); };
   const cst = C.corps[k] ? state.corps[k] : null, cf = C.corps[k] ? cfg(k) : null;
-  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (user.role === 'מגבש/ת' && c.group !== user.group) throw new Error(c.name + ' בצוות ' + c.group + '. אפשר לפעול רק על חיילי צוות ' + user.group); return c; };
+  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (!canSee(user, c, k)) throw new Error(c.name + (c.unit ? ' ב' + c.unit : '') + ', צוות ' + c.group + '. ' + (C.ROLES[user.role].scope === 'unit' ? 'אפשר לפעול רק על חיילי ' + user.unit : 'אפשר לפעול רק על חיילי ' + (C.ROLES[user.role].scope === 'team' ? user.unit + ', צוות ' + user.group : 'צוות ' + user.group))); return c; };
   const mustBeActive = (c) => { if (!isActive(c)) throw new Error(c.name + ' כבר אינו/ה בהכשרה (' + c.tstatus + ')'); };
   const text = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 
@@ -322,10 +331,17 @@ function apiHandle(p, b, user) {
     });
     logAct(k, `${user.title} גייס/ה ${added} מועמדים מקובץ`); save(); return { ok: true, added, skipped };
   }
-  if (p === 'fav') {
-    allow('fav', 'אין הרשאה לסמן מעקב אישי'); soldier(b.id);
-    cst.favs = cst.favs || {}; const set = new Set(cst.favs[user.id] || []); if (b.on) set.add(b.id); else set.delete(b.id); cst.favs[user.id] = Array.from(set);
-    save(); return { ok: true };
+  // ---- attendance (arrival status) and measured data: the minimal things a squad commander may enter ----
+  if (p === 'attend') {
+    allow('attend', 'הגעה מוזנת ע״י סגל ההכשרה'); const rows = Array.isArray(b.rows) ? b.rows.slice(0, 300) : [b]; let n = 0;
+    rows.forEach((r) => { const c = soldier(r.id); mustBeActive(c); if (!T.attend.includes(r.att)) throw new Error('יש לבחור סטטוס הגעה: ' + T.attend.join(' / ')); setAttend(c, r.att, user); n++; });
+    logAct(k, `${user.title} עדכנ/ה הגעה ל-${n} חיילים`); save(); return { ok: true, saved: n };
+  }
+  if (p === 'stats') {
+    allow('stats', 'נתוני מדידה מוזנים ע״י סגל ההכשרה'); const c = soldier(b.id); mustBeActive(c); const changed = [];
+    cf.stats.forEach((s) => { if (!(s.k in (b.stats || {}))) return; const v = num(b.stats[s.k]); if (v == null) return; if (v < 0 || v > 100000) throw new Error('ערך לא סביר ב' + s.l); if (c.stats[s.k] !== v) { c.stats[s.k] = v; changed.push(s.l); } });
+    if (!changed.length) throw new Error('לא הוזן ערך חדש. שדה ריק משאיר את הנתון כפי שהיה');
+    c.statsBy = user.title; c.statsTs = Date.now(); logAct(k, `${user.title} עדכנ/ה ל${c.name}: ${changed.join(', ')}`); save(); return { ok: true, changed };
   }
   // ---- daily follow-up: one entry per author per soldier per day (a second save the same day replaces the first) ----
   if (p === 'daily') {
@@ -336,7 +352,7 @@ function apiHandle(p, b, user) {
       const level = parseInt(r.level, 10); if (![0, 1, 2].includes(level)) throw new Error('יש לבחור רמה יומית ל' + c.name);
       const e = { d, ts: now, by: user.title, byId: user.id, level, att: T.attend.includes(r.att) ? r.att : T.attend[0], text: text(r.text, 500) };
       const i = c.daily.findIndex((x) => x.d === d && x.byId === user.id); if (i >= 0) c.daily[i] = e; else c.daily.push(e);
-      if (c.daily.length > 400) c.daily.shift(); n++;
+      if (c.daily.length > 400) c.daily.shift(); setAttend(c, e.att, user); n++;
     });
     logAct(k, `${user.title} הזינ/ה מעקב יומי ל-${n} חיילים`); save(); return { ok: true, saved: n };
   }
@@ -434,9 +450,9 @@ const DATA_MIGRATIONS = {};
 function normalize(st) {
   st.settings = Object.assign({ period: 'רבעון' }, st.settings); st.log = st.log || []; st.version = st.version || 1; st.corps = st.corps || {};
   Object.keys(C.corps).forEach((k) => {
-    const c = st.corps[k] || (st.corps[k] = { cands: [], favs: {}, needs: {} }); c.cands = c.cands || []; c.favs = c.favs || {}; c.needs = c.needs || {};
+    const c = st.corps[k] || (st.corps[k] = { cands: [], needs: {} }); c.cands = c.cands || []; delete c.favs; c.needs = c.needs || {};
     C.corps[k].units.forEach((u) => { if (c.needs[u.name] == null) c.needs[u.name] = u.need || 0; });
-    c.cands.forEach((x) => { x.daily = x.daily || []; x.reviews = x.reviews || []; x.dismiss = x.dismiss || []; if (!x.tstatus) x.tstatus = 'בהכשרה'; });
+    c.cands.forEach((x) => { x.daily = x.daily || []; x.attendance = x.attendance || []; x.reviews = x.reviews || []; x.dismiss = x.dismiss || []; if (!x.tstatus) x.tstatus = 'בהכשרה'; });
   });
   return st;
 }
@@ -490,7 +506,7 @@ function sqliteStore() {
           const seen = new Set(), now = Date.now();
           Object.keys(st.corps).forEach((k) => {
             st.corps[k].cands.forEach((c, pos) => { const key = k + '|' + c.id, plain = pos + '|' + JSON.stringify(c); seen.add(key); if (last.get(key) !== plain) { q.up.run(k, c.id, pos, sealJson(c), now); last.set(key, plain); } });
-            const d = { favs: st.corps[k].favs || {}, needs: st.corps[k].needs || {} }, ds = JSON.stringify(d); if (lastCs.get(k) !== ds) { q.cs.run(k, sealJson(d)); lastCs.set(k, ds); }
+            const d = { needs: st.corps[k].needs || {} }, ds = JSON.stringify(d); if (lastCs.get(k) !== ds) { q.cs.run(k, sealJson(d)); lastCs.set(k, ds); }
           });
           Array.from(last.keys()).forEach((key) => { if (!seen.has(key)) { const i = key.indexOf('|'); q.del.run(key.slice(0, i), key.slice(i + 1)); last.delete(key); } });
           const m = JSON.stringify([st.settings, SCHEMA]); if (m !== lastMeta) { q.meta.run('settings', sealJson(st.settings)); q.meta.run('data_version', String(SCHEMA)); lastMeta = m; }

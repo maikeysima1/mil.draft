@@ -414,3 +414,16 @@ details.tl summary{cursor:pointer}
 
 /* confirmation dialog */
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff;box-shadow:none}
+
+/* data completeness, click-through cards, dashboard breakdown */
+.need{outline:2px solid var(--orange);outline-offset:1px;background:var(--orange-l)!important;border-radius:10px}
+.seg.need{outline-offset:2px}
+.klink{cursor:pointer;position:relative;transition:.15s}.klink:hover,.klink:focus-visible{border-color:var(--green);box-shadow:0 8px 20px -14px rgba(0,0,0,.5)}
+.klink .go{display:block;margin-top:6px;font-size:12px;font-style:normal;color:var(--green);font-weight:700}
+.clinkp{text-decoration:none;cursor:pointer}.clinkp:hover{filter:brightness(.95);text-decoration:underline}
+.srow2 td{background:color-mix(in srgb,var(--bg2) 60%,transparent);font-size:13px}.srow2 td:first-child{padding-inline-start:28px}
+.srow2.tmrow td:first-child{padding-inline-start:44px}
+.urow td{border-top:2px solid var(--line)}
+@keyframes flashBox{0%{box-shadow:0 0 0 0 rgba(198,61,50,.6)}100%{box-shadow:0 0 0 14px rgba(198,61,50,0)}}
+.flash{animation:flashBox 1.2s ease-out 2}
+.list-item.needs{border-inline-start:4px solid var(--orange);background:color-mix(in srgb,var(--orange-l) 55%,var(--card))}
