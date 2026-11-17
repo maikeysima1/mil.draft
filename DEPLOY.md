@@ -17,6 +17,13 @@
     AUTH=1 ADMIN_PASSWORD='סיסמה-ארוכה-123' npm start       # כניסה עם סיסמה אישית
 
 ## 2. Render – קישור שאחרים נכנסים אליו
+
+**הדרך הקצרה (בלי מפתחות ובלי הגדרות ידניות):** לפתוח את הקישור הזה, להתחבר ל-Render עם GitHub, להקליד ADMIN_PASSWORD וללחוץ Apply:
+
+    https://render.com/deploy?repo=https://github.com/maikeysima1/mil.draft
+
+הקישור קורא את `render.yaml` מהריפו (הוא ציבורי), כך שאין צורך ב-API key. הצעדים המפורטים למטה הם אותו דבר, דרך הממשק.
+
 הקובץ `render.yaml` כבר מגדיר כניסה עם סיסמה, הצפנה והגדרות proxy.
 
 1. נרשמים ב-https://render.com עם חשבון GitHub.

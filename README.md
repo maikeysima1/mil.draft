@@ -15,6 +15,8 @@
 ## הרצה
 הרצה כאפליקציה שלמה (מחשב, Render או Docker): [`DEPLOY.md`](DEPLOY.md).
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/maikeysima1/mil.draft)
+
     npm start            # http://localhost:3000   (PORT=... לשינוי פורט)
 
 אין תלויות הרצה (Node בלבד). הגרסה העצמאית (`index.html`, GitHub Pages) רצה כולה בדפדפן ושומרת נתונים במכשיר.
