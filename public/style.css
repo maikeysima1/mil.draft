@@ -440,3 +440,4 @@ td.num,th.num{text-align:center;font-variant-numeric:tabular-nums}
 .msg{background:var(--bg2);border-radius:12px;padding:7px 11px;max-width:88%;align-self:flex-start}
 .msg.me{background:var(--green-l);align-self:flex-end}
 .msg.call{background:var(--orange-l);border:1px solid color-mix(in srgb,var(--orange) 40%,transparent);max-width:100%;align-self:stretch}
+.demosw{display:inline-flex;gap:6px;align-items:center}.demosw select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit}

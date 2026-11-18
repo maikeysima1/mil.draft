@@ -156,7 +156,7 @@ function shell(inner) {
     <div class="usercard"><span class="avatar" style="${roleStyle(A.me.role)[0]}">${esc(A.me.initial)}</span><span class="uc-t"><b>${esc(A.me.title)}</b><small>${esc(A.me.unit)}</small></span></div>
     <div class="row" style="gap:6px"><span class="lbadge">שכבה ${R().layer} · ${esc(A.me.role)}</span></div></div></aside>
    <div class="content"><header class="tbar"><div class="bar-t"><span class="bar-page">${page ? page.name : ''}</span><span class="bar-sub">${esc(scope)}</span></div>
-    <div class="bar-r">${installBox(true)}<span class="live"><i></i>חי</span><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="החלפת ערכת נושא">${icon(dark ? 'sun' : 'moon', 18)}</button>${A.auth ? `<button class="iconbtn" data-act="pwOpen" title="שינוי סיסמה" aria-label="שינוי סיסמה">${icon('key', 18)}</button>` : ''}<button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header>
+    <div class="bar-r">${demoSwitch()}${installBox(true)}<span class="live"><i></i>חי</span><button class="iconbtn" data-act="theme" title="מצב כהה / בהיר" aria-label="החלפת ערכת נושא">${icon(dark ? 'sun' : 'moon', 18)}</button>${A.auth ? `<button class="iconbtn" data-act="pwOpen" title="שינוי סיסמה" aria-label="שינוי סיסמה">${icon('key', 18)}</button>` : ''}<button class="iconbtn" data-act="logout" title="החלפת משתמש" aria-label="החלפת משתמש">${icon('out', 18)}</button></div></header>
     <main>${inner}</main></div>${A.ui.pw ? pwView(false) : ''}</div>`;
 }
 
@@ -257,6 +257,15 @@ function restoreFocus(k) {
 }
 function rerender(live) { if (live && A.ui.ask) return; /* don't wipe an open edit dialog on live updates */ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; const y = window.scrollY; render(); window.scrollTo(0, y); }); }
 
+// demo mode only (no passwords): jump to another role of the same track without logging out - to see what each role can open
+function demoSwitch() {
+  if (A.auth || !A.cfg) return '';
+  const k = typeof corpsKey === 'function' ? corpsKey() : null, seen = new Set();
+  const us = A.cfg.users.filter((u) => (!k || u.corps === k || (!u.corps && (u.org === k || u.org === 'dev' || u.org === 'hr'))) && A.cfg.roles[u.role]).filter((u) => { const key = u.role + '|' + (u.group || ''); if (seen.has(key) && u.id !== A.me.id) return false; seen.add(key); return true; });
+  if (!us.some((u) => u.id === A.me.id)) us.unshift(A.me);
+  return `<label class="demosw" title="החלפת תפקיד להדגמה"><span class="mut small">תפקיד:</span><select data-chg="switchUser" aria-label="החלפת תפקיד להדגמה">${us.map((u) => `<option value="${esc(u.id)}" ${u.id === A.me.id ? 'selected' : ''}>${esc(u.role + (u.group ? ' צוות ' + u.group : ''))}</option>`).join('')}</select></label>`;
+}
+
 // ---- global actions ----
 const ACTIONS = {
   lorg: (d) => { A.ui.lorg = d.v; A.ui.lunit = null; A.ui.sel = null; rerender(); },
@@ -271,6 +280,7 @@ const ACTIONS = {
     } else { A.me = u; localStorage.setItem('mil-user', A.me.id); }
     connectSSE(); await refresh(); go(homeFor()); render();
   },
+  switchUser: async (d, t) => { const u = A.cfg.users.find((x) => x.id === t.value); if (!u || A.auth) return; A.me = u; localStorage.setItem('mil-user', u.id); A.ui = {}; connectSSE(); await refresh(); go(homeFor()); render(); },
   reload: () => location.reload(),
   askOk: () => { const a = A.ui.ask; A.ui.ask = null; rerender(); if (a) a.resolve(true); },
   askNo: () => { const a = A.ui.ask; A.ui.ask = null; rerender(); if (a) a.resolve(false); },
