@@ -91,10 +91,12 @@ const ROLES = {
 };
 // evaluators and training-staff teams per track (each team has one evaluator, one מ״מ and one מ״כ)
 const TEAMS = [1, 2];
-const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
+// a user may carry an own scope (user.scope) that narrows the role's scope: 'unit' = only the soldiers of the own unit (user.unit) inside the own track
+const scopeOf = (user) => (user && user.scope) || (ROLES[user && user.role] || {}).scope;
+const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (scopeOf(user) === 'all' || user.corps === k); };
 // Login step 1 ("חיל"): the five entrances. Users carry org / orgUnit / roleLabel for steps 1-3.
 const ORGS = [
   { key: 'recon', label: 'יח״טיות חטיבתיות' }, { key: 'special', label: 'יחידות מיוחדות' }, { key: 'pilot', label: 'קורס טיס' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
-module.exports={TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
+module.exports={scopeOf,TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};

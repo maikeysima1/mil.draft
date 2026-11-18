@@ -126,8 +126,8 @@ Object.keys(C.corps).forEach((k) => C.corps[k].units.forEach((u, i) => {
 const INITIALS = { 'מפקד/ת הכשרה': 'מה', 'ראש מטה': 'רמ', 'צופה/ת': 'צו', 'מנהל/ת מערכת': 'מנ' };
 [['u3', 'hr', 'משאבי אנוש', 'מפקד/ת הכשרה'], ['hr-0-1', 'hr', 'משאבי אנוש', 'ראש מטה'], ['hr-1-0', 'hr', 'מטה', 'מפקד/ת הכשרה'], ['h1', 'hr', 'מטה', 'ראש מטה'], ['hr-2-0', 'hr', 'ראש אכ״א', 'מפקד/ת הכשרה'], ['hr-2-1', 'hr', 'ראש אכ״א', 'ראש מטה'],
  ['a1', 'dev', 'צוות פיתוח', 'מנהל/ת מערכת'], ['o1', 'dev', 'צוות פיתוח', 'צופה/ת']].forEach(([id, org, unit, role]) => USERS.push({ id, title: role + ' · ' + unit, unit, corps: null, role, initial: INITIALS[role], org, orgUnit: unit, roleLabel: role }));
-// the training commander is also a role under every unit (same permissions as before: scope = all corps)
-Object.keys(C.corps).forEach((k) => C.corps[k].units.map((u) => u.name).concat([C.corps[k].eventName]).forEach((unit, i) => USERS.push({ id: 'c-' + k + '-' + i, title: 'מפקד/ת הכשרה · ' + unit, unit, corps: null, role: 'מפקד/ת הכשרה', initial: 'מה', org: k, orgUnit: unit, roleLabel: 'מפקד/ת הכשרה' })));
+// the training commander is also a role under every unit: under a real unit he sees ONLY that unit's soldiers (scope 'unit'); under the event ("גיבוש ...") he sees the whole track
+Object.keys(C.corps).forEach((k) => C.corps[k].units.map((u) => u.name).concat([C.corps[k].eventName]).forEach((unit, i) => USERS.push({ id: 'c-' + k + '-' + i, title: 'מפקד/ת הכשרה · ' + unit, unit, corps: k, scope: i < C.corps[k].units.length ? 'unit' : 'corps', role: 'מפקד/ת הכשרה', initial: 'מה', org: k, orgUnit: unit, roleLabel: 'מפקד/ת הכשרה' })));
 // login structure for corps users: חיל ← יחידה ← תפקיד
 USERS.forEach((u) => { if (u.org) return; u.org = u.corps; u.orgUnit = u.unit; u.roleLabel = u.group ? u.role + ' צוות ' + u.group : u.role; });
 const userById = (id) => USERS.find((u) => u.id === id);
@@ -266,21 +266,22 @@ function makeSnapshot(userId) {
   Object.keys(C.corps).forEach((k) => {
     const cst = state.corps[k], f = cst.favs || {}, mine = userId && f[userId] ? { [userId]: f[userId] } : {};
     let cands = [];
-    if (R && (R.scope === 'all' || user.corps === k)) cands = !files ? cst.cands.map(anon) : (R.scope === 'group' ? cst.cands.filter((c) => c.group === user.group) : cst.cands);
+    const sc = C.scopeOf(user);
+    if (R && (sc === 'all' || user.corps === k)) cands = !files ? cst.cands.map(anon) : (sc === 'group' ? cst.cands.filter((c) => c.group === user.group) : (sc === 'unit' ? cst.cands.filter((c) => c.unit === user.unit) : cst.cands));
     o.corps[k] = { cands, favs: files ? mine : {}, needs: cst.needs || {} };
   });
-  if (R && files && R.scope !== 'group') o.log = state.log.filter((l) => R.scope === 'all' || !l.corps || l.corps === user.corps).slice(-400).reverse();
+  const sc0 = C.scopeOf(user); if (R && files && sc0 !== 'group' && sc0 !== 'unit') o.log = state.log.filter((l) => sc0 === 'all' || !l.corps || l.corps === user.corps).slice(-400).reverse(); // the activity log names soldiers of every unit, so unit / team scopes get none
   return o;
 }
 // every state-changing action. Throws Error(hebrew message) on a refused action; returns the response object.
 function apiHandle(p, b, user) {
   const k = b.corps, T = C.TR;
   const OOPS = 'משהו השתבש – רעננו את הדף ונסו שוב';
-  const needCorps = () => { if (!C.corps[k]) throw new Error(OOPS); if (C.ROLES[user.role].scope !== 'all' && user.corps !== k) throw new Error('התפקיד שלך מוגבל למסלול ' + (C.corps[user.corps] ? C.corps[user.corps].corps : 'אחר')); };
+  const needCorps = () => { if (!C.corps[k]) throw new Error(OOPS); if (C.scopeOf(user) !== 'all' && user.corps !== k) throw new Error('התפקיד שלך מוגבל למסלול ' + (C.corps[user.corps] ? C.corps[user.corps].corps : 'אחר')); };
   const whoCan = (action) => Object.keys(C.ROLES).filter((r) => C.ROLES[r].can.includes(action)).join(' / ');
   const allow = (action, msg) => { needCorps(); if (!canDo(user, action, k)) throw new Error(msg || 'הפעולה שמורה ל' + whoCan(action)); };
   const cst = C.corps[k] ? state.corps[k] : null, cf = C.corps[k] ? cfg(k) : null;
-  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (C.ROLES[user.role].scope === 'group' && c.group !== user.group) throw new Error(c.name + ' בצוות ' + c.group + '. אפשר לפעול רק על חיילי צוות ' + user.group); return c; };
+  const soldier = (id) => { const c = cst.cands.find((x) => x.id === id); if (!c) throw new Error('החייל/ת לא נמצא/ה במסלול הזה – ייתכן שעבר/ה מסלול. רעננו את הדף'); if (C.scopeOf(user) === 'group' && c.group !== user.group) throw new Error(c.name + ' בצוות ' + c.group + '. אפשר לפעול רק על חיילי צוות ' + user.group); if (C.scopeOf(user) === 'unit' && c.unit !== user.unit) throw new Error(c.name + ' ביחידה אחרת. אפשר לפעול רק על חיילי ' + user.unit); return c; };
   const mustBeActive = (c) => { if (!isActive(c)) throw new Error(c.name + ' כבר אינו/ה בהכשרה (' + c.tstatus + ')'); };
   const text = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 
@@ -689,7 +690,7 @@ http.createServer(async (req, res) => {
       }
       if (p === '/api/audit-event') { // sensitive reads/exports done in the browser are reported here (only whitelisted events; logged in AUTH mode)
         const ev = ['view-candidate', 'export'].includes(b.ev) ? b.ev : null; if (!ev) return json(res, 400, { error: 'אירוע לא מוכר' });
-        const k0 = C.corps[b.corps] ? b.corps : '', scope = C.ROLES[user.role].scope;
+        const k0 = C.corps[b.corps] ? b.corps : '', scope = C.scopeOf(user);
         if (AUTH && !(user._mustChange) && (scope === 'all' || user.corps === k0)) audit(ev, user.id, req, true, [k0, String(b.what || '').slice(0, 80)].filter(Boolean).join(' · '));
         return json(res, 200, { ok: true });
       }

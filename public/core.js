@@ -122,7 +122,9 @@ const roleOf = (name) => A.cfg.roles[name];
 const allowed = (p) => !!A.me && R().pages.includes(p.id);
 const homeFor = () => R().home;
 // can the current user run `action` on corps k (mirrors the server's canDo)
-const can = (action, k) => !!A.me && R().can.includes(action) && (R().scope === 'all' || A.me.corps === k);
+const myScope = () => (A.me && A.me.scope) || R().scope;
+const unitOnly = () => !!A.me && myScope() === 'unit'; // a unit commander: only the soldiers of the own unit
+const can = (action, k) => !!A.me && R().can.includes(action) && (myScope() === 'all' || A.me.corps === k);
 const canFile = () => !!A.me && (R().pages.includes('roster') || R().pages.includes('daily')); // may open candidate files
 const SCOPE_TXT = { all: 'כל המסלולים', corps: 'החיל שלו/ה', group: 'הצוות שלו/ה' };
 function route() { return (location.hash.replace('#/', '') || '').split('?')[0]; }

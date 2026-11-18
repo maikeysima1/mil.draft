@@ -15,6 +15,7 @@ echo "OK index.html is up to date"
 DATA_DIR="$DIR" PORT="$PORT" node server.js >"$DIR/server.log" 2>&1 &
 timeout 30 bash -c "until curl -sf http://localhost:$PORT/healthz >/dev/null; do sleep 0.3; done" || { cat "$DIR/server.log"; exit 1; }
 node .claude/skills/run-mil-draft/driver.cjs smoke --base "http://localhost:$PORT/"
+node scripts/scope-test.cjs "http://localhost:$PORT"
 
 # authentication mode (AUTH=1): separate server on a separate data dir
 lsof -ti:"$PORT" -sTCP:LISTEN | xargs -r kill; sleep 1
