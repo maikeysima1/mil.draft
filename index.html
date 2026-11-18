@@ -432,6 +432,18 @@ label.need,div.need{color:var(--navy)}
 td.num,th.num{text-align:center;font-variant-numeric:tabular-nums}
 .stkcell{min-width:180px}
 .big-pct{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+
+/* live meeting room */
+.partbox{margin-top:12px;background:var(--bg2);border-radius:12px;padding:10px 12px}
+.parts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:8px}
+.part{display:flex;gap:8px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.part .pd{width:9px;height:9px;border-radius:50%;background:#94A3B8;margin-top:6px;flex:none}
+.part.on{border-color:color-mix(in srgb,var(--green) 40%,var(--line))}.part.on .pd{background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 25%,transparent)}
+.chatbox{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:12px}
+.chat{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.msg{background:var(--bg2);border-radius:12px;padding:7px 11px;max-width:88%;align-self:flex-start}
+.msg.me{background:var(--green-l);align-self:flex-end}
+.msg.call{background:var(--orange-l);border:1px solid color-mix(in srgb,var(--orange) 40%,transparent);max-width:100%;align-self:stretch}
 </style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 <script>try{localStorage.getItem('x')}catch(e){var _m={};Object.defineProperty(window,'localStorage',{value:{getItem:function(k){return k in _m?_m[k]:null},setItem:function(k,v){_m[k]=String(v)},removeItem:function(k){delete _m[k]}}})}</script>
@@ -538,15 +550,16 @@ const TARGETS = { recon: ['פלס״ר (סיור)', 'פלחה״ן (חבלה וה�
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'opine', 'complete', 'regroup', 'evalbulk', 'settings', 'factory'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, מעקב, נימוקים בחדר ההדחה, צורכי היחידות, הגדרות, משתמשים ואיפוס. ההחלטה על הדחה אינה שלו/ה – היא של מפקד/ת ההכשרה בלבד.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'eval'], desc: 'מזין/ה מעקב יומי וסטטוס תקופתי, פותח/ת בדיקת הדחה, רושם/ת נימוק בחדר ההדחה ומחליט/ה, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'opine', 'discuss', 'complete', 'regroup', 'evalbulk', 'settings', 'factory'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, מעקב, נימוקים בחדר ההדחה, צורכי היחידות, הגדרות, משתמשים ואיפוס. ההחלטה על הדחה אינה שלו/ה – היא של מפקד/ת ההכשרה בלבד.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'discuss', 'decide', 'complete', 'eval'], desc: 'מזין/ה מעקב יומי וסטטוס תקופתי, פותח/ת בדיקת הדחה, רושם/ת נימוק בחדר ההדחה ומחליט/ה, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
   // training staff (סגל הכשרה): the platoon / company commanders are responsible for filling in the data; the squad commander may only update basic data
-  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: מעקב יומי, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ונימוק בחדר ההדחה. ההחלטה על הדחה – של מפקד/ת ההכשרה.' },
-  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: מעקב יומי, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ונימוק בחדר ההדחה.' },
+  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'discuss', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: מעקב יומי, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ונימוק בחדר ההדחה. ההחלטה על הדחה – של מפקד/ת ההכשרה.' },
+  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'discuss', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: מעקב יומי, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ונימוק בחדר ההדחה.' },
   'מ״כ': { layer: 5, scope: 'group', home: 'eval', staff: true, pages: ['roster', 'eval'], can: ['evalmini', 'attend'], desc: 'סגל הכשרה – מפקד/ת כיתה. רואה את חיילי הצוות, ויכול/ה לעדכן רק נתונים בסיסיים: מדדים (קליעה, ריצה וכו׳) וסטטוס הגעה. שאר הנתונים באחריות המ״מ / המ״פ.' },
+  'מפקד/ת יחידה': { layer: 2, scope: 'corps', home: 'dash', pages: ['dash', 'weekly', 'roster', 'dismiss', 'eval', 'log'], can: ['opine', 'discuss'], desc: 'מפקד/ת היחידה. רואה את תמונת המצב והתיקים של המסלול, נכנס/ת לחדר ההדחה, רושם/ת נימוק ומשתתף/ת בדיון החי. ההחלטה על הדחה – של מפקד/ת ההכשרה בלבד.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה בלבד בתמונת המצב של כל החילות. אין גישה לתיקי החיילים.' },
   'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
-  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss', 'opine'], desc: 'אחראי/ת על צוות אחד: מעקב יומי על חיילי הצוות, דף מגבש, פתיחת בדיקת הדחה ורישום נימוק בחדר ההדחה על חיילי הצוות. ההחלטה היא של מפקד/ת ההכשרה.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss', 'opine', 'discuss'], desc: 'אחראי/ת על צוות אחד: מעקב יומי על חיילי הצוות, דף מגבש, פתיחת בדיקת הדחה ורישום נימוק בחדר ההדחה על חיילי הצוות. ההחלטה היא של מפקד/ת ההכשרה.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה במספרים המסכמים בתמונת המצב בלבד, ללא שמות, תיקים או הרשאות פעולה.' },
 };
 // evaluators and training-staff teams per track (each team has one evaluator, one מ״מ and one מ״כ)
@@ -579,6 +592,7 @@ const CORPS_SHORT_S = {}; Object.keys(C.corps).forEach((k) => { CORPS_SHORT_S[k]
 Object.keys(C.corps).forEach((k) => TEAMS.forEach((g) => USERS.push({ id: LEGACY_EVAL[k + '|' + g] || 'e-' + k + '-' + g, title: 'מגבש/ת צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: 'מגבש/ת', initial: 'מג' })));
 // training staff (סגל הכשרה) in every corps: one מ״פ for the whole track, and one מ״מ and one מ״כ per team
 const STAFF_INI = { 'מ״פ': 'מפ', 'מ״מ': 'ממ', 'מ״כ': 'מכ' };
+Object.keys(C.corps).forEach((k) => USERS.push({ id: 'uc-' + k, title: 'מפקד/ת יחידה · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, role: 'מפקד/ת יחידה', initial: 'מי' }));
 Object.keys(C.corps).forEach((k) => {
   USERS.push({ id: 'p-' + k, title: 'מ״פ · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, role: 'מ״פ', initial: STAFF_INI['מ״פ'] });
   ['מ״מ', 'מ״כ'].forEach((r) => TEAMS.forEach((g) => USERS.push({ id: (r === 'מ״מ' ? 'm-' : 'k-') + k + '-' + g, title: r + ' צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: r, initial: STAFF_INI[r] })));
@@ -720,6 +734,10 @@ function seedCands() {
 }
 
 // ---------- training model + api (shared with the standalone build) ----------
+// ---- live room: who is in the dismissal room right now (memory only, never saved) and the discussion thread ----
+const PRES = {}; // PRES[corps][userId] = last ping (ms)
+const PRES_TTL = 45e3;
+function presenceMap() { const now = Date.now(), out = {}; Object.keys(PRES).forEach((k) => { Object.keys(PRES[k]).forEach((id) => { if (now - PRES[k][id] > PRES_TTL) { delete PRES[k][id]; return; } (out[k] || (out[k] = [])).push(id); }); }); return out; }
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 const SCHEMA = 10;
@@ -927,6 +945,21 @@ function apiHandle(p, b, user) {
     d.opinions = d.opinions || []; const o = { byId: user.id, by: user.title, stance: b.stance, text: txt, ts: Date.now() }, i = d.opinions.findIndex((x) => x.byId === user.id);
     if (i >= 0) d.opinions[i] = o; else d.opinions.push(o);
     logAct(k, `${user.title} רשמ/ה נימוק בחדר ההדחה על ${c.name}: ${b.stance}`); save(); return { ok: true };
+  }
+  // live room: heartbeat ("I am in the room") and the discussion thread of an open review
+  if (p === 'room-ping') {
+    needCorps(); if (!C.ROLES[user.role].pages.includes('dismiss')) throw new Error('אין גישה לחדר ההדחה');
+    const was = !!(PRES[k] && PRES[k][user.id] && Date.now() - PRES[k][user.id] < PRES_TTL);
+    if (b.leave) { if (PRES[k]) delete PRES[k][user.id]; } else (PRES[k] || (PRES[k] = {}))[user.id] = Date.now();
+    if (was === !b.leave) return { ok: true, presence: presenceMap() }; // nothing changed
+    if (typeof onPresence === 'function') onPresence(); return { ok: true, presence: presenceMap() };
+  }
+  if (p === 'dismiss-msg') {
+    allow('discuss', 'הדיון בחדר ההדחה פתוח למפקדים הרלוונטיים'); const c = soldier(b.id), d = openDismiss(c);
+    if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה');
+    const txt = text(b.text, 600); if (txt.length < 2) throw new Error('יש לכתוב הודעה');
+    d.chat = d.chat || []; d.chat.push({ byId: user.id, by: user.title, role: user.role, text: txt, kind: b.kind === 'call' ? 'call' : 'msg', ts: Date.now() }); if (d.chat.length > 200) d.chat.shift();
+    save(); return { ok: true };
   }
   if (p === 'dismiss-decide') {
     allow('decide', 'הדחה והחלטה בבדיקה – רק באישור מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
@@ -1291,6 +1324,7 @@ function connectSSE() {
   A.es.onmessage = async (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { await refresh(); rerender(true); }
+    if (m.type === 'presence') { A.presence = m.presence || {}; rerender(true); }
   };
 }
 // ---- small UI pieces ----
@@ -1649,6 +1683,37 @@ const stanceCls = (s) => STANCE_CLS[TR().stances.indexOf(s)] || 'p-gray';
 const tally = (d) => TR().stances.map((s) => ({ s, n: (d.opinions || []).filter((o) => o.stance === s).length }));
 const tallyHtml = (d) => tally(d).filter((t) => t.n).map((t) => `<span class="pill ${stanceCls(t.s)}">${t.n} ${esc(t.s)}</span>`).join(' ') || '<span class="mut small">עדיין אין נימוקים</span>';
 function opinionsHtml(d) { return (d.opinions || []).slice().sort((a, b) => a.ts - b.ts).map((o) => `<div class="opn"><div class="row" style="gap:8px"><span class="pill ${stanceCls(o.stance)}">${esc(o.stance)}</span><b class="small">${esc(o.by)}</b><span class="mut small">${fmtD(o.ts)} · ${agoTxt(o.ts)}</span></div><div style="margin-top:3px">${esc(o.text)}</div></div>`).join(''); }
+// ---- live meeting room: who is in the room right now, who has written an opinion, and a discussion thread per review ----
+function roomPing(leave) {
+  const k = corpsKey(); if (!k) return;
+  api('room-ping', { corps: k, leave: !!leave }).then((r) => { if (r && r.presence && JSON.stringify(r.presence) !== JSON.stringify(A.presence || {})) { A.presence = r.presence; if (!leave) rerender(true); } }).catch(() => { /* a missed heartbeat is harmless */ });
+}
+function startPing() {
+  if (A.pingT) return; roomPing();
+  A.pingT = setInterval(() => { if (route() !== 'dismiss' || !A.me) { clearInterval(A.pingT); A.pingT = null; roomPing(true); return; } roomPing(); }, 20000);
+}
+const DECIDER = 'מפקד/ת הכשרה';
+function participantsOf(k, x) { // the people who belong in this review: the soldier's team, company, unit and training commander
+  const us = A.cfg.users, org = (u) => (u.corps || u.org) === k;
+  const pick = (r, f) => us.filter((u) => u.role === r && org(u) && (!f || f(u)));
+  const cmd = pick(DECIDER, (u) => u.orgUnit === x.unit);
+  return [].concat(cmd.length ? cmd : pick(DECIDER).slice(0, 1), pick('מפקד/ת יחידה'), pick('מ״פ'), pick('מ״מ', (u) => u.group === x.group), pick('מגבש/ת', (u) => u.group === x.group));
+}
+function participantsHtml(k, x, d) {
+  const on = new Set((A.presence || {})[k] || []), ops = d.opinions || [], list = participantsOf(k, x), ids = new Set(list.map((u) => u.id));
+  const extra = [...on].filter((id) => !ids.has(id)).map((id) => A.cfg.users.find((u) => u.id === id)).filter(Boolean);
+  const chip = (u) => { const o = ops.find((q) => q.byId === u.id), isOn = on.has(u.id), dec = u.role === DECIDER; return `<div class="part ${isOn ? 'on' : ''}"><i class="pd" aria-hidden="true"></i><span><b>${esc(u.title)}</b><span class="mut small"> · ${isOn ? 'בחדר' : 'לא מחובר/ת'}</span><div class="small">${dec ? '<span class="pill p-blue">מחליט/ה</span> ' : ''}${o ? `<span class="pill ${stanceCls(o.stance)}">${esc(o.stance)}</span>` : (dec ? '<span class="mut">ממתין/ה לנימוקים</span>' : '<span class="mut">טרם נימק/ה</span>')}</div></span></div>`; };
+  const nOn = list.filter((u) => on.has(u.id)).length;
+  return `<div class="partbox"><div class="row spread"><b>משתתפים בחדר</b><span class="mut small">${nOn} מתוך ${list.length} מחוברים עכשיו${extra.length ? ' · צופים: ' + esc(extra.map((u) => u.title).join(', ')) : ''}</span></div><div class="parts">${list.map(chip).join('')}</div></div>`;
+}
+function chatHtml(k, x, d) {
+  const ms = d.chat || [], draft = (A.ui.chat || {})[x.id] || '';
+  return `<div class="chatbox"><h3 style="margin:0 0 6px">דיון בחדר <span class="mut small" style="font-weight:400">· הדיון נשמר בתיק הבדיקה</span></h3><div class="chat" id="chat-${x.id}">${ms.map((m) => `<div class="msg ${m.byId === A.me.id ? 'me' : ''} ${m.kind === 'call' ? 'call' : ''}"><div class="small"><b>${esc(m.by)}</b> <span class="mut">· ${agoTxt(m.ts)}</span></div><div>${esc(m.text)}</div></div>`).join('') || '<div class="mut small">הדיון עוד לא התחיל. כתבו הודעה, כל המשתתפים מחוברים רואים אותה מיד.</div>'}</div>${can('discuss', k) ? `<div class="row" style="margin-top:8px;align-items:flex-end"><textarea id="chatin-${x.id}" data-inp="chatText" data-id="${x.id}" rows="2" placeholder="הודעה לחדר…" style="flex:1;min-width:200px">${esc(draft)}</textarea><button class="btn sm" data-act="chatSend" data-id="${x.id}">שליחה</button></div>` : '<div class="mut small" style="margin-top:6px">צפייה בלבד.</div>'}</div>`;
+}
+function decideStatus(k, x, d) { // for everyone who cannot decide: what is the state of the review and what happens next
+  const n = (d.opinions || []).length, min = TR().minOpinions, ready = n >= min;
+  return `<div class="decide"><b>החלטה – של מפקד/ת ההכשרה</b><div class="mut small" style="margin-top:4px">${ready ? `נרשמו ${n} נימוקים – הבדיקה מוכנה להחלטה. ממתינים למפקד/ת ההכשרה.` : `נרשמו ${n} מתוך ${min} נימוקים נדרשים. אחרי שנרשמים מספיק נימוקים אפשר לזמן את מפקד/ת ההכשרה להחלטה.`}</div>${can('discuss', k) ? `<div class="row" style="margin-top:8px"><button class="btn sec sm" data-act="chatCall" data-id="${x.id}">זימון מפקד/ת ההכשרה להחלטה</button></div>` : ''}<div class="mut small" style="margin-top:6px">כדי להחליט בהדגמה: להיכנס כמפקד/ת הכשרה.</div></div>`;
+}
 function roomCard(k, x) {
   const d = openDis(x), ops = d.opinions || [], mine = ops.find((o) => o.byId === A.me.id), min = TR().minOpinions;
   const week = (x.daily || []).filter((e) => daysAgo(e.ts) <= 7), wk = TR().daily.map((w, j) => week.filter((e) => e.level === j).length), rv = lastRv(x);
@@ -1656,15 +1721,18 @@ function roomCard(k, x) {
   const dc = (A.ui.dec || {})[x.id] || {}, canDismiss = ops.length >= min;
   return `<div class="card room" id="room-${x.id}">
     <div class="row spread" style="align-items:flex-start"><span class="row" style="gap:12px;flex-wrap:nowrap">${avatar(x, 56)}<span><b style="font-size:19px">${candLink(k, x.id, x.name)}</b><div class="mut small"><bdi>${x.id}</bdi> · ${esc(x.role)} · ${esc(x.unit)} · צוות ${x.group}</div></span></span><span class="row" style="gap:6px">${tallyHtml(d)}<span class="pill ${canDismiss ? 'p-blue' : 'p-gray'}">${ops.length} מתוך ${min} נימוקים נדרשים</span></span></div>
+    ${participantsHtml(k, x, d)}
     <div class="grid g2" style="margin-top:12px"><div><div class="mut small">סיבת הבדיקה · ${esc(d.openedBy)} · ${fmtD(d.openedTs)}</div><div>${esc(d.reason)}</div></div>
      <div><div class="mut small">נתונים מהתיק</div><div class="row" style="gap:6px">${week.length ? TR().daily.map((w, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(w)}</span>` : '')).join('') + '<span class="mut small">ב-7 הימים האחרונים</span>' : '<span class="mut small">אין מעקב יומי ב-7 הימים האחרונים</span>'}</div><div style="margin-top:4px">${rv ? `<span class="pill p-gray">${esc(rv.label)}: ${esc(rv.rec)}</span>` : '<span class="mut small">אין סטטוס תקופתי</span>'}</div></div></div>
     <div style="margin-top:12px"><div class="mut small">מעקב יומי – 4 שבועות אחרונים</div>${trend(x, 420)}</div>
     <h3 style="margin:14px 0 4px">נימוקי המפקדים (${ops.length})</h3>${opinionsHtml(d) || '<div class="mut">עדיין לא נרשמו נימוקים לבדיקה הזו.</div>'}
     ${can('opine', k) ? `<div class="opform"><b>${mine ? 'הנימוק שלי (עדכון)' : 'הנימוק שלי'}</b><div class="seg" style="margin:6px 0">${TR().stances.map((w) => `<button type="button" class="${stance === w ? 'on' : ''}" data-act="opStance" data-id="${x.id}" data-v="${esc(w)}">${esc(w)}</button>`).join('')}</div><textarea id="op-${x.id}" data-inp="opText" data-id="${x.id}" rows="2" placeholder="עובדות ומקרים שמבססים את העמדה שלך" style="width:100%">${esc(txt)}</textarea><div class="row" style="margin-top:6px"><button class="btn sec sm" data-act="opSave" data-id="${x.id}">${mine ? 'עדכון הנימוק' : 'רישום הנימוק'}</button></div></div>` : ''}
-    ${can('decide', k) ? `<div class="decide"><b>החלטה – באישור מפקד/ת ההכשרה בלבד</b><div class="mut small">${canDismiss ? 'נרשמו מספיק נימוקים. ההחלטה נרשמת בתיק עם הנימוק שלך.' : 'כדי להדיח נדרשים לפחות ' + min + ' נימוקים. אפשר כבר להחליט להשאיר.'}</div><div class="small" style="margin-top:4px">במקרה של הדחה: ${(() => { const pl = nextPlace(k, x); return pl ? `<b>מעבר אוטומטי ל${esc(placeTxt(k, pl))}</b> <span class="mut">(${pl.k === k ? 'דרגה אחת מתחת באותו מסלול' : 'אין מקום פתוח במסלול – מעבר למסלול הבא'}, צורך פתוח ${needOf(pl.k, pl.unit)})</span>` : `<b>יציאה ל${esc(cf(k).fallback)}</b> <span class="mut">(אין יחידה עם צורך פתוח במסלול הזה ובמסלולים שאחריו)</span>`; })()}</div><div class="row" style="margin-top:6px;align-items:flex-end"><label>החלטה<select data-chg="decSet" data-f="decision" data-id="${x.id}"><option value="">בחרו…</option>${TR().decisions.map((o) => `<option ${o === dc.decision ? 'selected' : ''} ${o === TR().decisions[2] && !canDismiss ? 'disabled' : ''}>${esc(o)}</option>`).join('')}</select></label><label style="flex:1;min-width:220px">נימוק ההחלטה<input type="text" id="dec-${x.id}" data-inp="decSet" data-f="note" data-id="${x.id}" value="${esc(dc.note || '')}" placeholder="חובה" style="width:100%"></label><button class="btn sm" data-act="decSave" data-id="${x.id}">שמירת ההחלטה</button></div></div>` : ''}
+    ${chatHtml(k, x, d)}
+    ${can('decide', k) ? `<div class="decide"><b>החלטה – באישור מפקד/ת ההכשרה בלבד</b><div class="mut small">${canDismiss ? 'נרשמו מספיק נימוקים. ההחלטה נרשמת בתיק עם הנימוק שלך.' : 'כדי להדיח נדרשים לפחות ' + min + ' נימוקים. אפשר כבר להחליט להשאיר.'}</div><div class="small" style="margin-top:4px">במקרה של הדחה: ${(() => { const pl = nextPlace(k, x); return pl ? `<b>מעבר אוטומטי ל${esc(placeTxt(k, pl))}</b> <span class="mut">(${pl.k === k ? 'דרגה אחת מתחת באותו מסלול' : 'אין מקום פתוח במסלול – מעבר למסלול הבא'}, צורך פתוח ${needOf(pl.k, pl.unit)})</span>` : `<b>יציאה ל${esc(cf(k).fallback)}</b> <span class="mut">(אין יחידה עם צורך פתוח במסלול הזה ובמסלולים שאחריו)</span>`; })()}</div><div class="row" style="margin-top:6px;align-items:flex-end"><label>החלטה<select data-chg="decSet" data-f="decision" data-id="${x.id}"><option value="">בחרו…</option>${TR().decisions.map((o) => `<option ${o === dc.decision ? 'selected' : ''} ${o === TR().decisions[2] && !canDismiss ? 'disabled' : ''}>${esc(o)}</option>`).join('')}</select></label><label style="flex:1;min-width:220px">נימוק ההחלטה<input type="text" id="dec-${x.id}" data-inp="decSet" data-f="note" data-id="${x.id}" value="${esc(dc.note || '')}" placeholder="חובה" style="width:100%"></label><button class="btn sm" data-act="decSave" data-id="${x.id}">שמירת ההחלטה</button></div></div>` : decideStatus(k, x, d)}
    </div>`;
 }
 SCREENS.dismiss = (k) => {
+  startPing();
   const c = cf(k), vis = visible(k), open = vis.filter(openDis).sort((a, b) => openDis(a).openedTs - openDis(b).openedTs), closed = []; vis.forEach((x) => (x.dismiss || []).filter((d) => d.status === 'נסגרה').forEach((d) => closed.push({ x, d }))); closed.sort((a, b) => b.d.decidedTs - a.d.decidedTs);
   A.ui.list = open.map((x) => x.id);
   return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר הדחה – ${esc(c.label)}</h1><div class="mut small">כל מפקד/ת רושם/ת נימוק על כל מועמד/ת להדחה, ועל בסיס הנימוקים מתקבלת ההחלטה. פתיחת בדיקה אינה הדחה.${can('opine', k) || can('decide', k) ? '' : ' צפייה בלבד.'}</div></div>
@@ -1674,6 +1742,9 @@ SCREENS.dismiss = (k) => {
    <div class="card"><h2>בדיקות שנסגרו (${closed.length})</h2>${closed.map(({ x, d }) => `<details class="tl"><summary><span class="row spread" style="display:inline-flex;width:calc(100% - 24px)"><span><b>${candLink(k, x.id, x.name)}</b> <span class="mut small">${esc(x.unit)}</span></span><span class="row"><span class="pill ${d.decision === TR().decisions[2] ? 'p-gray' : 'p-green'}">${esc(d.decision)}</span>${d.movedTo ? `<span class="pill p-orange">עבר/ה ל${esc(d.movedTo)}</span>` : (d.exitTo ? `<span class="pill p-gray">יצא/ה ל${esc(d.exitTo)}</span>` : '')}<span class="mut small">${fmtD(d.decidedTs)} · ${esc(d.decidedBy)} · ${(d.opinions || []).length} נימוקים</span></span></span></summary><div class="mut small" style="margin-top:6px">סיבת הבדיקה: ${esc(d.reason)}</div><div style="margin:2px 0 6px"><b>נימוק ההחלטה:</b> ${esc(d.note)}</div>${opinionsHtml(d)}</details>`).join('') || '<span class="mut">עדיין לא נסגרו בדיקות.</span>'}</div>`;
 };
 Object.assign(ACTIONS, {
+  chatText: (d, t) => { (A.ui.chat || (A.ui.chat = {}))[d.id] = t.value; },
+  chatSend: async (d) => { const k = corpsKey(), t = ((A.ui.chat || {})[d.id] || '').trim(); if (!t) return; try { await api('dismiss-msg', { corps: k, id: d.id, text: t }); delete A.ui.chat[d.id]; rerender(); } catch (x) { /* toast shown */ } },
+  chatCall: async (d) => { const k = corpsKey(), c = candOf(k, d.id); try { await api('dismiss-msg', { corps: k, id: d.id, kind: 'call', text: 'מזמינ/ה את מפקד/ת ההכשרה להחלטה בעניין ' + c.name + '. נרשמו ' + (openDis(c).opinions || []).length + ' נימוקים.' }); toast('הזימון נשלח לחדר'); rerender(); } catch (x) { /* toast shown */ } },
   openReason: (d, t) => { A.ui.openReason = t.value; },
   openCancel: () => { A.ui.openFor = null; A.ui.openReason = ''; rerender(); },
   openSave: async (d) => { const k = corpsKey(), c = candOf(k, d.id); try { await api('dismiss-open', { corps: k, id: d.id, reason: A.ui.openReason || '' }); A.ui.openFor = null; A.ui.openReason = ''; toast('נפתחה בדיקת הדחה ל' + c.name); rerender(); focusRoom(d.id); } catch (x) { /* toast shown */ } },

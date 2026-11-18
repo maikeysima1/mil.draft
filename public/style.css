@@ -428,3 +428,15 @@ label.need,div.need{color:var(--navy)}
 td.num,th.num{text-align:center;font-variant-numeric:tabular-nums}
 .stkcell{min-width:180px}
 .big-pct{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+
+/* live meeting room */
+.partbox{margin-top:12px;background:var(--bg2);border-radius:12px;padding:10px 12px}
+.parts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:8px}
+.part{display:flex;gap:8px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.part .pd{width:9px;height:9px;border-radius:50%;background:#94A3B8;margin-top:6px;flex:none}
+.part.on{border-color:color-mix(in srgb,var(--green) 40%,var(--line))}.part.on .pd{background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 25%,transparent)}
+.chatbox{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:12px}
+.chat{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.msg{background:var(--bg2);border-radius:12px;padding:7px 11px;max-width:88%;align-self:flex-start}
+.msg.me{background:var(--green-l);align-self:flex-end}
+.msg.call{background:var(--orange-l);border:1px solid color-mix(in srgb,var(--orange) 40%,transparent);max-width:100%;align-self:stretch}

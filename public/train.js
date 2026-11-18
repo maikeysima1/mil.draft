@@ -330,6 +330,37 @@ const stanceCls = (s) => STANCE_CLS[TR().stances.indexOf(s)] || 'p-gray';
 const tally = (d) => TR().stances.map((s) => ({ s, n: (d.opinions || []).filter((o) => o.stance === s).length }));
 const tallyHtml = (d) => tally(d).filter((t) => t.n).map((t) => `<span class="pill ${stanceCls(t.s)}">${t.n} ${esc(t.s)}</span>`).join(' ') || '<span class="mut small">עדיין אין נימוקים</span>';
 function opinionsHtml(d) { return (d.opinions || []).slice().sort((a, b) => a.ts - b.ts).map((o) => `<div class="opn"><div class="row" style="gap:8px"><span class="pill ${stanceCls(o.stance)}">${esc(o.stance)}</span><b class="small">${esc(o.by)}</b><span class="mut small">${fmtD(o.ts)} · ${agoTxt(o.ts)}</span></div><div style="margin-top:3px">${esc(o.text)}</div></div>`).join(''); }
+// ---- live meeting room: who is in the room right now, who has written an opinion, and a discussion thread per review ----
+function roomPing(leave) {
+  const k = corpsKey(); if (!k) return;
+  api('room-ping', { corps: k, leave: !!leave }).then((r) => { if (r && r.presence && JSON.stringify(r.presence) !== JSON.stringify(A.presence || {})) { A.presence = r.presence; if (!leave) rerender(true); } }).catch(() => { /* a missed heartbeat is harmless */ });
+}
+function startPing() {
+  if (A.pingT) return; roomPing();
+  A.pingT = setInterval(() => { if (route() !== 'dismiss' || !A.me) { clearInterval(A.pingT); A.pingT = null; roomPing(true); return; } roomPing(); }, 20000);
+}
+const DECIDER = 'מפקד/ת הכשרה';
+function participantsOf(k, x) { // the people who belong in this review: the soldier's team, company, unit and training commander
+  const us = A.cfg.users, org = (u) => (u.corps || u.org) === k;
+  const pick = (r, f) => us.filter((u) => u.role === r && org(u) && (!f || f(u)));
+  const cmd = pick(DECIDER, (u) => u.orgUnit === x.unit);
+  return [].concat(cmd.length ? cmd : pick(DECIDER).slice(0, 1), pick('מפקד/ת יחידה'), pick('מ״פ'), pick('מ״מ', (u) => u.group === x.group), pick('מגבש/ת', (u) => u.group === x.group));
+}
+function participantsHtml(k, x, d) {
+  const on = new Set((A.presence || {})[k] || []), ops = d.opinions || [], list = participantsOf(k, x), ids = new Set(list.map((u) => u.id));
+  const extra = [...on].filter((id) => !ids.has(id)).map((id) => A.cfg.users.find((u) => u.id === id)).filter(Boolean);
+  const chip = (u) => { const o = ops.find((q) => q.byId === u.id), isOn = on.has(u.id), dec = u.role === DECIDER; return `<div class="part ${isOn ? 'on' : ''}"><i class="pd" aria-hidden="true"></i><span><b>${esc(u.title)}</b><span class="mut small"> · ${isOn ? 'בחדר' : 'לא מחובר/ת'}</span><div class="small">${dec ? '<span class="pill p-blue">מחליט/ה</span> ' : ''}${o ? `<span class="pill ${stanceCls(o.stance)}">${esc(o.stance)}</span>` : (dec ? '<span class="mut">ממתין/ה לנימוקים</span>' : '<span class="mut">טרם נימק/ה</span>')}</div></span></div>`; };
+  const nOn = list.filter((u) => on.has(u.id)).length;
+  return `<div class="partbox"><div class="row spread"><b>משתתפים בחדר</b><span class="mut small">${nOn} מתוך ${list.length} מחוברים עכשיו${extra.length ? ' · צופים: ' + esc(extra.map((u) => u.title).join(', ')) : ''}</span></div><div class="parts">${list.map(chip).join('')}</div></div>`;
+}
+function chatHtml(k, x, d) {
+  const ms = d.chat || [], draft = (A.ui.chat || {})[x.id] || '';
+  return `<div class="chatbox"><h3 style="margin:0 0 6px">דיון בחדר <span class="mut small" style="font-weight:400">· הדיון נשמר בתיק הבדיקה</span></h3><div class="chat" id="chat-${x.id}">${ms.map((m) => `<div class="msg ${m.byId === A.me.id ? 'me' : ''} ${m.kind === 'call' ? 'call' : ''}"><div class="small"><b>${esc(m.by)}</b> <span class="mut">· ${agoTxt(m.ts)}</span></div><div>${esc(m.text)}</div></div>`).join('') || '<div class="mut small">הדיון עוד לא התחיל. כתבו הודעה, כל המשתתפים מחוברים רואים אותה מיד.</div>'}</div>${can('discuss', k) ? `<div class="row" style="margin-top:8px;align-items:flex-end"><textarea id="chatin-${x.id}" data-inp="chatText" data-id="${x.id}" rows="2" placeholder="הודעה לחדר…" style="flex:1;min-width:200px">${esc(draft)}</textarea><button class="btn sm" data-act="chatSend" data-id="${x.id}">שליחה</button></div>` : '<div class="mut small" style="margin-top:6px">צפייה בלבד.</div>'}</div>`;
+}
+function decideStatus(k, x, d) { // for everyone who cannot decide: what is the state of the review and what happens next
+  const n = (d.opinions || []).length, min = TR().minOpinions, ready = n >= min;
+  return `<div class="decide"><b>החלטה – של מפקד/ת ההכשרה</b><div class="mut small" style="margin-top:4px">${ready ? `נרשמו ${n} נימוקים – הבדיקה מוכנה להחלטה. ממתינים למפקד/ת ההכשרה.` : `נרשמו ${n} מתוך ${min} נימוקים נדרשים. אחרי שנרשמים מספיק נימוקים אפשר לזמן את מפקד/ת ההכשרה להחלטה.`}</div>${can('discuss', k) ? `<div class="row" style="margin-top:8px"><button class="btn sec sm" data-act="chatCall" data-id="${x.id}">זימון מפקד/ת ההכשרה להחלטה</button></div>` : ''}<div class="mut small" style="margin-top:6px">כדי להחליט בהדגמה: להיכנס כמפקד/ת הכשרה.</div></div>`;
+}
 function roomCard(k, x) {
   const d = openDis(x), ops = d.opinions || [], mine = ops.find((o) => o.byId === A.me.id), min = TR().minOpinions;
   const week = (x.daily || []).filter((e) => daysAgo(e.ts) <= 7), wk = TR().daily.map((w, j) => week.filter((e) => e.level === j).length), rv = lastRv(x);
@@ -337,15 +368,18 @@ function roomCard(k, x) {
   const dc = (A.ui.dec || {})[x.id] || {}, canDismiss = ops.length >= min;
   return `<div class="card room" id="room-${x.id}">
     <div class="row spread" style="align-items:flex-start"><span class="row" style="gap:12px;flex-wrap:nowrap">${avatar(x, 56)}<span><b style="font-size:19px">${candLink(k, x.id, x.name)}</b><div class="mut small"><bdi>${x.id}</bdi> · ${esc(x.role)} · ${esc(x.unit)} · צוות ${x.group}</div></span></span><span class="row" style="gap:6px">${tallyHtml(d)}<span class="pill ${canDismiss ? 'p-blue' : 'p-gray'}">${ops.length} מתוך ${min} נימוקים נדרשים</span></span></div>
+    ${participantsHtml(k, x, d)}
     <div class="grid g2" style="margin-top:12px"><div><div class="mut small">סיבת הבדיקה · ${esc(d.openedBy)} · ${fmtD(d.openedTs)}</div><div>${esc(d.reason)}</div></div>
      <div><div class="mut small">נתונים מהתיק</div><div class="row" style="gap:6px">${week.length ? TR().daily.map((w, j) => (wk[j] ? `<span class="pill ${LV_CLS[j]}">${wk[j]} ${esc(w)}</span>` : '')).join('') + '<span class="mut small">ב-7 הימים האחרונים</span>' : '<span class="mut small">אין מעקב יומי ב-7 הימים האחרונים</span>'}</div><div style="margin-top:4px">${rv ? `<span class="pill p-gray">${esc(rv.label)}: ${esc(rv.rec)}</span>` : '<span class="mut small">אין סטטוס תקופתי</span>'}</div></div></div>
     <div style="margin-top:12px"><div class="mut small">מעקב יומי – 4 שבועות אחרונים</div>${trend(x, 420)}</div>
     <h3 style="margin:14px 0 4px">נימוקי המפקדים (${ops.length})</h3>${opinionsHtml(d) || '<div class="mut">עדיין לא נרשמו נימוקים לבדיקה הזו.</div>'}
     ${can('opine', k) ? `<div class="opform"><b>${mine ? 'הנימוק שלי (עדכון)' : 'הנימוק שלי'}</b><div class="seg" style="margin:6px 0">${TR().stances.map((w) => `<button type="button" class="${stance === w ? 'on' : ''}" data-act="opStance" data-id="${x.id}" data-v="${esc(w)}">${esc(w)}</button>`).join('')}</div><textarea id="op-${x.id}" data-inp="opText" data-id="${x.id}" rows="2" placeholder="עובדות ומקרים שמבססים את העמדה שלך" style="width:100%">${esc(txt)}</textarea><div class="row" style="margin-top:6px"><button class="btn sec sm" data-act="opSave" data-id="${x.id}">${mine ? 'עדכון הנימוק' : 'רישום הנימוק'}</button></div></div>` : ''}
-    ${can('decide', k) ? `<div class="decide"><b>החלטה – באישור מפקד/ת ההכשרה בלבד</b><div class="mut small">${canDismiss ? 'נרשמו מספיק נימוקים. ההחלטה נרשמת בתיק עם הנימוק שלך.' : 'כדי להדיח נדרשים לפחות ' + min + ' נימוקים. אפשר כבר להחליט להשאיר.'}</div><div class="small" style="margin-top:4px">במקרה של הדחה: ${(() => { const pl = nextPlace(k, x); return pl ? `<b>מעבר אוטומטי ל${esc(placeTxt(k, pl))}</b> <span class="mut">(${pl.k === k ? 'דרגה אחת מתחת באותו מסלול' : 'אין מקום פתוח במסלול – מעבר למסלול הבא'}, צורך פתוח ${needOf(pl.k, pl.unit)})</span>` : `<b>יציאה ל${esc(cf(k).fallback)}</b> <span class="mut">(אין יחידה עם צורך פתוח במסלול הזה ובמסלולים שאחריו)</span>`; })()}</div><div class="row" style="margin-top:6px;align-items:flex-end"><label>החלטה<select data-chg="decSet" data-f="decision" data-id="${x.id}"><option value="">בחרו…</option>${TR().decisions.map((o) => `<option ${o === dc.decision ? 'selected' : ''} ${o === TR().decisions[2] && !canDismiss ? 'disabled' : ''}>${esc(o)}</option>`).join('')}</select></label><label style="flex:1;min-width:220px">נימוק ההחלטה<input type="text" id="dec-${x.id}" data-inp="decSet" data-f="note" data-id="${x.id}" value="${esc(dc.note || '')}" placeholder="חובה" style="width:100%"></label><button class="btn sm" data-act="decSave" data-id="${x.id}">שמירת ההחלטה</button></div></div>` : ''}
+    ${chatHtml(k, x, d)}
+    ${can('decide', k) ? `<div class="decide"><b>החלטה – באישור מפקד/ת ההכשרה בלבד</b><div class="mut small">${canDismiss ? 'נרשמו מספיק נימוקים. ההחלטה נרשמת בתיק עם הנימוק שלך.' : 'כדי להדיח נדרשים לפחות ' + min + ' נימוקים. אפשר כבר להחליט להשאיר.'}</div><div class="small" style="margin-top:4px">במקרה של הדחה: ${(() => { const pl = nextPlace(k, x); return pl ? `<b>מעבר אוטומטי ל${esc(placeTxt(k, pl))}</b> <span class="mut">(${pl.k === k ? 'דרגה אחת מתחת באותו מסלול' : 'אין מקום פתוח במסלול – מעבר למסלול הבא'}, צורך פתוח ${needOf(pl.k, pl.unit)})</span>` : `<b>יציאה ל${esc(cf(k).fallback)}</b> <span class="mut">(אין יחידה עם צורך פתוח במסלול הזה ובמסלולים שאחריו)</span>`; })()}</div><div class="row" style="margin-top:6px;align-items:flex-end"><label>החלטה<select data-chg="decSet" data-f="decision" data-id="${x.id}"><option value="">בחרו…</option>${TR().decisions.map((o) => `<option ${o === dc.decision ? 'selected' : ''} ${o === TR().decisions[2] && !canDismiss ? 'disabled' : ''}>${esc(o)}</option>`).join('')}</select></label><label style="flex:1;min-width:220px">נימוק ההחלטה<input type="text" id="dec-${x.id}" data-inp="decSet" data-f="note" data-id="${x.id}" value="${esc(dc.note || '')}" placeholder="חובה" style="width:100%"></label><button class="btn sm" data-act="decSave" data-id="${x.id}">שמירת ההחלטה</button></div></div>` : decideStatus(k, x, d)}
    </div>`;
 }
 SCREENS.dismiss = (k) => {
+  startPing();
   const c = cf(k), vis = visible(k), open = vis.filter(openDis).sort((a, b) => openDis(a).openedTs - openDis(b).openedTs), closed = []; vis.forEach((x) => (x.dismiss || []).filter((d) => d.status === 'נסגרה').forEach((d) => closed.push({ x, d }))); closed.sort((a, b) => b.d.decidedTs - a.d.decidedTs);
   A.ui.list = open.map((x) => x.id);
   return `<div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">חדר הדחה – ${esc(c.label)}</h1><div class="mut small">כל מפקד/ת רושם/ת נימוק על כל מועמד/ת להדחה, ועל בסיס הנימוקים מתקבלת ההחלטה. פתיחת בדיקה אינה הדחה.${can('opine', k) || can('decide', k) ? '' : ' צפייה בלבד.'}</div></div>
@@ -355,6 +389,9 @@ SCREENS.dismiss = (k) => {
    <div class="card"><h2>בדיקות שנסגרו (${closed.length})</h2>${closed.map(({ x, d }) => `<details class="tl"><summary><span class="row spread" style="display:inline-flex;width:calc(100% - 24px)"><span><b>${candLink(k, x.id, x.name)}</b> <span class="mut small">${esc(x.unit)}</span></span><span class="row"><span class="pill ${d.decision === TR().decisions[2] ? 'p-gray' : 'p-green'}">${esc(d.decision)}</span>${d.movedTo ? `<span class="pill p-orange">עבר/ה ל${esc(d.movedTo)}</span>` : (d.exitTo ? `<span class="pill p-gray">יצא/ה ל${esc(d.exitTo)}</span>` : '')}<span class="mut small">${fmtD(d.decidedTs)} · ${esc(d.decidedBy)} · ${(d.opinions || []).length} נימוקים</span></span></span></summary><div class="mut small" style="margin-top:6px">סיבת הבדיקה: ${esc(d.reason)}</div><div style="margin:2px 0 6px"><b>נימוק ההחלטה:</b> ${esc(d.note)}</div>${opinionsHtml(d)}</details>`).join('') || '<span class="mut">עדיין לא נסגרו בדיקות.</span>'}</div>`;
 };
 Object.assign(ACTIONS, {
+  chatText: (d, t) => { (A.ui.chat || (A.ui.chat = {}))[d.id] = t.value; },
+  chatSend: async (d) => { const k = corpsKey(), t = ((A.ui.chat || {})[d.id] || '').trim(); if (!t) return; try { await api('dismiss-msg', { corps: k, id: d.id, text: t }); delete A.ui.chat[d.id]; rerender(); } catch (x) { /* toast shown */ } },
+  chatCall: async (d) => { const k = corpsKey(), c = candOf(k, d.id); try { await api('dismiss-msg', { corps: k, id: d.id, kind: 'call', text: 'מזמינ/ה את מפקד/ת ההכשרה להחלטה בעניין ' + c.name + '. נרשמו ' + (openDis(c).opinions || []).length + ' נימוקים.' }); toast('הזימון נשלח לחדר'); rerender(); } catch (x) { /* toast shown */ } },
   openReason: (d, t) => { A.ui.openReason = t.value; },
   openCancel: () => { A.ui.openFor = null; A.ui.openReason = ''; rerender(); },
   openSave: async (d) => { const k = corpsKey(), c = candOf(k, d.id); try { await api('dismiss-open', { corps: k, id: d.id, reason: A.ui.openReason || '' }); A.ui.openFor = null; A.ui.openReason = ''; toast('נפתחה בדיקת הדחה ל' + c.name); rerender(); focusRoom(d.id); } catch (x) { /* toast shown */ } },

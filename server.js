@@ -39,6 +39,7 @@ const CORPS_SHORT_S = {}; Object.keys(C.corps).forEach((k) => { CORPS_SHORT_S[k]
 Object.keys(C.corps).forEach((k) => TEAMS.forEach((g) => USERS.push({ id: LEGACY_EVAL[k + '|' + g] || 'e-' + k + '-' + g, title: 'מגבש/ת צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: 'מגבש/ת', initial: 'מג' })));
 // training staff (סגל הכשרה) in every corps: one מ״פ for the whole track, and one מ״מ and one מ״כ per team
 const STAFF_INI = { 'מ״פ': 'מפ', 'מ״מ': 'ממ', 'מ״כ': 'מכ' };
+Object.keys(C.corps).forEach((k) => USERS.push({ id: 'uc-' + k, title: 'מפקד/ת יחידה · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, role: 'מפקד/ת יחידה', initial: 'מי' }));
 Object.keys(C.corps).forEach((k) => {
   USERS.push({ id: 'p-' + k, title: 'מ״פ · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, role: 'מ״פ', initial: STAFF_INI['מ״פ'] });
   ['מ״מ', 'מ״כ'].forEach((r) => TEAMS.forEach((g) => USERS.push({ id: (r === 'מ״מ' ? 'm-' : 'k-') + k + '-' + g, title: r + ' צוות ' + g + ' · ' + CORPS_SHORT_S[k], unit: C.corps[k].eventName, corps: k, group: g, role: r, initial: STAFF_INI[r] })));
@@ -180,6 +181,10 @@ function seedCands() {
 }
 
 // ---------- training model + api (shared with the standalone build) ----------
+// ---- live room: who is in the dismissal room right now (memory only, never saved) and the discussion thread ----
+const PRES = {}; // PRES[corps][userId] = last ping (ms)
+const PRES_TTL = 45e3;
+function presenceMap() { const now = Date.now(), out = {}; Object.keys(PRES).forEach((k) => { Object.keys(PRES[k]).forEach((id) => { if (now - PRES[k][id] > PRES_TTL) { delete PRES[k][id]; return; } (out[k] || (out[k] = [])).push(id); }); }); return out; }
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 const SCHEMA = 10;
@@ -388,6 +393,21 @@ function apiHandle(p, b, user) {
     if (i >= 0) d.opinions[i] = o; else d.opinions.push(o);
     logAct(k, `${user.title} רשמ/ה נימוק בחדר ההדחה על ${c.name}: ${b.stance}`); save(); return { ok: true };
   }
+  // live room: heartbeat ("I am in the room") and the discussion thread of an open review
+  if (p === 'room-ping') {
+    needCorps(); if (!C.ROLES[user.role].pages.includes('dismiss')) throw new Error('אין גישה לחדר ההדחה');
+    const was = !!(PRES[k] && PRES[k][user.id] && Date.now() - PRES[k][user.id] < PRES_TTL);
+    if (b.leave) { if (PRES[k]) delete PRES[k][user.id]; } else (PRES[k] || (PRES[k] = {}))[user.id] = Date.now();
+    if (was === !b.leave) return { ok: true, presence: presenceMap() }; // nothing changed
+    if (typeof onPresence === 'function') onPresence(); return { ok: true, presence: presenceMap() };
+  }
+  if (p === 'dismiss-msg') {
+    allow('discuss', 'הדיון בחדר ההדחה פתוח למפקדים הרלוונטיים'); const c = soldier(b.id), d = openDismiss(c);
+    if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה');
+    const txt = text(b.text, 600); if (txt.length < 2) throw new Error('יש לכתוב הודעה');
+    d.chat = d.chat || []; d.chat.push({ byId: user.id, by: user.title, role: user.role, text: txt, kind: b.kind === 'call' ? 'call' : 'msg', ts: Date.now() }); if (d.chat.length > 200) d.chat.shift();
+    save(); return { ok: true };
+  }
   if (p === 'dismiss-decide') {
     allow('decide', 'הדחה והחלטה בבדיקה – רק באישור מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
     if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה. בדיקה נפתחת מתיק החייל/ת');
@@ -541,6 +561,8 @@ console.log('storage: ' + (store.kind === 'sqlite' ? DB_FILE : DATA_FILE + ' (JS
 // ---------- SSE ----------
 const clients = new Set();
 const snapshot = makeSnapshot;
+function onPresence() { const d = 'data: ' + JSON.stringify({ type: 'presence', presence: presenceMap() }) + '\n\n'; clients.forEach((c) => c.res.write(d)); }
+setInterval(onPresence, 20e3).unref(); // also drops people whose heartbeat stopped
 function broadcast() { const d = 'data: ' + JSON.stringify({ type: 'state', version: state.version }) + '\n\n'; clients.forEach((c) => c.res.write(d)); }
 
 // ---------- HTTP ----------

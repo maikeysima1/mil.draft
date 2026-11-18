@@ -305,6 +305,7 @@ function connectSSE() {
   A.es.onmessage = async (e) => {
     const m = JSON.parse(e.data);
     if (m.type === 'state') { await refresh(); rerender(true); }
+    if (m.type === 'presence') { A.presence = m.presence || {}; rerender(true); }
   };
 }
 // ---- small UI pieces ----
