@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>סגירת חודש — דמו לעסק קטן ולרואה החשבון</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#17212b;--mut:#64707d;--line:#e1e6eb;--pri:#0f766e;--pri2:#ccfbf1;--bad:#b91c1c;--bad2:#fee2e2;--warn:#b45309;--warn2:#fef3c7;--ok:#15803d;--ok2:#dcfce7;--info2:#e0f2fe}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:84px}
+header{background:var(--pri);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;flex:1}
+.seg{display:flex;background:rgba(255,255,255,.18);border-radius:10px;padding:3px}
+.seg button{border:0;background:none;color:#fff;padding:6px 12px;border-radius:8px;font:inherit;cursor:pointer}
+.seg button.on{background:#fff;color:var(--pri);font-weight:600}
+.demo{background:var(--warn2);color:var(--warn);font-size:12.5px;padding:7px 16px;border-bottom:1px solid #f3d38b}
+main{max-width:880px;margin:0 auto;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{margin:0 0 8px;font-size:16px}.card h3{margin:0 0 6px;font-size:14px}
+.mut{color:var(--mut);font-size:13px}
+.big{font-size:22px;font-weight:700}
+.pill{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:600}
+.p-ok{background:var(--ok2);color:var(--ok)}.p-bad{background:var(--bad2);color:var(--bad)}.p-warn{background:var(--warn2);color:var(--warn)}.p-info{background:var(--info2);color:#0369a1}
+button.b,label.b{display:inline-block;border:1px solid var(--pri);background:var(--pri);color:#fff;border-radius:10px;padding:8px 14px;font:inherit;cursor:pointer}
+button.b.sec,label.b.sec{background:#fff;color:var(--pri)}button.b.bad{background:var(--bad);border-color:var(--bad)}
+button.b:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sp{flex:1}
+.issue{border-right:4px solid var(--bad);background:var(--bad2);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:13.5px}
+.issue.warn{border-color:var(--warn);background:var(--warn2)}.issue.ok{border-color:var(--ok);background:var(--ok2)}.issue.wait{border-color:#0369a1;background:var(--info2)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{text-align:right;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600;font-size:12px}
+tr.click{cursor:pointer}tr.click:hover{background:#f8fafb}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.grid{grid-template-columns:1fr}}
+.f label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
+.f input,.f select,.f textarea{width:100%;font:inherit;padding:8px;border:1px solid #c7d0d8;border-radius:8px;background:#fff}
+.f.unk input{border-color:var(--warn);background:var(--warn2)}.f .cf{font-size:11.5px;color:var(--mut)}
+nav{position:fixed;bottom:0;right:0;left:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+nav button{border:0;background:none;font:inherit;font-size:12px;color:var(--mut);padding:4px 8px;position:relative;cursor:pointer}nav button.on{color:var(--pri);font-weight:700}
+nav .dot{position:absolute;top:-2px;left:2px;background:var(--bad);color:#fff;border-radius:99px;font-size:10px;padding:0 5px}
+.steps{list-style:none;margin:0;padding:0}.steps li{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.steps li:last-child{border:0}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:14px;z-index:9}
+.modal>div{background:#fff;border-radius:14px;padding:16px;max-width:520px;width:100%;max-height:90vh;overflow:auto}
+.toast{position:fixed;bottom:90px;right:50%;transform:translateX(50%);background:#17212b;color:#fff;padding:9px 16px;border-radius:99px;font-size:13px;z-index:10}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--pri)}
+.log li{padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px;list-style:none}.log{padding:0;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>סגירת חודש <span style="font-weight:400;opacity:.85">· דמו</span></h1>
+  <div class="seg" id="roleSeg"></div>
+</header>
+<div class="demo">דמו להמחשה בלבד · כל הנתונים פיקטיביים · זו אינה תוכנה מוסמכת ואינה מדווחת לרשות המסים · כללי החישוב (מע״מ, סף מספר הקצאה) הם פרמטרים שרואה חשבון חייב לאשר.</div>
+<main id="app"></main>
+<nav id="nav"></nav>
+<div id="overlay"></div>
+<script>
+'use strict';
+const KEY='inv-demo-v1', PERIOD='2026-10';
+const TYPES=['חשבונית מס','חשבונית מס-קבלה','קבלה','חשבונית זיכוי','חשבון עסקה'];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=n=>n==null||n===''?'—':Number(n).toLocaleString('he-IL')+' ₪';
+const dfmt=d=>d?d.split('-').reverse().join('.'):'—';
+const nowStr=()=>{const d=new Date();return d.toLocaleDateString('he-IL')+' '+d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})};
+function seed(){
+  const D=(id,type,supplier,number,date,net,vat,total,alloc,file)=>({id,type,supplier,number,date,net,vat,total,alloc:alloc||'',file:file||'',note:'',txId:null,notes:{},accepted:{},by:'בעל העסק'});
+  const docs=[
+    D('d1','חשבונית מס','מאפיית הבוקר','4412','2026-10-03',1200,216,1416,'','scan_4412.jpg'),
+    D('d2','חשבונית מס','חשמל ומים בע״מ','88231','2026-10-09',2000,360,2360,'','electric_oct.pdf'),
+    D('d3','חשבונית מס','ציוד מטבח פרו','7710','2026-10-12',6500,1170,7670,'','IMG_2041.jpg'),
+    D('d4','חשבונית מס','מאפיית הבוקר','4412','2026-10-03',1200,216,1416,'','IMG_2044.jpg'),
+    D('d5','קבלה','תחנת דלק הצפון','1190','2026-10-15',null,null,310,'','receipt_fuel.jpg'),
+    D('d6','חשבונית מס','שירותי ניקיון נקי','302','2026-09-28',500,90,590,'','clean_sep.pdf'),
+    D('d7','חשבונית מס','קפה אקספרס','3305','2026-10-21',3000,480,3480,'','IMG_2090.jpg'),
+    D('d8','חשבונית מס','','','2026-10-23',null,null,450,'','IMG_2101.jpg')
+  ];
+  const T=(id,date,text,amount,docId)=>({id,date,text,amount,docId:docId||null});
+  const tx=[T('b1','2026-10-05','העברה — מאפיית הבוקר',1416,'d1'),T('b2','2026-10-10','הוראת קבע — חשמל',2360,'d2'),
+    T('b3','2026-10-14','העברה — ציוד מטבח פרו',7670,'d3'),T('b4','2026-10-18','חיוב אשראי — בית עסק לא מזוהה',1240),
+    T('b5','2026-10-22','הוראת קבע — ביטוח עסק',640),T('b6','2026-10-15','חיוב אשראי — תחנת דלק',310,'d5'),T('b7','2026-10-24','העברה — קפה אקספרס',3480,'d7')];
+  docs.find(d=>d.id==='d1').txId='b1';docs.find(d=>d.id==='d2').txId='b2';docs.find(d=>d.id==='d3').txId='b3';docs.find(d=>d.id==='d5').txId='b6';docs.find(d=>d.id==='d7').txId='b7';
+  return {docs,tx,requests:[],log:[{t:nowStr(),who:'מערכת',text:'נטענו נתוני דמו פיקטיביים לאוקטובר 2026'}],closed:false,params:{vat:18,alloc:5000},next:9,nreq:1};
+}
+let S=load();function load(){try{return JSON.parse(localStorage.getItem(KEY))||seed()}catch{return seed()}}
+const save=()=>localStorage.setItem(KEY,JSON.stringify(S));
+let role='owner',tab='home',sel=null,draft=null,toastT;
+const logIt=(who,text)=>{S.log.unshift({t:nowStr(),who,text});save()};
+const who=()=>role==='owner'?'בעל העסק':'רו״ח';
+
+/* ---- checks: every flag states its reason ---- */
+function checks(d){
+  const out=[],P=S.params,type=d.type;
+  const add=(code,sev,text)=>out.push({code,sev,text,state:d.accepted[code]?'accepted':d.notes[code]?'explained':'open'});
+  if(!d.supplier)add('supplier','bad','שם הספק לא זוהה/לא הוזן');
+  if(!d.date)add('date','bad','תאריך המסמך חסר');
+  if(d.total==null)add('total','bad','סכום כולל חסר');
+  if(d.date&&d.date.slice(0,7)!==PERIOD)add('period','bad',`התאריך ${dfmt(d.date)} מחוץ לתקופה (אוקטובר 2026)`);
+  const dup=S.docs.find(x=>x.id!==d.id&&x.supplier&&x.supplier===d.supplier&&x.number&&x.number===d.number&&x.total===d.total);
+  if(dup&&d.id>dup.id)add('dup','bad',`כפילות אפשרית: אותו ספק, מספר ${d.number} וסכום ${money(d.total)} כבר קיימים (${dup.id.toUpperCase()})`);
+  if(type==='חשבונית מס'&&d.net!=null&&d.vat!=null){
+    const exp=Math.round(d.net*P.vat/100);
+    if(Math.abs(exp-d.vat)>1)add('vat','bad',`מע״מ שהוזן ${money(d.vat)} שונה מהצפוי ${money(exp)} (${P.vat}% מ-${money(d.net)})`);
+    else if(d.total!=null&&Math.abs(d.net+d.vat-d.total)>1)add('sum','bad',`נטו + מע״מ = ${money(d.net+d.vat)} אך הסכום הכולל ${money(d.total)}`);
+  }
+  if((type==='חשבונית מס'||type==='חשבונית מס-קבלה')&&d.net!=null&&d.net>P.alloc&&!d.alloc)
+    add('alloc','bad',`סכום לפני מע״מ ${money(d.net)} מעל הסף (${money(P.alloc)}) ואין מספר הקצאה — ללא מספר הקצאה ייתכן שלא ניתן לקזז מע״מ (הסף לאישור רו״ח)`);
+  if(!d.txId&&d.total!=null&&type!=='חשבונית זיכוי')add('bank','warn','לא משויך לתנועת בנק (לא חובה)');
+  return out;
+}
+const open=c=>c.filter(x=>x.state!=='accepted'&&x.sev==='bad');
+function status(){
+  const docs=S.docs.filter(d=>(d.date||'').slice(0,7)===PERIOD||!d.date||d.date.slice(0,7)!==PERIOD);
+  let issues=0,wait=0;
+  docs.forEach(d=>checks(d).forEach(c=>{if(c.sev!=='bad'||c.state==='accepted')return;c.state==='explained'?wait++:issues++}));
+  const unm=S.tx.filter(t=>!t.docId&&!S.requests.some(r=>r.txId===t.id&&r.status==='closed')).length;
+  const reqs=S.requests.filter(r=>r.status!=='closed').length;
+  const ready=!issues&&!wait&&!unm&&!reqs;
+  const total=S.docs.length+S.tx.length,bad=issues+wait+unm;
+  return {issues,wait,unm,reqs,ready,pct:Math.max(0,Math.round(100*(1-Math.min(bad,total)/total)))};
+}
+
+/* ---- simulated OCR: values under 80% confidence are left empty, never guessed ---- */
+const SAMPLES=[
+ {type:'חשבונית מס',supplier:['ירקות השוק בע״מ',.96],number:['5521',.91],date:['2026-10-27',.94],net:[800,.9],vat:[144,.88],total:[944,.95],alloc:['',1]},
+ {type:'חשבונית מס',supplier:['ספק לא קריא',.42],number:['9?3',.3],date:['2026-10-29',.85],net:[2000,.55],vat:[null,.2],total:[2360,.9],alloc:['',1]},
+ {type:'חשבונית מס',supplier:['אורי שיפוצים',.93],number:['118',.9],date:['2026-10-30',.92],net:[12000,.9],vat:[2160,.9],total:[14160,.94],alloc:['',.0]},
+ {type:'קבלה',supplier:['חניון העיר',.89],number:['77120',.84],date:['2026-10-30',.9],net:[null,.0],vat:[null,.0],total:[55,.93],alloc:['',1]}];
+function simulate(name,txId){
+  let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;
+  const s=SAMPLES[h%SAMPLES.length],f={},cf={};
+  for(const k of ['supplier','number','date','net','vat','total','alloc']){const[v,c]=s[k];cf[k]=c;f[k]=c>=.8?v:(k==='alloc'?'':null)}
+  const t=txId?S.tx.find(x=>x.id===txId):null;
+  return {file:name,type:s.type,...f,conf:cf,txId:txId||'',note:'',edit:null,hint:t?`שויך לתנועת בנק: ${t.text} (${money(t.amount)})`:''};
+}
+
+/* ---- rendering ---- */
+const pillFor=c=>c.sev==='warn'?'p-warn':'p-bad';
+function render(){
+  document.getElementById('roleSeg').innerHTML=[['owner','בעל העסק'],['acc','רואה חשבון']].map(([k,l])=>`<button class="${role===k?'on':''}" data-act="role" data-v="${k}">${l}</button>`).join('');
+  const st=status(),tabs=role==='owner'?[['home','בית'],['docs','מסמכים'],['upload','העלאה'],['reqs','בקשות'],['log','יומן']]:[['clients','לקוחות'],['month','חודש הלקוח'],['reqs','בקשות'],['log','יומן']];
+  if(!tabs.some(t=>t[0]===tab))tab=tabs[0][0];
+  document.getElementById('nav').innerHTML=tabs.map(([k,l])=>`<button class="${tab===k?'on':''}" data-act="tab" data-v="${k}">${l}${k==='reqs'&&st.reqs?`<span class="dot">${st.reqs}</span>`:''}</button>`).join('');
+  const v={home,docs,upload,reqs,log,clients,month}[tab];
+  document.getElementById('app').innerHTML=v(st);
+}
+function summaryCard(st){
+  return `<div class="card"><div class="row"><div><div class="mut">קפה הפינה · אוקטובר 2026</div><div class="big">${st.ready?'מוכן לסגירה':'חסר כדי לסגור'}</div></div><div class="sp"></div>${S.closed?'<span class="pill p-ok">החודש נסגר ע״י רו״ח</span>':st.ready?'<span class="pill p-ok">מוכן — ממתין לאישור רו״ח</span>':'<span class="pill p-warn">בטיפול</span>'}</div>
+  <div class="bar" style="margin:10px 0"><i style="width:${st.pct}%"></i></div>
+  <ul class="steps">
+   <li>${st.issues?'🔴':'🟢'}<span><b>${st.issues}</b> בעיות במסמכים שדורשות טיפול</span></li>
+   <li>${st.wait?'🔵':'🟢'}<span><b>${st.wait}</b> הסברים שממתינים לאישור רואה החשבון</span></li>
+   <li>${st.unm?'🔴':'🟢'}<span><b>${st.unm}</b> תנועות בנק בלי מסמך</span></li>
+   <li>${st.reqs?'🔴':'🟢'}<span><b>${st.reqs}</b> בקשות פתוחות מרואה החשבון</span></li></ul></div>`;
+}
+function home(st){
+  const un=S.tx.filter(t=>!t.docId);
+  const bad=S.docs.map(d=>({d,c:open(checks(d))})).filter(x=>x.c.length);
+  return summaryCard(st)+`<div class="card"><h2>מה לעשות עכשיו</h2>`+
+   (un.length?`<h3>כסף יצא, חסר מסמך</h3>`+un.map(t=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="sp">${esc(t.text)}<div class="mut">${dfmt(t.date)} · ${money(t.amount)}</div></div><button class="b sec" data-act="attachTx" data-v="${t.id}">צרף מסמך</button></div>`).join(''):'')+
+   (bad.length?`<h3 style="margin-top:12px">מסמכים שדורשים טיפול</h3>`+bad.map(({d,c})=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="sp"><b>${esc(d.supplier||'ספק לא ידוע')}</b> · ${money(d.total)}<div class="mut">${c.map(x=>esc(x.text)).join(' · ')}</div></div><button class="b sec" data-act="open" data-v="${d.id}">טפל</button></div>`).join(''):'')+
+   (!un.length&&!bad.length?'<p class="mut">הכול מסודר. אין מה לטפל בו.</p>':'')+`</div>
+   <div class="card"><div class="row"><div class="sp"><h3>הוצאה חדשה?</h3><div class="mut">צלמו את החשבונית ותעלו אותה — המערכת תקרא את השדות ותשאיר ריק מה שלא בטוחה בו.</div></div><button class="b" data-act="tab" data-v="upload">העלאת מסמך</button></div></div>`;
+}
+function docs(){
+  return `<div class="card"><div class="row"><h2 class="sp">כל המסמכים (${S.docs.length})</h2><button class="b sec" data-act="csv">ייצוא לאקסל</button></div>
+  <table><tr><th>ספק</th><th>סוג</th><th>תאריך</th><th>סכום</th><th>מצב</th></tr>`+
+  S.docs.map(d=>{const c=checks(d),o=open(c);const wait=o.length&&o.every(x=>x.state==='explained');
+   return `<tr class="click" data-act="open" data-v="${d.id}"><td>${esc(d.supplier||'—')}<div class="mut">${esc(d.number?'מס׳ '+d.number:'')}</div></td><td>${esc(d.type)}</td><td>${dfmt(d.date)}</td><td>${money(d.total)}</td><td>${o.length?`<span class="pill ${wait?'p-info':'p-bad'}">${wait?'ממתין לרו״ח':o.length+' לטיפול'}</span>`:'<span class="pill p-ok">תקין</span>'}</td></tr>`}).join('')+`</table></div>`;
+}
+function fieldHTML(k,label,type,val,conf){
+  const unk=val==null||val==='';const c=conf!=null&&conf!==undefined?conf:null;
+  return `<div class="f ${unk&&c!==null&&c<.8?'unk':''}"><label>${label}</label><input data-fld="${k}" ${type==='number'?'inputmode="decimal"':''} type="${type==='number'?'text':type}" value="${esc(val??'')}" placeholder="${unk&&c!==null&&c<.8?'לא זוהה — נא למלא':''}">${c!==null?`<div class="cf">ודאות הקריאה: ${Math.round(c*100)}%${c<.8?' · הערך הושאר ריק':''}</div>`:''}</div>`;
+}
+function upload(){
+  const d=draft;
+  if(!d)return `<div class="card"><h2>העלאת מסמך</h2><p class="mut">בחרו תמונה או קובץ. <b>הדמיה:</b> בדמו אין קריאה אמיתית — המערכת מדמה קריאה כדי להראות איך שדות לא ודאיים נשארים ריקים.</p>
+   <label class="b">צילום / בחירת קובץ<input type="file" accept="image/*,application/pdf" hidden data-fileinput="1"></label></div>`;
+  const un=S.tx.filter(t=>!t.docId);
+  return `<div class="card"><h2>בדיקת השדות</h2><p class="mut">קובץ: ${esc(d.file)} · הדמיית קריאה</p>${d.hint?`<div class="issue wait">${esc(d.hint)}</div>`:''}
+  <div class="grid" style="margin-top:10px">
+   <div class="f"><label>סוג מסמך</label><select data-fld="type">${TYPES.map(t=>`<option ${t===d.type?'selected':''}>${t}</option>`).join('')}</select></div>
+   ${fieldHTML('supplier','ספק','text',d.supplier,d.conf.supplier)}${fieldHTML('number','מספר מסמך','text',d.number,d.conf.number)}${fieldHTML('date','תאריך','date',d.date,d.conf.date)}
+   ${fieldHTML('net','סכום לפני מע״מ','number',d.net,d.conf.net)}${fieldHTML('vat','מע״מ','number',d.vat,d.conf.vat)}${fieldHTML('total','סכום כולל','number',d.total,d.conf.total)}${fieldHTML('alloc','מספר הקצאה (אם יש)','text',d.alloc,null)}
+   <div class="f"><label>שיוך לתנועת בנק</label><select data-fld="txId"><option value="">ללא</option>${un.concat(S.tx.filter(t=>t.id===d.txId&&t.docId)).map(t=>`<option value="${t.id}" ${t.id===d.txId?'selected':''}>${dfmt(t.date)} · ${esc(t.text)} · ${money(t.amount)}</option>`).join('')}</select></div>
+  </div><div class="row" style="margin-top:12px"><button class="b" data-act="saveDoc">שמירה</button><button class="b sec" data-act="cancelDraft">ביטול</button></div>
+  <p class="mut">אפשר לשמור גם עם שדות ריקים — הם יסומנו כחסרים ולא ינוחשו.</p></div>`;
+}
+function reqs(){
+  const L=S.requests;
+  return `<div class="card"><h2>${role==='owner'?'מה רואה החשבון מבקש':'בקשות שנשלחו ללקוח'}</h2>`+(L.length?L.slice().reverse().map(r=>`<div class="issue ${r.status==='closed'?'ok':r.status==='answered'?'wait':''}" style="margin-bottom:8px"><div class="row"><b class="sp">בקשה ${r.id}</b><span class="pill ${r.status==='closed'?'p-ok':r.status==='answered'?'p-info':'p-bad'}">${{open:'פתוחה',answered:'נענתה — ממתינה לרו״ח',closed:'סגורה'}[r.status]}</span></div>
+   <div style="white-space:pre-line;margin:6px 0">${esc(r.text)}</div>${r.answer?`<div class="mut">תשובת העסק: ${esc(r.answer)}</div>`:''}
+   <div class="row">${role==='owner'&&r.status==='open'?`${r.txId?`<button class="b sec" data-act="attachTx" data-v="${r.txId}">צרף מסמך</button>`:r.docId?`<button class="b sec" data-act="open" data-v="${r.docId}">פתח מסמך</button>`:''}<button class="b sec" data-act="answer" data-v="${r.id}">השב בטקסט</button>`:''}
+   ${role==='acc'&&r.status==='answered'?`<button class="b" data-act="closeReq" data-v="${r.id}">סגור בקשה</button><button class="b sec" data-act="reopenReq" data-v="${r.id}">החזר</button>`:''}</div></div>`).join(''):'<p class="mut">אין בקשות.</p>')+`</div>`;
+}
+function log(){return `<div class="card"><h2>יומן פעילות</h2><p class="mut">כל פעולה נרשמת: מי, מה ומתי. מסמך שנקלט לא נמחק.</p><ul class="log">${S.log.map(l=>`<li><b>${esc(l.who)}</b> · ${esc(l.text)}<div class="mut">${l.t}</div></li>`).join('')}</ul></div>`}
+
+/* ---- accountant ---- */
+const OTHER=[['מסעדת הגפן','עוסק מורשה',2,'בטיפול'],['סטודיו נועה — עיצוב','עוסק פטור',0,'מוכן לסגירה'],['חנות אופניים מהיר','חברה בע״מ',6,'חסרים מסמכים'],['ד״ר גלעד — קליניקה','עוסק מורשה',1,'בטיפול']];
+function clients(st){
+  return `<div class="card"><h2>הלקוחות שלי · אוקטובר 2026</h2><p class="mut">הלקוח הראשון חי בדמו; השאר לדוגמה בלבד.</p>
+  <table><tr><th>לקוח</th><th>סוג</th><th>חסרים</th><th>מצב</th></tr>
+  <tr class="click" data-act="tab" data-v="month"><td><b>קפה הפינה</b></td><td>עוסק מורשה</td><td>${st.issues+st.wait+st.unm+st.reqs}</td><td><span class="pill ${S.closed?'p-ok':st.ready?'p-ok':'p-warn'}">${S.closed?'נסגר':st.ready?'מוכן לסגירה':'בטיפול'}</span></td></tr>`+
+  OTHER.map(o=>`<tr class="click" data-act="toast" data-v="לקוח לדוגמה — בדמו רק קפה הפינה פעיל"><td>${o[0]}</td><td>${o[1]}</td><td>${o[2]}</td><td><span class="pill ${o[3]==='מוכן לסגירה'?'p-ok':o[3]==='חסרים מסמכים'?'p-bad':'p-warn'}">${o[3]}</span></td></tr>`).join('')+`</table></div>`;
+}
+function month(st){
+  const rows=[];
+  S.docs.forEach(d=>checks(d).filter(c=>c.sev==='bad').forEach(c=>rows.push({d,c})));
+  const un=S.tx.filter(t=>!t.docId);
+  return summaryCard(st)+`<div class="card"><div class="row"><h2 class="sp">חריגות לבדיקה</h2><button class="b sec" data-act="csv">ייצוא לאקסל</button></div>`+
+   (rows.length?rows.map(({d,c})=>`<div class="issue ${c.state==='accepted'?'ok':c.state==='explained'?'wait':''}"><b>${esc(d.supplier||'ספק לא ידוע')}</b> · ${money(d.total)} · ${esc(d.type)}<div>${esc(c.text)}</div>
+     ${c.state==='explained'?`<div class="mut">הסבר העסק: ${esc(d.notes[c.code].text)}</div>`:''}${c.state==='accepted'?'<div class="mut">אושר ע״י רו״ח</div>':''}
+     ${S.closed?'':`<div class="row" style="margin-top:6px">${c.state!=='accepted'?`<button class="b sec" data-act="accept" data-id="${d.id}" data-v="${c.code}">קבל כחריג מאושר</button><button class="b sec" data-act="askDoc" data-id="${d.id}" data-v="${c.code}">בקש השלמה</button>`:`<button class="b sec" data-act="unaccept" data-id="${d.id}" data-v="${c.code}">בטל אישור</button>`}</div>`}</div>`).join(''):'<p class="mut">אין חריגות.</p>')+
+   (un.length?`<h3 style="margin-top:12px">תנועות בנק בלי מסמך</h3>`+un.map(t=>`<div class="issue"><div class="row"><div class="sp">${esc(t.text)} · ${dfmt(t.date)} · ${money(t.amount)}</div>${S.closed?'':`<button class="b sec" data-act="askTx" data-v="${t.id}">בקש מסמך</button>`}</div></div>`).join(''):'')+`</div>
+   <div class="card"><h2>סגירת חודש</h2>`+(S.closed?`<p>החודש נסגר. מסמכים ננעלו לעריכה.</p><button class="b sec" data-act="reopen">פתיחה מחדש (עם נימוק)</button>`:
+    `<p class="mut">${st.ready?'הכול תקין — אפשר לאשר.':'אי אפשר לאשר כל עוד נשארו חריגות, הסברים ממתינים, תנועות בלי מסמך או בקשות פתוחות. המערכת מסמנת; רואה החשבון מחליט.'}</p><button class="b" data-act="close" ${st.ready?'':'disabled'}>אישור סגירת חודש</button>`)+`</div>
+   <div class="card"><h3>פרמטרים (לאישור רו״ח)</h3><div class="grid"><div class="f"><label>שיעור מע״מ %</label><input data-param="vat" value="${S.params.vat}"></div><div class="f"><label>סף מספר הקצאה (₪ לפני מע״מ)</label><input data-param="alloc" value="${S.params.alloc}"></div></div><p class="mut">הערכים נשמרים כאן ולא בקוד כי הם משתנים ברגולציה. נא לוודא מול המקור הרשמי.</p></div>
+   <div class="card"><button class="b sec bad" style="color:var(--bad);border-color:var(--bad)" data-act="reset">איפוס נתוני דמו</button></div>`;
+}
+
+/* ---- actions ---- */
+function toast(t){clearTimeout(toastT);let e=document.querySelector('.toast');if(e)e.remove();e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);toastT=setTimeout(()=>e.remove(),2600)}
+function modal(html){document.getElementById('overlay').innerHTML=`<div class="modal" data-act="mclose"><div>${html}</div></div>`}
+const mclose=()=>document.getElementById('overlay').innerHTML='';
+function openDoc(id){
+  const d=S.docs.find(x=>x.id===id),cs=checks(d),locked=S.closed&&(d.date||'').slice(0,7)===PERIOD;
+  modal(`<h2>${esc(d.supplier||'ספק לא ידוע')}</h2><div class="mut">${esc(d.type)} · מס׳ ${esc(d.number||'—')} · ${dfmt(d.date)} · קובץ: ${esc(d.file)}</div>
+   <table style="margin:8px 0"><tr><td>לפני מע״מ</td><td>${money(d.net)}</td><td>מע״מ</td><td>${money(d.vat)}</td></tr><tr><td>כולל</td><td>${money(d.total)}</td><td>מספר הקצאה</td><td>${esc(d.alloc||'—')}</td></tr></table>
+   ${d.txId?`<div class="mut">משויך לתנועת בנק: ${esc(S.tx.find(t=>t.id===d.txId)?.text||'')}</div>`:''}
+   ${locked?'<div class="issue wait">החודש נסגר — המסמך נעול. תיקון נעשה בחשבונית זיכוי בלבד.</div>':''}
+   ${cs.length?cs.map(c=>`<div class="issue ${c.sev==='warn'?'warn':c.state==='accepted'?'ok':c.state==='explained'?'wait':''}">${esc(c.text)}${c.state==='accepted'?' · אושר ע״י רו״ח':''}${c.state==='explained'?`<div class="mut">ההסבר שלך: ${esc(d.notes[c.code].text)} — ממתין לרו״ח</div>`:''}
+     ${role==='owner'&&c.sev==='bad'&&c.state==='open'&&!locked?`<div class="row" style="margin-top:6px"><button class="b sec" data-act="explain" data-id="${d.id}" data-v="${c.code}">הסבר לרו״ח</button></div>`:''}</div>`).join(''):'<div class="issue ok">כל הבדיקות עברו</div>'}
+   <div class="row" style="margin-top:12px"><button class="b sec" data-act="mclose">סגירה</button></div>`);
+}
+function textModal(title,def,okAct,payload){
+  modal(`<h2>${title}</h2><div class="f"><textarea id="mtext" rows="5">${esc(def)}</textarea></div><div class="row" style="margin-top:10px"><button class="b" data-act="${okAct}" data-p='${esc(JSON.stringify(payload))}'>אישור</button><button class="b sec" data-act="mclose">ביטול</button></div>`);
+}
+const mtext=()=>(document.getElementById('mtext')?.value||'').trim();
+function newReq(text,extra){S.requests.push({id:'R'+S.nreq++,text,status:'open',answer:'',...extra});logIt('רו״ח',`נשלחה בקשת השלמה ללקוח: ${text.split('\n')[0]}`);}
+const acts={
+ role(v){role=v;tab=v==='owner'?'home':'clients'},
+ tab(v){tab=v},
+ open(v){openDoc(v)},
+ mclose(e){if(e.target.classList.contains('modal')||e.target.dataset.act==='mclose')mclose();return true},
+ toast(v){toast(v);return true},
+ attachTx(v){draft=simulate('צילום_'+v+'.jpg',v);draft.total=S.tx.find(t=>t.id===v).amount;draft.conf.total=.99;mclose();role='owner';tab='upload'},
+ cancelDraft(){draft=null},
+ saveDoc(){
+  const d=draft,num=x=>{x=String(x??'').replace(/[,₪\s]/g,'');return x===''?null:isNaN(+x)?null:+x};
+  const doc={id:'d'+S.next++,type:d.type,supplier:(d.supplier||'').trim(),number:(d.number||'').trim(),date:d.date||'',net:num(d.net),vat:num(d.vat),total:num(d.total),alloc:(d.alloc||'').trim(),file:d.file,note:'',txId:d.txId||null,notes:{},accepted:{},by:'בעל העסק'};
+  if(!doc.txId&&doc.total!=null){const m=S.tx.find(t=>!t.docId&&t.amount===doc.total);if(m){doc.txId=m.id;logIt('מערכת',`שויך אוטומטית לתנועת בנק "${m.text}" — אותו סכום ${money(m.amount)}`)}}
+  S.docs.push(doc);if(doc.txId)S.tx.find(t=>t.id===doc.txId).docId=doc.id;
+  const miss=open(checks(doc)).length;
+  logIt('בעל העסק',`הועלה מסמך ${doc.type} ${doc.supplier||'(ספק לא ידוע)'} ${doc.total!=null?money(doc.total):''}${miss?` · ${miss} פריטים לטיפול`:''}`);
+  S.requests.forEach(r=>{if(r.status==='open'&&r.txId&&r.txId===doc.txId){r.status='answered';r.answer='הועלה מסמך '+doc.id.toUpperCase()}});
+  draft=null;tab='docs';save();toast(miss?`נשמר · ${miss} פריטים לטיפול`:'נשמר · כל הבדיקות עברו')},
+ explain(el){const id=el.dataset.id,code=el.dataset.v;textModal('הסבר לרואה החשבון','','doExplain',{id,code})},
+ answer(v){textModal('תשובה לרואה החשבון','','doAnswer',{id:v})},
+ doExplain(el){const p=JSON.parse(el.dataset.p),t=mtext();if(!t){toast('נא לכתוב הסבר');return true}S.docs.find(d=>d.id===p.id).notes[p.code]={text:t,by:'owner'};logIt('בעל העסק',`הסביר חריגה (${p.code}) במסמך ${p.id.toUpperCase()}: ${t}`);mclose()},
+ doAnswer(el){const p=JSON.parse(el.dataset.p),t=mtext();if(!t){toast('נא לכתוב תשובה');return true}const r=S.requests.find(x=>x.id===p.id);r.answer=t;r.status='answered';logIt('בעל העסק',`ענה על בקשה ${r.id}: ${t}`);mclose()},
+ accept(el){const d=S.docs.find(x=>x.id===el.dataset.id);d.accepted[el.dataset.v]=true;logIt('רו״ח',`אישר כחריג (${el.dataset.v}) במסמך ${d.id.toUpperCase()}`)},
+ unaccept(el){const d=S.docs.find(x=>x.id===el.dataset.id);delete d.accepted[el.dataset.v];logIt('רו״ח',`ביטל אישור חריג (${el.dataset.v}) במסמך ${d.id.toUpperCase()}`)},
+ askDoc(el){const d=S.docs.find(x=>x.id===el.dataset.id),c=checks(d).find(x=>x.code===el.dataset.v);textModal('בקשת השלמה ללקוח',`שלום, לגבי המסמך מ"${d.supplier||'ספק לא ידוע'}" (${dfmt(d.date)}, ${money(d.total)}):\n${c.text}.\nנא לתקן/להשלים או להסביר.`,'doAsk',{docId:d.id})},
+ askTx(v){const t=S.tx.find(x=>x.id===v);textModal('בקשת מסמך ללקוח',`שלום, בחשבון הבנק יש תנועה "${t.text}" ב-${dfmt(t.date)} בסך ${money(t.amount)} ללא חשבונית/קבלה. נא לצרף מסמך, או לכתוב מה זו ההוצאה.`,'doAsk',{txId:v})},
+ doAsk(el){const p=JSON.parse(el.dataset.p),t=mtext();if(!t)return true;newReq(t,p);mclose();toast('הבקשה נשלחה ללקוח')},
+ closeReq(v){S.requests.find(r=>r.id===v).status='closed';logIt('רו״ח',`סגר בקשה ${v}`)},
+ reopenReq(v){S.requests.find(r=>r.id===v).status='open';logIt('רו״ח',`החזיר בקשה ${v} ללקוח`)},
+ close(){const st=status();if(!st.ready)return true;S.closed=true;logIt('רו״ח','אישר סגירת חודש אוקטובר 2026 — המסמכים ננעלו');toast('החודש נסגר')},
+ reopen(){textModal('פתיחת חודש מחדש — נימוק חובה','','doReopen',{})},
+ doReopen(){const t=mtext();if(!t){toast('נימוק חובה');return true}S.closed=false;logIt('רו״ח',`פתח מחדש את אוקטובר 2026. נימוק: ${t}`);mclose()},
+ csv(){
+  const rows=[['מזהה','סוג','ספק','מספר','תאריך','לפני מע״מ','מע״מ','סכום כולל','מספר הקצאה','תנועת בנק','בעיות פתוחות']];
+  S.docs.forEach(d=>rows.push([d.id,d.type,d.supplier,d.number,d.date,d.net??'',d.vat??'',d.total??'',d.alloc,d.txId?S.tx.find(t=>t.id===d.txId)?.text:'',open(checks(d)).map(c=>c.text).join(' | ')]));
+  const body='﻿'+rows.map(r=>r.map(c=>'"'+String(c??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type:'text/csv;charset=utf-8'}));a.download='סגירת-חודש-2026-10.csv';a.click();logIt(who(),'ייצא את המסמכים לקובץ אקסל');return true},
+ reset(){S=seed();save();draft=null;toast('הנתונים אופסו')}
+};
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  if(el.dataset.act==='mclose'&&e.target!==el&&!e.target.closest('button'))return;
+  const f=acts[el.dataset.act];if(!f)return;
+  const keep=el.dataset.act==='mclose'?f(e):f(el.dataset.act==='doExplain'||el.dataset.act==='doAnswer'||el.dataset.act==='doAsk'||['accept','unaccept','askDoc','explain'].includes(el.dataset.act)?el:el.dataset.v);
+  if(keep===true&&el.dataset.act!=='mclose')return;
+  save();render();
+});
+document.addEventListener('input',e=>{
+  const k=e.target.dataset.fld;if(k&&draft){draft[k]=e.target.value}
+  const p=e.target.dataset.param;if(p){const n=+e.target.value;if(n>0){S.params[p]=n;save()}}
+});
+document.addEventListener('change',e=>{
+  if(e.target.dataset.fileinput&&e.target.files[0]){draft=simulate(e.target.files[0].name,'');render()}
+  if(e.target.dataset.param)render();
+});
+render();
+</script>
+</body>
+</html>
