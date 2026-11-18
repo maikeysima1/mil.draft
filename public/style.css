@@ -418,3 +418,13 @@ label.need,div.need{color:var(--navy)}
 .pill.linkpill{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .clk{cursor:pointer}
 .room.flash{box-shadow:0 0 0 3px var(--blue),var(--sh);transition:box-shadow .3s}
+
+/* status distribution chart */
+.stk{display:flex;gap:2px;height:14px;min-width:150px}
+.stk i{display:block;min-width:5px;border-radius:4px;cursor:default}
+.stk i:focus-visible,.stk i:hover{opacity:.85;outline:none}
+.stk-leg{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+.stk-leg span{display:inline-flex;gap:6px;align-items:center}.stk-leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+td.num,th.num{text-align:center;font-variant-numeric:tabular-nums}
+.stkcell{min-width:180px}
+.big-pct{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}

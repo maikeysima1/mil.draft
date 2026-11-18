@@ -422,6 +422,16 @@ label.need,div.need{color:var(--navy)}
 .pill.linkpill{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .clk{cursor:pointer}
 .room.flash{box-shadow:0 0 0 3px var(--blue),var(--sh);transition:box-shadow .3s}
+
+/* status distribution chart */
+.stk{display:flex;gap:2px;height:14px;min-width:150px}
+.stk i{display:block;min-width:5px;border-radius:4px;cursor:default}
+.stk i:focus-visible,.stk i:hover{opacity:.85;outline:none}
+.stk-leg{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+.stk-leg span{display:inline-flex;gap:6px;align-items:center}.stk-leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+td.num,th.num{text-align:center;font-variant-numeric:tabular-nums}
+.stkcell{min-width:180px}
+.big-pct{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
 </style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 <script>try{localStorage.getItem('x')}catch(e){var _m={};Object.defineProperty(window,'localStorage',{value:{getItem:function(k){return k in _m?_m[k]:null},setItem:function(k,v){_m[k]=String(v)},removeItem:function(k){delete _m[k]}}})}</script>
@@ -1443,6 +1453,16 @@ Object.assign(ACTIONS, {
   complete: async () => { const k = corpsKey(), c = candOf(k, A.ui.cand); if (!(await ask({ title: 'לסמן סיום הכשרה ל' + c.name + '?', body: 'אחרי הסימון אי אפשר להזין מעקב יומי, סטטוס או בדיקת הדחה.', ok: 'סימון סיום', cancel: 'חזרה' }))) return; try { await api('complete', { corps: k, id: c.id }); toast('סומן סיום הכשרה'); } catch (x) { /* toast shown */ } },
 });
 
+// ---- status distribution chart: one stacked bar per unit (segments proportional to headcount, 2px gaps, direct counts in tooltips) ----
+const STK = [['בהכשרה', 'var(--green)'], ['במעקב', 'var(--orange)'], ['בבדיקת הדחה', 'var(--red)'], ['הודח/ה', '#94A3B8'], ['סיים/ה הכשרה', 'var(--blue)']];
+const stkLegend = () => `<div class="stk-leg" aria-hidden="true">${STK.map(([n, col]) => `<span><i style="background:${col}"></i>${esc(n)}</span>`).join('')}</div>`;
+function stkBar(g, label) {
+  const parts = STK.map(([n, col]) => ({ n, col, v: g.filter((x) => x.tstatus === n).length })).filter((p) => p.v);
+  if (!parts.length) return '<span class="mut small">אין חיילים</span>';
+  return `<div class="stk" role="img" aria-label="${esc(label + ': ' + parts.map((p) => p.n + ' ' + p.v).join(', '))}">${parts.map((p) => `<i tabindex="0" style="flex:${p.v};background:${p.col}" data-tip="${p.v}|${esc(p.n + ' · ' + label)}"></i>`).join('')}</div>`;
+}
+const pctTxt = (v, n) => (n ? Math.round(v / n * 100) + '%' : '—');
+
 // ---- dashboard ----
 function attention(k) { // who needs a look, and why (transparent rules, no score)
   const out = [];
@@ -1452,7 +1472,7 @@ function attention(k) { // who needs a look, and why (transparent rules, no scor
     else if (c.tstatus === 'במעקב') why.push('במעקב');
     const low = (c.daily || []).filter((e) => daysAgo(e.ts) <= 7 && e.level === 0).length; if (low >= 2) why.push(low + ' ימים "מתקשה" בשבוע האחרון');
     if (!ld) why.push('אין מעקב יומי'); else if (daysAgo(ld.ts) >= 3) why.push('אין מעקב יומי ' + daysAgo(ld.ts) + ' ימים');
-    if (!periodRv(c)) why.push('חסר סטטוס ' + A.S.period.label);
+    if (!periodRv(c)) why.push('חסר סטטוס תקופתי');
     if (why.length) out.push({ c, why, w: (od ? 100 : 0) + (c.tstatus === 'במעקב' ? 50 : 0) + low * 10 + why.length });
   });
   return out.sort((a, b) => b.w - a.w);
@@ -1460,14 +1480,14 @@ function attention(k) { // who needs a look, and why (transparent rules, no scor
 SCREENS.dash = (k) => {
   const c = cf(k), all = cs(k).cands, act = all.filter(isActive), n = (s) => all.filter((x) => x.tstatus === s).length;
   const today = act.filter((x) => todayAll(x).length).length, per = act.filter(periodRv).length, names = canFile(), att = names ? attention(k) : [];
+  const cover = (title, v, n, col, sub) => `<div class="card"><div class="row spread"><h2 style="margin:0">${title}</h2><span class="big-pct">${pctTxt(v, n)}</span></div><div class="bar" style="margin:10px 0 6px" role="img" aria-label="${title}: ${v} מתוך ${n}"><i style="width:${n ? v / n * 100 : 0}%;background:${col}"></i></div><div class="row spread small"><span class="mut">${sub}</span><b>${v} מתוך ${n}</b></div></div>`;
   const kpi = (v, l, sub) => `<div class="kpi"><b>${v}</b><span>${l}</span>${sub ? `<div class="mut small">${sub}</div>` : ''}</div>`;
-  const byUnit = c.units.map((u) => { const g = all.filter((x) => x.unit === u.name), a = g.filter(isActive); return `<tr><td><b>${esc(u.name)}</b><div class="mut small">${esc(u.desc)}</div></td><td>${u.tier || 1}</td><td>${needOf(k, u.name) || '·'}</td><td>${a.length}</td><td>${g.filter((x) => x.tstatus === 'במעקב').length || '·'}</td><td>${g.filter((x) => x.tstatus === 'בבדיקת הדחה').length || '·'}</td><td>${g.filter((x) => x.tstatus === 'הודח/ה').length || '·'}</td><td>${g.filter((x) => x.tstatus === 'סיים/ה הכשרה').length || '·'}</td><td>${a.filter((x) => todayAll(x).length).length} / ${a.length}</td><td>${a.filter(periodRv).length} / ${a.length}</td></tr>`; }).join('');
+  const byUnit = c.units.map((u) => { const g = all.filter((x) => x.unit === u.name), a = g.filter(isActive), t = a.filter((x) => todayAll(x).length).length, p = a.filter(periodRv).length; return `<tr><td><b>${esc(u.name)}</b><div class="mut small">${esc(u.desc)}</div></td><td class="num">${u.tier || 1}</td><td class="num">${needOf(k, u.name) || '·'}</td><td class="stkcell">${stkBar(g, u.name)}</td><td class="num"><b>${g.length}</b></td><td class="num">${t} / ${a.length}</td><td class="num">${p} / ${a.length}</td></tr>`; }).join('');
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תמונת מצב – ${esc(c.label)}</h1><div class="mut small">חיילים בהכשרה שמועמדים ליחידה מיוחדת · ${fmtD(nowS())} · ${esc(A.S.period.label)}</div></div></div>
    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${kpi(act.length, 'בהכשרה כעת', 'מתוך ' + all.length + ' שגויסו')}${kpi(n('במעקב'), 'במעקב')}${kpi(n('בבדיקת הדחה'), 'בבדיקת הדחה')}${kpi(all.filter((x) => (x.transfers || []).length).length, 'הועברו ליחידה אחרת', 'אחרי הדחה')}${kpi(n('הודח/ה'), 'יצאו מהמסלול', 'אחרי הדחה')}${kpi(n('סיים/ה הכשרה'), 'סיימו הכשרה')}</div>
-   <div class="grid g2"><div class="card"><h2>מעקב יומי – היום</h2><div class="row"><div class="bar"><i style="width:${act.length ? today / act.length * 100 : 0}%"></i></div><b>${today} / ${act.length}</b></div><div class="mut small" style="margin-top:6px">חיילים פעילים שהוזן להם רישום היום</div></div>
-    <div class="card"><h2>סטטוס ${esc(A.S.period.label)}</h2><div class="row"><div class="bar"><i style="width:${act.length ? per / act.length * 100 : 0}%;background:var(--blue)"></i></div><b>${per} / ${act.length}</b></div><div class="mut small" style="margin-top:6px">חיילים פעילים שהוזן להם סטטוס לתקופה הנוכחית</div></div></div>
-   <div class="card"><h2>לפי יחידה</h2><div style="overflow:auto"><table><thead><tr><th>יחידה</th><th>דרגה</th><th>צורך פתוח</th><th>בהכשרה</th><th>במעקב</th><th>בבדיקת הדחה</th><th>יצאו</th><th>סיימו</th><th>מעקב היום</th><th>סטטוס תקופתי</th></tr></thead><tbody>${byUnit}</tbody></table></div></div>
-   ${names ? `<div class="card"><h2>דורשים תשומת לב (${att.length})</h2><div class="mut small" style="margin-bottom:8px">לפי כללים גלויים: בדיקת הדחה פתוחה, מעקב, שני ימי "מתקשה" בשבוע, אין מעקב 3 ימים, או חסר סטטוס תקופתי. אין כאן ציון ואין המלצה.</div>${att.slice(0, 12).map((a) => `<div class="row spread" style="padding:7px 0;border-bottom:1px solid var(--line2)"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(a.c, 32)}<span><b>${candLink(k, a.c.id, a.c.name)}</b> <span class="mut small">${esc(a.c.unit)} · צוות ${a.c.group}</span></span></span><span class="row" style="gap:6px;justify-content:flex-end">${a.why.map((w) => `<span class="pill ${/הדחה/.test(w) ? 'p-red' : 'p-orange'}">${esc(w)}</span>`).join('')}</span></div>`).join('') || '<span class="mut">אין כרגע חיילים שדורשים תשומת לב לפי הכללים.</span>'}${att.length > 12 ? `<div class="mut small" style="margin-top:6px">ועוד ${att.length - 12} – ברשימת החיילים</div>` : ''}</div>` : '<div class="demo-note">התפקיד שלך רואה מספרים מסכמים בלבד, ללא שמות ותיקים.</div>'}`;
+   <div class="grid g2">${cover('כיסוי מעקב יומי – היום', today, act.length, 'var(--green)', 'חיילים פעילים שהוזן להם רישום היום')}${cover('כיסוי סטטוס ' + A.S.period.label, per, act.length, 'var(--blue)', 'חיילים פעילים שהוזן להם סטטוס לתקופה הנוכחית')}</div>
+   <div class="card"><div class="row spread"><h2 style="margin:0">התפלגות לפי יחידה</h2>${stkLegend()}</div><div class="mut small" style="margin:4px 0 8px">אורך כל מקטע יחסי למספר החיילים בסטטוס. ריחוף על מקטע מציג מספר.</div><div style="overflow:auto"><table><thead><tr><th>יחידה</th><th class="num">דרגה</th><th class="num">צורך פתוח</th><th>סטטוס החיילים</th><th class="num">סה״כ</th><th class="num">מעקב יומי היום</th><th class="num">סטטוס תקופתי</th></tr></thead><tbody>${byUnit}</tbody></table></div></div>
+   ${names ? `<div class="card"><h2>דורשים תשומת לב (${att.length})</h2><div class="mut small" style="margin-bottom:8px">מוצגים לפי כללים גלויים: בדיקת הדחה פתוחה, מעקב, שני ימי "מתקשה" בשבוע, שלושה ימים בלי רישום או חסר סטטוס תקופתי. המערכת אינה מדרגת ואינה ממליצה.</div>${att.slice(0, 12).map((a) => `<div class="row spread" style="padding:7px 0;border-bottom:1px solid var(--line2)"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(a.c, 32)}<span><b>${candLink(k, a.c.id, a.c.name)}</b> <span class="mut small">${esc(a.c.unit)} · צוות ${a.c.group}</span></span></span><span class="row" style="gap:6px;justify-content:flex-end">${a.why.map((w) => `<span class="pill ${/הדחה/.test(w) ? 'p-red' : 'p-orange'}">${esc(w)}</span>`).join('')}</span></div>`).join('') || '<span class="mut">אין כרגע חיילים שדורשים תשומת לב לפי הכללים.</span>'}${att.length > 12 ? `<div class="mut small" style="margin-top:6px">ועוד ${att.length - 12} – ברשימת החיילים</div>` : ''}</div>` : '<div class="demo-note">התפקיד שלך רואה מספרים מסכמים בלבד, ללא שמות ותיקים.</div>'}`;
 };
 
 // ---- "my day" for the team's evaluator: everything that waits for me, on one screen ----
