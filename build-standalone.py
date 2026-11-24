@@ -25,7 +25,7 @@ function save() { state.version++; persist(); if (L.onChange) L.onChange(); }
 state = load();
 if (!state) { state = freshState(); persist(); }
 window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(); if (f) { state = f; if (L.onChange) L.onChange(); } } });
-L.config = () => ({ teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
+L.config = () => ({ program: C.PROGRAM, teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
 L.snapshot = () => makeSnapshot(L.me && L.me.id);
 L.handle = function (p, userId, b) { const user = userById(userId); L.me = user; if (!user) throw new Error('לא מחובר'); return apiHandle(p, b, user); };
 return L;
@@ -67,6 +67,7 @@ html = """<!DOCTYPE html>
 <script>""" + js(rd('public/core.js')) + """</script>
 <script>""" + js(rd('public/train.js')) + """</script>
 <script>""" + js(rd('public/screens.js')) + """</script>
+<script>""" + js(rd('public/program.js')) + """</script>
 <script>""" + js(glue) + """</script>
 </body></html>
 """

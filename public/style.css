@@ -439,3 +439,7 @@ label.need,div.need{color:var(--navy)}
 @media(max-width:900px){.exbar{bottom:calc(80px + env(safe-area-inset-bottom))}}
 @media(max-width:600px){.exlist{grid-template-columns:1fr}.exbar .btn{flex:1}}
 .exbar .btn{white-space:nowrap}
+/* training program matrix */
+.mx th{font-size:12px;font-weight:600;min-width:74px;max-width:110px;white-space:normal;line-height:1.25;vertical-align:bottom}
+.mx td.c{text-align:center}
+@media(max-width:600px){.exbar{flex-wrap:wrap}.exbar .btn{flex:1 1 40%;white-space:normal}.filters select{max-width:100%}}

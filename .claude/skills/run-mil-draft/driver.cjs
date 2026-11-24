@@ -121,6 +121,19 @@ async function main() {
       await deny('u3', 'dismiss-decide', { corps: K, id: t3.id, decision: 'הודח/ה', note: 'הנתיב הישן של החלטה' }, 'removed one-step decision');
       await deny('a1', 'needs', { corps: I, unit: 'מגלן', need: 9 }, 'removed unit needs (no automatic placement)');
       ok(!('needs' in (await api('state', 'a1')).json.corps[K]), 'no unit needs in the state');
+      // training program (תוכנית הכשרה): one record per soldier per item; a missed / unrecorded held item is a makeup
+      const PGc = cfg.program, shoot = PGc.items.find((it) => it.domain === 'קליעה' && it.kind === 'done'), other = PGc.items.find((it) => it.domain !== 'קליעה' && it.kind === 'done'), sc = PGc.items.find((it) => it.kind === 'score');
+      ok(PGc.items.length >= 50 && PGc.phases.length === 2 && (await st()).some((x) => Object.keys(x.prog || {}).length > 20), 'the program catalog is loaded and the demo soldiers have records');
+      const t2 = (await st()).find((x) => x.group === 2 && x.tstatus !== 'הודח/ה' && x.tstatus !== 'סיים/ה הכשרה');
+      ok((await api('prog', 'k-recon-2', { corps: K, item: shoot.k, rows: [{ id: t2.id, s: 'חסר' }] })).status === 200 && by(await st(), t2.id).prog[shoot.k].s === 'חסר', 'מ״כ records a shooting day');
+      await deny('k-recon-2', 'prog', { corps: K, item: other.k, rows: [{ id: t2.id, s: 'עשה' }] }, 'מ״כ recording outside the shooting domain');
+      await deny('u1', 'prog', { corps: K, item: other.k, rows: [{ id: t2.id, s: 'עשה' }] }, 'שלישות recording in the program');
+      await deny('m-recon-2', 'prog', { corps: K, item: sc.k, rows: [{ id: t2.id, s: 'עשה' }] }, 'a test marked done without a score');
+      await deny('m-recon-2', 'prog', { corps: K, item: other.k, rows: [{ id: t2.id, s: 'אולי' }] }, 'an unknown mark');
+      ok((await api('prog', 'm-recon-2', { corps: K, item: sc.k, rows: [{ id: t2.id, s: 'עשה', v: 84 }] })).status === 200 && by(await st(), t2.id).prog[sc.k].v === 84, 'מ״מ records a test score');
+      ok((await api('prog', 'm-recon-2', { corps: K, item: shoot.k, rows: [{ id: t2.id, s: 'עשה' }] })).status === 200 && by(await st(), t2.id).prog[shoot.k].s === 'עשה', 'a makeup replaces the "missed" record');
+      ok((await api('prog', 'm-recon-2', { corps: K, item: shoot.k, rows: [{ id: t2.id, s: '' }] })).status === 200 && !by(await st(), t2.id).prog[shoot.k], 'a record can be cleared');
+      await api('prog', 'm-recon-2', { corps: K, item: shoot.k, rows: [{ id: t2.id, s: 'עשה' }] });
       // intake
       await deny('u3', 'intake', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], unit: cfg.corps[K].units[0].name, target: cfg.TARGETS[K][0], group: 1 }, 'training commander doing intake');
       await deny('u1', 'intake', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], group: 1 }, 'intake without a target unit');
@@ -191,6 +204,14 @@ async function main() {
       ok(await cm.page.evaluate(() => location.hash) === '#/dismiss', 'the dismissal-review button in the soldier file goes straight to the dismissal room');
       await cm.page.fill('#open-reason', 'בדיקה שנפתחה ישירות מחדר ההדחה'); await cm.page.click('[data-act=openSave]'); await cm.page.waitForTimeout(600);
       ok(await cm.page.locator('#room-' + dzR.id).count() === 1 && by(await st(), dzR.id).tstatus === 'בבדיקת הדחה', 'the review opened in the room and the soldier is listed there');
+      // program screen: makeups list, makeup recording for one item, export
+      await go(cm.page, 'program'); ok(/השלמות פתוחות/.test(await cm.page.locator('main').innerText()) && await cm.page.locator('[data-act=pgMakeup]').count() > 0, 'program screen lists the open makeups by soldier and by item');
+      const mk0 = await cm.page.evaluate(() => { const k = corpsKey(), it = PG().items.find((x) => x.kind === 'done' && progRows(k).some((s) => makeups(k, s).includes(x))); ACTIONS.pgMakeup({ item: it.k }); return { item: it.k, n: progRows(k).filter((s) => makeups(k, s).includes(it)).length }; });
+      await cm.page.waitForTimeout(300); ok(await cm.page.locator('.excard').count() === mk0.n, '"תיעוד השלמה" opens the item with only the soldiers who need it (' + mk0.n + ')');
+      await cm.page.locator('.excard').first().locator('[data-act=pgMark][data-v="עשה"]').click(); await cm.page.waitForTimeout(200); await cm.page.click('[data-act=pgSave]'); await cm.page.waitForTimeout(600);
+      ok(/נשמרו 1/.test(await cm.page.locator('#toast').innerText()) && await cm.page.evaluate((it) => progRows(corpsKey()).filter((s) => makeups(corpsKey(), s).some((x) => x.k === it)).length, mk0.item) === mk0.n - 1, 'the makeup is recorded and leaves the list');
+      const [pdl] = await Promise.all([cm.page.waitForEvent('download'), cm.page.click('[data-act=pgExport]')]); ok(/^program-.*\.xlsx$/.test(pdl.suggestedFilename()), 'program matrix exports to Excel');
+      await cm.page.click('[data-act=pgTab][data-v=mx]'); await cm.page.waitForTimeout(300); ok(await cm.page.locator('table.mx tbody tr').count() > 0, 'program matrix renders');
       // periodic screen: deadline, priority order, structured summary, continuous entry
       const ps = (await api('state', 'u3')).json; ok(ps.period.daysLeft >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(ps.period.end), 'period carries its end date and the days left');
       await deny('u3', 'periodic', { corps: K, id: nc.id, rec: 'ממשיך/ה', strong: 'חוזקה כלשהי בתקופה' }, 'structured status without "המלצה להמשך"');

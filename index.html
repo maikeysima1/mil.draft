@@ -443,6 +443,10 @@ label.need,div.need{color:var(--navy)}
 @media(max-width:900px){.exbar{bottom:calc(80px + env(safe-area-inset-bottom))}}
 @media(max-width:600px){.exlist{grid-template-columns:1fr}.exbar .btn{flex:1}}
 .exbar .btn{white-space:nowrap}
+/* training program matrix */
+.mx th{font-size:12px;font-weight:600;min-width:74px;max-width:110px;white-space:normal;line-height:1.25;vertical-align:bottom}
+.mx td.c{text-align:center}
+@media(max-width:600px){.exbar{flex-wrap:wrap}.exbar .btn{flex:1 1 40%;white-space:normal}.filters select{max-width:100%}}
 </style></head>
 <body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
 <script>try{localStorage.getItem('x')}catch(e){var _m={};Object.defineProperty(window,'localStorage',{value:{getItem:function(k){return k in _m?_m[k]:null},setItem:function(k,v){_m[k]=String(v)},removeItem:function(k){delete _m[k]}}})}</script>
@@ -563,26 +567,46 @@ const TARGETS = { recon: ['פלס״ר (סיור)', 'פלחה״ן (חבלה וה�
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'complete', 'regroup', 'evalbulk', 'settings', 'factory'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, תיעוד התנסויות, הגדרות, משתמשים ואיפוס. תהליך ההדחה (שיחות וועדות) אינו שלו/ה.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'eval'], desc: 'מתעד/ת התנסויות וסטטוס תקופתי, פותח/ת בדיקת הדחה, מתעד/ת שיחות ואת הוועדות בתהליך ההדחה ומחליט/ה בהן, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'complete', 'regroup', 'evalbulk', 'settings', 'factory', 'prog'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, תיעוד התנסויות, הגדרות, משתמשים ואיפוס. תהליך ההדחה (שיחות וועדות) אינו שלו/ה.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'eval', 'prog'], desc: 'מתעד/ת התנסויות וסטטוס תקופתי, פותח/ת בדיקת הדחה, מתעד/ת שיחות ואת הוועדות בתהליך ההדחה ומחליט/ה בהן, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
   // training staff (סגל הכשרה): the platoon / company commanders are responsible for filling in the data; the squad commander may only update basic data
-  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד השיחות בתהליך. ההחלטה – בוועדה.' },
-  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד שיחת המ״מ.' },
-  'מ״כ': { layer: 5, scope: 'group', home: 'eval', staff: true, pages: ['roster', 'eval'], can: ['evalmini', 'attend'], desc: 'סגל הכשרה – מפקד/ת כיתה. רואה את חיילי הצוות, ויכול/ה לעדכן רק נתונים בסיסיים: מדדים (קליעה, ריצה וכו׳) וסטטוס הגעה. שאר הנתונים באחריות המ״מ / המ״פ.' },
+  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend', 'prog'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד השיחות בתהליך. ההחלטה – בוועדה.' },
+  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend', 'prog'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד שיחת המ״מ.' },
+  'מ״כ': { layer: 5, scope: 'group', home: 'eval', staff: true, pages: ['roster', 'program', 'eval'], can: ['evalmini', 'attend', 'progmini'], desc: 'סגל הכשרה – מפקד/ת כיתה. רואה את חיילי הצוות, ויכול/ה לעדכן רק נתונים בסיסיים: מדדים (קליעה, ריצה וכו׳), ימי קליעה בתוכנית ההכשרה וסטטוס הגעה. שאר הנתונים באחריות המ״מ / המ״פ.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה בלבד בתמונת המצב של כל החילות. אין גישה לתיקי החיילים.' },
-  'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
-  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss'], desc: 'אחראי/ת על צוות אחד: תיעוד התנסויות של חיילי הצוות, דף מגבש ופתיחת בדיקת הדחה. השיחות וההחלטה בתהליך ההדחה – של הסגל והוועדה.' },
+  'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'program', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'program', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss', 'prog'], desc: 'אחראי/ת על צוות אחד: תיעוד התנסויות של חיילי הצוות, דף מגבש ופתיחת בדיקת הדחה. השיחות וההחלטה בתהליך ההדחה – של הסגל והוועדה.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה במספרים המסכמים בתמונת המצב בלבד, ללא שמות, תיקים או הרשאות פעולה.' },
 };
 // evaluators and training-staff teams per track (each team has one evaluator, one מ״מ and one מ״כ)
 const TEAMS = [1, 2];
+// Training program (תוכנית הכשרה): the fixed list of lessons, ranges, tests and drills every soldier must complete, by phase and domain.
+// Built from the column headers of a company's tracking workbook (item names only – no personal data). Replace with the real program per track.
+// kind: 'done' = took part / passed (yes / no) · 'score' = a test score (0–100) · 'time' = a time in minutes:seconds
+// A soldier needs a makeup (השלמה) for every item that was already held for the team and that the soldier missed or has no record of.
+const PROGRAM = (() => {
+  const items = [];
+  const add = (phase, domain, list) => list.forEach((x) => { const [l, kind] = Array.isArray(x) ? x : [x, 'done']; items.push({ k: 'p' + (items.length + 1), l, phase, domain, kind }); });
+  add('הכש״י', 'קליעה', ['ירי איפוס', 'סימולטור', 'יום קליעה 5 – יום', 'יום קליעה 5 – לילה', 'יום קליעה 6 – יום', 'יום קליעה 6 – לילה', 'יום קליעה 7', 'קליעה 8 – ירי בתנועה', 'קליעה 9 – טווחים קצרים', ['קליעה 11 – מסכם הכש״י', 'score']]);
+  add('הכש״י', 'שיעורים מקצועיים', ['שיעור קשר כיתתי', ['מבחן קשר', 'score'], 'פירוק והרכבה', 'יסודות ירי', 'מעצורים', ['מבחן נשק', 'score'], ['מבחן ב״מ', 'score'], 'שיעור אב״כ', ['בוחן שדאות', 'score']]);
+  add('הכש״י', 'חבלה', ['מבוא לחבלה', 'הפעלה קרבית', 'הפעלה חשמלית', 'מעגל רועם', ['מבחן חבלן בסיסי', 'score'], 'מטווח חבלה – פרט יום', 'מטווח חבלה – פרט לילה', 'מטווח חבלה – חוליה יום', 'מטווח חבלה – חוליה לילה']);
+  add('הכש״י', 'כושר', [['בוחן כש״ג ראשון', 'score'], 'ריצה 2 ק״מ', 'ריצה 3.5 ק״מ', 'ריצה 5 ק״מ', 'קרב מגע – אימון 1', 'קרב מגע – אימון 2', ['בוחן כש״ג שני', 'score']]);
+  add('הכש״י', 'מסעות', ['מסע 3', 'מסע 5', 'מסע 7+1', 'מסע 10+2']);
+  add('הכש״י', 'בטיחות וחינוך', [['בוחן בטיחות', 'score'], 'שעת בטיחות – רבעון', 'התנהגות ברשתות', 'בטיחות בדרכים', 'הר הרצל', 'יד ושם']);
+  add('הכש״מ', 'חבלה ומיקוש', ['מטען רעם', 'צפ״ח', 'מסגרת פריצה', 'חבלה במבנים', ['מבחן חבלן מתקדם', 'score'], 'מבוא למיקוש', ['מבחן מיקוש', 'score'], 'תרמ״ח מתחת לאדמה']);
+  add('הכש״מ', 'רק״ם', ['היכר רק״ם', 'טיפולים', 'החלפת גלגל', 'פריסת זחל', ['מבחן רק״ם', 'score']]);
+  add('הכש״מ', 'קליעה', ['קליעה 12 – מכסות', ['קליעה 14 – מסכם הכש״מ', 'score'], 'ירי מא״ג – יום']);
+  add('הכש״מ', 'שטח פתוח ותרגילים', [['בוחן בטיחות שטח פתוח', 'score'], 'פרט', 'פרט לילה', 'חוליה', 'חוליה לילה', 'כיתה', 'כיתה לילה', 'מחלקה', 'צוות יום', 'צוות לילה', ['בוחן מחלקה', 'score'], ['בחמ״ס', 'time'], ['בוחן לוחם', 'score']]);
+  add('הכש״מ', 'כושר ומסעות', ['ריצה 6 ק״מ', 'וסט + אלונקות 2.5', 'מסע 14+3', 'מסע 18+5', 'מסע כומתה', ['בוחן כש״ג סוף', 'score']]);
+  return { phases: ['הכש״י', 'הכש״מ'], items, marks: ['עשה', 'חסר', 'פטור'], squadDomains: ['קליעה'] }; // squadDomains: what a מ״כ may record
+})();
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
 // Login step 1 ("חיל"): the five entrances. Users carry org / orgUnit / roleLabel for steps 1-3.
 const ORGS = [
   { key: 'recon', label: 'יח״טיות חטיבתיות' }, { key: 'special', label: 'יחידות מיוחדות' }, { key: 'pilot', label: 'קורס טיס' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
-module.exports={TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,RECS,WORDS:['בסיסי','טוב','בולט']};
+module.exports={PROGRAM,TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,RECS,WORDS:['בסיסי','טוב','בולט']};
 
 return module.exports; })();
 </script>
@@ -764,7 +788,7 @@ function nextStage(d) {
 }
 const logAct = (k, text) => { const e = { ts: Date.now(), corps: k, text }; state.log.push(e); if (state.log.length > 1500) state.log.shift(); if (typeof onLog === 'function') onLog(e); }; // onLog: the host may keep the full history (the database does)
 // training fields of a soldier who enters the system (event 1: intake)
-function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; c.events = []; return c; }
+function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; c.events = []; c.prog = {}; return c; }
 // demo history so the screens are not empty: a few daily entries, last period's status, and three soldiers in / after a dismissal review
 function seedTraining(k, cands) {
   const cf = cfg(k), now = Date.now(); let s = 5 + k.length;
@@ -782,6 +806,14 @@ function seedTraining(k, cands) {
     if (i % 5 !== 4) c.reviews.push({ period: prev.key, label: prev.label, ts: now - (60 + Math.floor(rnd() * 20)) * DAY, by: 'מפקד/ת הכשרה · ' + c.unit, lv: c.lv.slice(), rec: sum <= 4 ? C.TR.periodRec[1] : C.TR.periodRec[0], summary: (cf.traits.filter((t, j) => c.lv[j] === 2).length ? 'חוזקות: ' + cf.traits.filter((t, j) => c.lv[j] === 2).join(', ') + '. ' : 'תפקוד תקין ברוב התחומים. ') + (cf.traits.filter((t, j) => c.lv[j] === 0).length ? 'לחיזוק: ' + cf.traits.filter((t, j) => c.lv[j] === 0).join(', ') + '.' : 'אין תחום חריג לחיזוק.') });
     if (sum <= 4 && c.reviews.length) c.tstatus = 'במעקב';
   });
+  // program records: most of the first phase and the start of the second were held; some soldiers missed items (they need makeups)
+  const P = C.PROGRAM, held = P.items.filter((it) => it.phase === P.phases[0]).slice(0, -3).concat(P.items.filter((it) => it.phase === P.phases[1]).slice(0, 9));
+  cands.forEach((c) => { c.prog = {}; held.forEach((it, j) => {
+    const r = rnd(); if (r < 0.03) return; // no record at all: a gap
+    const s = r < 0.09 ? P.marks[1] : (r < 0.11 ? P.marks[2] : P.marks[0]);
+    const v = s === P.marks[0] && it.kind === 'score' ? Math.round(62 + rnd() * 36) : (s === P.marks[0] && it.kind === 'time' ? Math.round((7.8 + rnd() * 2.6) * 60) / 60 : null);
+    c.prog[it.k] = { s, v, ts: now - (95 - j) * DAY, by: 'מ״מ צוות ' + c.group + ' · ' + cf.short, byId: 'seed' };
+  }); });
   const low = cands.filter((c) => c.tstatus === 'במעקב');
   if (low[0]) { low[0].tstatus = 'בבדיקת הדחה'; low[0].dismiss.push({ id: 'd1', status: 'פתוחה', openedTs: now - 3 * DAY, openedBy: 'מגבש/ת צוות ' + low[0].group, reason: 'ירידה מתמשכת בתפקוד בשבועיים האחרונים וקושי לעמוד בעומס.', prev: 'במעקב', treat: 'שיחה אישית עם המ״מ ותגבור בתרגילי הצוות.', stages: [{ key: C.TR.stages[0].key, label: C.TR.stages[0].label, byId: 'seed', by: 'מ״מ צוות ' + low[0].group + ' · ' + cf.short, rec: C.TR.stances[0], summary: 'שלושה תרגילים רצופים שבהם לא עמד/ה בקצב הצוות, גם אחרי שיחה אישית.', ts: now - 2 * DAY }] }); }
   if (low[0]) low[0].events.push({ ts: now - 4 * DAY, by: 'מ״מ צוות ' + low[0].group + ' · ' + cf.short, byId: 'seed', kind: C.TR.eventKinds[1], text: 'לא הגיע/ה למסדר הבוקר ונמצא/ה רק אחרי שעה. שיחה מיידית עם המ״מ.' });
@@ -913,6 +945,25 @@ function apiHandle(p, b, user) {
     c.events = c.events || []; c.events.push({ ts: Date.now(), by: user.title, byId: user.id, kind: b.kind, text: txt });
     logAct(k, `${user.title} תיעד/ה אירוע חריג (${b.kind}) ל${c.name}`); save(); return { ok: true };
   }
+  // ---- training program (תוכנית הכשרה): one record per soldier per program item; a later save replaces it (that is how a makeup is recorded) ----
+  if (p === 'prog') {
+    needCorps(); const P = C.PROGRAM, it = P.items.find((x) => x.k === b.item); if (!it) throw new Error('הפריט לא נמצא בתוכנית ההכשרה');
+    const full = canDo(user, 'prog', k), squad = canDo(user, 'progmini', k);
+    if (!full && !(squad && P.squadDomains.includes(it.domain))) throw new Error(squad ? 'כמ״כ אפשר לתעד בתוכנית רק ' + P.squadDomains.join(' / ') : 'תיעוד בתוכנית ההכשרה שמור ל' + whoCan('prog'));
+    const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 300), now = Date.now(); let n = 0;
+    rows.forEach((r) => {
+      const c = soldier(r.id); mustBeActive(c); c.prog = c.prog || {};
+      if (r.s === '' || r.s == null) { if (c.prog[it.k]) { delete c.prog[it.k]; n++; } return; }
+      if (!P.marks.includes(r.s)) throw new Error('יש לסמן ' + P.marks.join(' / ') + ' ל' + c.name);
+      let v = null;
+      if (it.kind !== 'done' && r.s === P.marks[0]) {
+        v = toNum(r.v); const max = it.kind === 'time' ? 600 : 100;
+        if (v == null || v < 0 || v > max) throw new Error((it.kind === 'time' ? 'יש להזין זמן' : 'יש להזין ציון בין 0 ל-100') + ' ל' + c.name + ' ב' + it.l);
+      }
+      c.prog[it.k] = { s: r.s, v, ts: now, by: user.title, byId: user.id }; n++;
+    });
+    logAct(k, `${user.title} תיעד/ה בתוכנית ההכשרה: ${it.l} (${it.phase} · ${it.domain}) ל-${n} חיילים`); save(); return { ok: true, saved: n };
+  }
   // ---- event 3: periodic status (רבעון / חציון) ----
   if (p === 'periodic') {
     allow('periodic', 'סטטוס תקופתי מוזן ע״י מפקד/ת הכשרה'); const c = soldier(b.id); mustBeActive(c);
@@ -991,7 +1042,7 @@ function save() { state.version++; persist(); if (L.onChange) L.onChange(); }
 state = load();
 if (!state) { state = freshState(); persist(); }
 window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(); if (f) { state = f; if (L.onChange) L.onChange(); } } });
-L.config = () => ({ teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
+L.config = () => ({ program: C.PROGRAM, teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
 L.snapshot = () => makeSnapshot(L.me && L.me.id);
 L.handle = function (p, userId, b) { const user = userById(userId); L.me = user; if (!user) throw new Error('לא מחובר'); return apiHandle(p, b, user); };
 return L;
@@ -1073,6 +1124,7 @@ const PAGES = [
   { id: 'weekly', name: 'סיכום שבועי', icon: 'cal' },
   { id: 'roster', name: 'חיילים בהכשרה', icon: 'users' },
   { id: 'daily', name: 'התנסויות', icon: 'clip' },
+  { id: 'program', name: 'תוכנית והשלמות', icon: 'list' },
   { id: 'periodic', name: 'סטטוס תקופתי', icon: 'grid' },
   { id: 'dismiss', name: 'חדר הדחה', icon: 'flag' },
   { id: 'intake', name: 'גיוס מועמד', icon: 'upload' },
@@ -1097,6 +1149,7 @@ const ICONS = {
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
   check: '<path d="m5 12 5 5 9-10"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"/><circle cx="5" cy="18" r="1.6"/>',
   heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
 };
 const icon = (n, s) => `<svg class="ic" width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -1424,6 +1477,7 @@ function drawer(k, id) {
    ${od ? `<div class="demo-note ${canRoom() ? 'clk' : ''}" style="border-color:var(--red)" ${canRoom() ? `data-act="goRoom" data-id="${c.id}" title="מעבר לחדר ההדחה"` : ''}><b>בדיקת הדחה פתוחה</b>${canRoom() ? ' · <u>לחדר ההדחה ←</u>' : ''} · ${esc(od.openedBy)} · ${fmtD(od.openedTs)}<div>${esc(od.reason)}</div><div style="margin-top:4px">${stagePill(od)}</div></div>` : ''}
    ${miss.length ? `<div class="demo-note">חסר בתיק: ${esc(miss.join(', '))}</div>` : ''}
    ${actions ? `<div class="row no-print">${actions}</div>` : ''}${cardForm(k, c)}
+   ${R().pages.includes('program') ? progCard(k, c) : ''}
    <div class="card"><h3 style="margin:0 0 6px">התנסויות – 4 שבועות אחרונים</h3>${trend(c, 320)}</div>
    <div class="card"><h3 style="margin:0 0 6px">ציר זמן</h3>${timeline(k, c)}</div>
    <div class="card"><h3 style="margin:0 0 6px">מדדים</h3>${statList(k, c)}</div>
@@ -1470,6 +1524,7 @@ function attention(k) { // who needs a look, and why (transparent rules, no scor
     if (!ld) why.push('לא תועדו התנסויות'); else if (daysAgo(ld.ts) >= 10) why.push('לא תועדה התנסות ' + daysAgo(ld.ts) + ' ימים');
     if ((c.events || []).some((e) => e.kind === TR().eventKinds[1] && daysAgo(e.ts) <= 14)) why.push('אירוע חריג בשבועיים האחרונים');
     if (!periodRv(c)) why.push('חסר סטטוס ' + A.S.period.label);
+    const mk = makeups(k, c).length; if (mk >= 3) why.push(mk + ' השלמות פתוחות');
     if (why.length) out.push({ c, why, w: (od ? 100 : 0) + (c.tstatus === 'במעקב' ? 50 : 0) + low * 10 + why.length });
   });
   return out.sort((a, b) => b.w - a.w);
@@ -1497,6 +1552,7 @@ SCREENS.today = (k) => {
    ${step(1, 'התנסויות', noRec.length + ' בלי תיעוד השבוע', `<div class="row" style="margin:8px 0"><a class="btn" href="#/daily">תיעוד התנסות חדשה</a><span class="mut small">כל הצוות במסך אחד, בלחיצה לכל חייל/ת</span></div>${mine.length ? mine.map((g) => `<div class="tl row spread"><span><b>${esc(g.exp || 'התנסות')}</b>${g.title && g.title !== g.exp ? ' – ' + esc(g.title) : ''}</span><span class="mut small">${fmtD(g.ts)} · ${g.n} חיילים</span></div>`).join('') : '<div class="mut small">עוד לא תיעדת התנסויות השבוע.</div>'}${noRec.length ? `<div class="mut small" style="margin-top:8px">בלי התנסות מתועדת ב-7 הימים האחרונים: ${noRec.map((x) => candLink(k, x.id, x.name)).join(', ')}</div>` : ''}`, !noRec.length)}
    ${step(2, 'חדר הדחה', room.length + ' ממתינים לתיעוד שלך', inRoom.length ? `${inRoom.map((x) => { const d = openDis(x), mine = canStage(dueStage(d), x); return `<div class="tl row spread"><span><b>${candLink(k, x.id, x.name)}</b> <span class="mut small">נפתחה ${agoTxt(d.openedTs)} · ${esc(stageTxt(d))}</span></span><span class="row" style="gap:6px">${mine ? '<span class="pill p-orange">ממתין לתיעוד שלך</span>' : '<span class="pill p-gray">בטיפול</span>'}</span></div>`; }).join('')}<div class="row" style="margin-top:8px"><a class="btn sec sm" href="#/dismiss">לחדר ההדחה</a></div>` : '<div class="mut" style="margin-top:6px">אין חיילים מהצוות בחדר ההדחה.</div>', !room.length)}
    ${step(3, 'דף מגבש', miss.length + ' תיקים עם נתונים חסרים', miss.length ? `${miss.slice(0, 6).map((x) => `<div class="tl row spread"><b>${candLink(k, x.id, x.name)}</b><span class="mut small">חסר: ${esc(missingOf(k, x).join(', '))}</span></div>`).join('')}<div class="row" style="margin-top:8px"><a class="btn sec sm" href="#/eval">לדף המגבש</a></div>` : '<div class="mut" style="margin-top:6px">כל התיקים של הצוות מלאים.</div>', !miss.length)}
+   ${R().pages.includes('program') ? (() => { const mk = act.map((x) => ({ x, m: makeups(k, x) })).filter((r) => r.m.length), n = mk.reduce((a, r) => a + r.m.length, 0); return `<div class="card"><div class="row spread"><h2 style="margin:0">השלמות בתוכנית ההכשרה</h2><span class="pill ${n ? 'p-red' : 'p-green'}">${n ? n + ' פתוחות' : 'אין'}</span></div>${mk.length ? `<div class="mut small" style="margin:6px 0">${mk.sort((a, b) => b.m.length - a.m.length).slice(0, 6).map((r) => candLink(k, r.x.id, r.x.name) + ' (' + r.m.length + ')').join(' · ')}</div>` : ''}<a class="btn sec sm" href="#/program">לתוכנית ולהשלמות</a></div>`; })() : ''}
    <div class="card"><h2>שווה מבט</h2><div class="mut small" style="margin-bottom:6px">חיילים מהצוות שעולים לפי הכללים הגלויים של תמונת המצב. אין כאן ציון.</div>${att.map((a) => `<div class="tl row spread"><b>${candLink(k, a.c.id, a.c.name)}</b><span class="row" style="gap:6px;justify-content:flex-end">${a.why.map((w) => `<span class="pill ${/הדחה/.test(w) ? 'p-red' : 'p-orange'}">${esc(w)}</span>`).join('')}</span></div>`).join('') || '<span class="mut">אין כרגע חיילים שדורשים תשומת לב מיוחדת.</span>'}</div>`;
 };
 
@@ -1556,6 +1612,7 @@ const RF = (k) => { const c = cf(k); return [
   ['per', 'סטטוס ' + A.S.period.label, ['הוזן', 'חסר'].concat(TR().periodRec), (x, v) => { const r = periodRv(x); return v === 'הוזן' ? !!r : (v === 'חסר' ? !r && isActive(x) : !!r && r.rec === v); }],
   ['arr', 'הגעה היום', TR().attend.concat(['לא עודכן']), (x, v) => (v === 'לא עודכן' ? !arriveToday(x) : arriveToday(x) === v)],
   ['miss', 'נתונים בתיק', ['חסר מידע', 'מלא'], (x, v) => (missingOf(k, x).length ? 'חסר מידע' : 'מלא') === v],
+  ['mk', 'השלמות', ['יש השלמות', '3 ומעלה', 'אין'], (x, v) => { const n = makeups(k, x).length; return v === 'אין' ? !n : (v === '3 ומעלה' ? n >= 3 : n > 0); }],
 ]; };
 function rosterList(k) {
   const f = A.ui.rf || {}, q = (f.q || '').trim().toLowerCase(), fs = RF(k);
@@ -1565,10 +1622,10 @@ function rosterList(k) {
 function rosterAoa(k, rows) {
   const c = cf(k);
   return [['מס׳', 'שם', 'תפקיד', 'יחידה', c.targetLabel, 'צוות', 'סטטוס', 'תאריך גיוס', 'הגעה היום', 'התנסות אחרונה', 'רמה בהתנסות האחרונה', 'תאריך התנסות אחרונה', 'אירועים חריגים', 'סטטוס ' + A.S.period.label, 'המלצת מגבש']
-    .concat(c.stats.map((s) => s.l + ' (' + s.u + ')'), c.traits.map((t) => 'רמה: ' + t), ['חסר בתיק', 'בדיקת הדחה פתוחה', 'מקור'])]
+    .concat(c.stats.map((s) => s.l + ' (' + s.u + ')'), c.traits.map((t) => 'רמה: ' + t), ['חסר בתיק', 'בדיקת הדחה פתוחה', 'מקור', 'ביצוע תוכנית %', 'השלמות פתוחות', 'פירוט השלמות'])]
     .concat(rows.map((x) => { const l = lastDaily(x), r = periodRv(x), od = openDis(x), m = missingOf(k, x);
       return [x.id, x.name, x.role, x.unit || '', x.target || '', x.group, x.tstatus, x.intakeTs ? fmtD(x.intakeTs) : '', arriveToday(x), l ? (l.exp || 'מעקב יומי') + (l.title && l.title !== l.exp ? ' – ' + l.title : '') : '', l ? TR().daily[l.level] : '', l ? fmtD(l.ts) : '', (x.events || []).length || '', r ? r.rec : (isActive(x) ? 'חסר' : ''), x.rec || '']
-        .concat(c.stats.map((s) => cellVal(s, x.stats[s.k])), c.traits.map((t, i) => (x.lv[i] == null ? '' : WORDS[x.lv[i]])), [m.join(', '), od ? 'כן' : '', x.source || '']); }));
+        .concat(c.stats.map((s) => cellVal(s, x.stats[s.k])), c.traits.map((t, i) => (x.lv[i] == null ? '' : WORDS[x.lv[i]])), [m.join(', '), od ? 'כן' : '', x.source || '', progOf(k, x).pct, makeups(k, x).length, makeups(k, x).map((it) => it.l).join(', ')]); }));
 }
 SCREENS.roster = (k) => {
   const c = cf(k), f = A.ui.rf || {}, rows = rosterList(k), fs = RF(k), nf = fs.filter(([key]) => f[key]).length + (f.q ? 1 : 0); A.ui.list = rows.map((x) => x.id);
@@ -1578,7 +1635,7 @@ SCREENS.roster = (k) => {
     <div class="row no-print"><button class="btn" data-act="rosterXlsx" ${rows.length ? '' : 'disabled'}>${icon('file', 17)} ייצוא לאקסל (${rows.length})</button></div></div>
    <div class="card"><div class="filters"><label>חיפוש לפי שם / מספר<input type="search" id="rf-q" data-inp="rfq" value="${esc(f.q || '')}" placeholder="לדוגמה: כהן או C-2101" autocomplete="off" style="min-width:200px"></label>${fs.map(sel).join('')}${nf ? `<button class="btn sec sm" data-act="rfClear" style="align-self:flex-end">ניקוי ${nf} מסננים</button>` : ''}</div>
    <div class="mut small" style="margin:-4px 0 8px">הייצוא כולל רק את השורות שמוצגות לפי הסינון, עם כל המדדים, הרמות והסטטוסים.</div>
-   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>תפקיד</th><th>יחידה</th><th>${esc(c.targetLabel)}</th><th>צוות</th><th>סטטוס</th><th>הגעה היום</th><th>התנסות אחרונה</th><th>${esc(A.S.period.label)}</th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x), av = arriveToday(x); return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap">${avatar(x, 40)}<span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="display:block">${x.id}</bdi></span></span></td><td>${esc(x.role)}</td><td>${esc(x.unit || '—')}</td><td>${esc(x.target || '—')}</td><td>${x.group}</td><td>${st(x)}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (av ? `<span class="pill ${av === TR().attend[0] ? 'p-green' : 'p-orange'}">${esc(av)}</span>` : '<span class="mut small">לא עודכן</span>')}</td><td>${isActive(x) ? dailyPill(lastDaily(x)) : '<span class="mut">—</span>'}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (r ? `<span class="pill p-green">${esc(r.rec)}</span>` : '<span class="pill p-orange">חסר</span>')}</td></tr>`; }).join('') || '<tr><td colspan="9" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
+   <div style="overflow:auto"><table class="ctbl"><thead><tr><th>חייל/ת</th><th>תפקיד</th><th>יחידה</th><th>${esc(c.targetLabel)}</th><th>צוות</th><th>סטטוס</th><th>הגעה היום</th><th>התנסות אחרונה</th><th>${esc(A.S.period.label)}</th><th>השלמות</th></tr></thead><tbody>${rows.map((x) => { const r = periodRv(x), av = arriveToday(x), mk = makeups(k, x); return `<tr class="clk" data-act="cand" data-id="${x.id}"><td><span class="row" style="gap:10px;flex-wrap:nowrap">${avatar(x, 40)}<span style="white-space:nowrap"><b>${candLink(k, x.id, x.name)}</b> <bdi class="mut small" style="display:block">${x.id}</bdi></span></span></td><td>${esc(x.role)}</td><td>${esc(x.unit || '—')}</td><td>${esc(x.target || '—')}</td><td>${x.group}</td><td>${st(x)}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (av ? `<span class="pill ${av === TR().attend[0] ? 'p-green' : 'p-orange'}">${esc(av)}</span>` : '<span class="mut small">לא עודכן</span>')}</td><td>${isActive(x) ? dailyPill(lastDaily(x)) : '<span class="mut">—</span>'}</td><td>${!isActive(x) ? '<span class="mut">—</span>' : (r ? `<span class="pill p-green">${esc(r.rec)}</span>` : '<span class="pill p-orange">חסר</span>')}</td><td>${mk.length ? `<span class="pill p-red" title="${esc(mk.map((it) => it.l).join(', '))}">${mk.length}</span>` : '<span class="mut">—</span>'}</td></tr>`; }).join('') || '<tr><td colspan="10" class="mut">אין חיילים שמתאימים לסינון. נסו להסיר מסנן.</td></tr>'}</tbody></table></div></div>`;
 };
 Object.assign(ACTIONS, {
   rf: (d, t) => { A.ui.rf = Object.assign({}, A.ui.rf, { [d.f]: t.type === 'checkbox' ? t.checked : t.value }); rerender(); },
@@ -2145,6 +2202,108 @@ Object.assign(ACTIONS, {
   tempClose: () => { A.ui.tempPw = null; rerender(); },
 });
 
+</script>
+<script>// Training program (תוכנית הכשרה) and makeups (השלמות).
+// The program is a fixed list of items (lessons, ranges, tests, drills) by phase and domain (A.cfg.program). An item counts as "held" for a team
+// once anyone in that team has a record of it; from then on every active soldier of the team needs a record: done (with a score / time when the
+// item has one), excused, or missed. Missed or unrecorded = a makeup (השלמה). Recording the makeup later replaces the record.
+const PG = () => A.cfg.program;
+const progRec = (c, key) => (c.prog || {})[key];
+const DONE = () => PG().marks[0], MISS = () => PG().marks[1], EXEMPT = () => PG().marks[2];
+// items held per team, cached per state version
+function heldMap(k) {
+  const key = k + '|' + A.S.version + '|' + (A.me && A.me.id);
+  if (A._held && A._held.key === key) return A._held.map;
+  const map = {}; cs(k).cands.forEach((c) => { const s = map[c.group] || (map[c.group] = new Set()); Object.keys(c.prog || {}).forEach((it) => s.add(it)); });
+  A._held = { key, map }; return map;
+}
+const isHeld = (k, c, it) => !!(heldMap(k)[c.group] && heldMap(k)[c.group].has(it.k));
+// the makeups of one soldier: held for the team, and missed or not recorded
+function makeups(k, c) { if (!isActive(c)) return []; return PG().items.filter((it) => { if (!isHeld(k, c, it)) return false; const r = progRec(c, it.k); return !r || r.s === MISS(); }); }
+function progOf(k, c) {
+  const held = PG().items.filter((it) => isHeld(k, c, it)), rel = held.filter((it) => { const r = progRec(c, it.k); return !r || r.s !== EXEMPT(); }), done = rel.filter((it) => { const r = progRec(c, it.k); return r && r.s === DONE(); });
+  return { held: held.length, rel: rel.length, done: done.length, total: PG().items.length, pct: rel.length ? Math.round(done.length / rel.length * 100) : 100 };
+}
+const fmtProg = (it, r) => (!r ? '' : (r.s !== DONE() ? r.s : (it.kind === 'time' && r.v != null ? fmtTime(r.v) : (r.v != null ? String(r.v) : '✓'))));
+const progCls = (r) => (!r ? 'p-orange' : (r.s === DONE() ? 'p-green' : (r.s === MISS() ? 'p-red' : 'p-gray')));
+const canProg = (k, it) => can('prog', k) || (can('progmini', k) && (!it || PG().squadDomains.includes(it.domain)));
+const pgState = () => A.ui.pg || (A.ui.pg = { tab: 'mk', phase: '', domain: '', item: '', only: false, d: {} });
+const domainsOf = (phase) => Array.from(new Set(PG().items.filter((it) => !phase || it.phase === phase).map((it) => it.domain)));
+const progRows = (k) => { const f = pgState(); return visible(k).filter(isActive).filter((x) => !f.team || x.group === +f.team); };
+// small progress card for the soldier's file
+function progCard(k, c) {
+  const p = progOf(k, c), mk = makeups(k, c);
+  return `<div class="card"><div class="row spread"><h3 style="margin:0">תוכנית הכשרה</h3><a class="small" href="#/program" data-act="pgSoldier" data-id="${c.id}">לתוכנית ←</a></div>
+   <div class="row" style="margin-top:6px"><div class="bar" style="flex:1"><i style="width:${p.pct}%"></i></div><b>${p.done} / ${p.rel}</b><span class="mut small">מהפריטים שהתקיימו (${p.pct}%)</span></div>
+   ${mk.length ? `<div style="margin-top:8px"><b class="small">השלמות (${mk.length})</b><div class="phrases" style="margin-top:4px">${mk.map((it) => `<span class="pill ${progCls(progRec(c, it.k))}" title="${esc(it.phase + ' · ' + it.domain)}">${esc(it.l)}${progRec(c, it.k) ? '' : ' · אין תיעוד'}</span>`).join('')}</div></div>` : '<div class="mut small" style="margin-top:6px">אין השלמות פתוחות.</div>'}</div>`;
+}
+SCREENS.program = (k) => {
+  const f = pgState(), rows = progRows(k), tabs = [['mk', 'השלמות'], ['rec', 'תיעוד פריט'], ['mx', 'מטריצה']];
+  const all = rows.map((x) => ({ x, mk: makeups(k, x), p: progOf(k, x) })), open = all.reduce((n, r) => n + r.mk.length, 0), withMk = all.filter((r) => r.mk.length).length;
+  const rel = all.reduce((n, r) => n + r.p.rel, 0), done = all.reduce((n, r) => n + r.p.done, 0);
+  const teamSel = teamOnly() ? '' : `<label>צוות<select data-chg="pgSet" data-f="team"><option value="">הכול</option>${teamList().map((t) => `<option ${String(t) === String(f.team || '') ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
+  let body = '';
+  if (f.tab === 'mk') {
+    const byItem = PG().items.map((it) => ({ it, who: all.filter((r) => r.mk.includes(it)).map((r) => r.x) })).filter((r) => r.who.length).sort((a, b) => b.who.length - a.who.length);
+    body = `<div class="grid g2" style="align-items:start"><div class="card"><h2>לפי חייל/ת</h2><div class="mut small" style="margin-bottom:6px">מי שחסרים לו פריטים שכבר התקיימו לצוות (לא השתתף/ה, או שאין תיעוד).</div>${all.filter((r) => r.mk.length).sort((a, b) => b.mk.length - a.mk.length).map((r) => `<div class="tl"><div class="row spread"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(r.x, 32)}<b>${candLink(k, r.x.id, r.x.name)}</b><span class="mut small">צוות ${r.x.group} · ${r.p.pct}%</span></span><span class="pill p-red">${r.mk.length} השלמות</span></div><div class="phrases" style="margin-top:6px">${r.mk.slice(0, 8).map((it) => `<span class="pill ${progCls(progRec(r.x, it.k))}">${esc(it.l)}</span>`).join('')}${r.mk.length > 8 ? `<span class="mut small">ועוד ${r.mk.length - 8}</span>` : ''}</div></div>`).join('') || '<div class="mut">אין השלמות פתוחות. כל הכבוד!</div>'}</div>
+     <div class="card"><h2>לפי פריט</h2><div class="mut small" style="margin-bottom:6px">לכל פריט – כמה צריכים השלמה. "תיעוד השלמה" פותח את הפריט רק עם מי שחסר לו.</div>${byItem.map((r) => `<div class="tl row spread"><span><b>${esc(r.it.l)}</b> <span class="mut small">${esc(r.it.phase)} · ${esc(r.it.domain)}</span><div class="mut small">${r.who.slice(0, 5).map((x) => esc(x.name)).join(', ')}${r.who.length > 5 ? '…' : ''}</div></span><span class="row" style="gap:6px"><span class="pill p-red">${r.who.length}</span>${canProg(k, r.it) ? `<button class="btn sec sm" data-act="pgMakeup" data-item="${r.it.k}">תיעוד השלמה</button>` : ''}</span></div>`).join('') || '<div class="mut">אין פריטים עם השלמות.</div>'}</div></div>`;
+  }
+  if (f.tab === 'rec') {
+    const items = PG().items.filter((it) => (!f.phase || it.phase === f.phase) && (!f.domain || it.domain === f.domain) && canProg(k, it)), it = PG().items.find((x) => x.k === f.item);
+    const sel = (key, label, opts, val, all1) => `<label>${label}<select data-chg="pgSet" data-f="${key}">${all1 ? `<option value="">${all1}</option>` : ''}${opts.map(([v, t]) => `<option value="${esc(v)}" ${String(v) === String(val || '') ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+    const heldCnt = (x) => rows.filter((s) => progRec(s, x.k)).length;
+    let list = '';
+    if (it) {
+      const rs = rows.filter((x) => !f.only || makeups(k, x).includes(it)), d = f.d;
+      const changed = rs.filter((x) => { const q = d[x.id]; if (!q) return false; const r = progRec(x, it.k); if (!q.s && !r) return false; return !r || r.s !== q.s || (q.s === DONE() && it.kind !== 'done' && String(r.v) !== String(q.v)); });
+      list = `<div class="exlist">${rs.map((x) => { const r = progRec(x, it.k), q = d[x.id] || {};
+        return `<div class="excard ${q.s ? 'set' : ''}"><div class="row spread" style="flex-wrap:nowrap"><span class="row" style="gap:8px;flex-wrap:nowrap">${avatar(x, 34)}<span><b>${candLink(k, x.id, x.name)}</b><span class="mut small" style="display:block">צוות ${x.group} · ${r ? 'מתועד: ' + esc(fmtProg(it, r)) + ' · ' + fmtD(r.ts) : 'אין תיעוד'}</span></span></span></div>
+         <div class="seg big">${PG().marks.map((m) => `<button type="button" class="${q.s === m ? 'on ' + (m === DONE() ? 'l2' : (m === MISS() ? 'l0' : 'l1')) : ''}" data-act="pgMark" data-id="${x.id}" data-v="${esc(m)}">${esc(m)}</button>`).join('')}</div>
+         ${it.kind !== 'done' && q.s === DONE() ? `<label class="small mut row" style="gap:6px">${it.kind === 'time' ? 'זמן (דק׳:שנ׳)' : 'ציון'}<input type="text" inputmode="${it.kind === 'time' ? 'text' : 'decimal'}" id="pgv-${x.id}" data-inp="pgVal" data-id="${x.id}" value="${esc(q.v == null ? '' : (it.kind === 'time' && typeof q.v === 'number' ? fmtTime(q.v) : q.v))}" placeholder="${it.kind === 'time' ? '8:45' : '0–100'}" style="width:110px"></label>` : ''}</div>`; }).join('') || '<div class="card mut">אין חיילים לתיעוד בסינון הזה.</div>'}</div>
+       <div class="exbar"><b>${changed.length}</b><span class="mut small">שינויים לשמירה</span><span style="flex:1"></span><button class="btn sec" data-act="pgAll" title="מסמן ${esc(DONE())} לכל מי שעוד לא סומן/ה">כולם: ${esc(DONE())}</button><button class="btn" data-act="pgSave" ${changed.length ? '' : 'disabled'}>שמירת ${changed.length} רישומים</button></div>`;
+    }
+    body = `<div class="card"><div class="filters">${sel('phase', 'שלב', PG().phases.map((p) => [p, p]), f.phase, 'הכול')}${sel('domain', 'תחום', domainsOf(f.phase).map((d) => [d, d]), f.domain, 'הכול')}${sel('item', 'פריט', items.map((x) => [x.k, x.l + (it && it.k === x.k ? '' : (heldCnt(x) ? ' · התקיים' : ''))]), f.item, 'בחרו פריט…')}${teamSel}<label class="row" style="gap:6px;align-self:flex-end"><input type="checkbox" id="pg-only" data-chg="pgSet" data-f="only" ${f.only ? 'checked' : ''}> רק מי שצריך השלמה</label></div>
+      ${can('progmini', k) && !can('prog', k) ? `<div class="demo-note">כמ״כ אפשר לתעד בתוכנית רק: ${esc(PG().squadDomains.join(', '))}.</div>` : ''}
+      ${it ? `<div class="mut small">${esc(it.phase)} · ${esc(it.domain)} · ${it.kind === 'score' ? 'נרשם ציון' : (it.kind === 'time' ? 'נרשם זמן' : 'השתתפות')}. כולם מסומנים "${esc(DONE())}" כברירת מחדל – מסמנים רק מי שחסר/ה או פטור/ה.</div>` : '<div class="mut">בחרו פריט מהתוכנית כדי לתעד את הצוות.</div>'}</div>${list}`;
+  }
+  if (f.tab === 'mx') {
+    const ph = f.phase || PG().phases[0], dm = f.domain && domainsOf(ph).includes(f.domain) ? f.domain : domainsOf(ph)[0], its = PG().items.filter((it) => it.phase === ph && it.domain === dm);
+    body = `<div class="card"><div class="filters"><label>שלב<select data-chg="pgSet" data-f="phase">${PG().phases.map((p) => `<option ${p === ph ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></label><label>תחום<select data-chg="pgSet" data-f="domain">${domainsOf(ph).map((d) => `<option ${d === dm ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></label>${teamSel}</div>
+     <div class="mut small" style="margin-bottom:6px"><span class="pill p-green">✓ / ציון</span> בוצע · <span class="pill p-red">חסר</span> לא השתתף/ה · <span class="pill p-orange">?</span> התקיים לצוות ואין תיעוד · <span class="pill p-gray">פטור</span> · ריק = עוד לא התקיים לצוות</div>
+     <div style="overflow:auto"><table class="ctbl mx"><thead><tr><th>חייל/ת</th>${its.map((it) => `<th title="${esc(it.l)}">${esc(it.l)}</th>`).join('')}<th>השלמות</th></tr></thead><tbody>${all.map((r) => `<tr><td style="white-space:nowrap"><b>${candLink(k, r.x.id, r.x.name)}</b> <span class="mut small">צ׳ ${r.x.group}</span></td>${its.map((it) => { const rc = progRec(r.x, it.k), held = isHeld(k, r.x, it); return `<td class="c">${rc ? `<span class="pill ${progCls(rc)}">${esc(fmtProg(it, rc))}</span>` : (held ? '<span class="pill p-orange">?</span>' : '')}</td>`; }).join('')}<td class="c">${r.mk.length ? `<span class="pill p-red">${r.mk.length}</span>` : '<span class="mut">—</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
+  }
+  return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">תוכנית הכשרה והשלמות</h1><div class="mut small">${PG().items.length} פריטים ב-${PG().phases.length} שלבים. השלמה = פריט שהתקיים לצוות והחייל/ת לא השתתף/ה בו או שאין עליו תיעוד.</div></div>
+    <div class="row no-print"><button class="btn sec" data-act="pgExport">ייצוא מטריצה לאקסל</button></div></div>
+   <div class="grid g3" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"><div class="kpi"><b>${rel ? Math.round(done / rel * 100) : 100}%</b><span>ביצוע מהפריטים שהתקיימו</span></div><div class="kpi"><b>${open}</b><span>השלמות פתוחות</span></div><div class="kpi"><b>${withMk} / ${all.length}</b><span>חיילים עם השלמות</span></div></div>
+   <div class="row"><div class="seg">${tabs.map(([t, l]) => `<button type="button" class="${f.tab === t ? 'on' : ''}" data-act="pgTab" data-v="${t}">${l}</button>`).join('')}</div>${f.tab === 'rec' ? '' : `<div class="filters" style="margin:0">${f.tab === 'mk' ? teamSel : ''}</div>`}</div>
+   ${body}`;
+};
+// matrix of the whole program for Excel: one row per soldier, one column per item, and the open makeups
+function progAoa(k) {
+  const its = PG().items, rows = progRows(k);
+  return [['מס׳', 'שם', 'צוות'].concat(its.map((it) => it.phase + ' · ' + it.domain + ' · ' + it.l), ['ביצוע %', 'השלמות פתוחות', 'פירוט השלמות'])]
+    .concat(rows.map((x) => { const mk = makeups(k, x), p = progOf(k, x); return [x.id, x.name, x.group].concat(its.map((it) => { const r = progRec(x, it.k); return r ? fmtProg(it, r) : (isHeld(k, x, it) ? 'אין תיעוד' : ''); }), [p.pct, mk.length, mk.map((it) => it.l).join(', ')]); }));
+}
+function pgInitDraft(k) { // the draft starts from what is recorded; soldiers without a record start as "done" (unless only makeups are shown)
+  const f = pgState(), it = PG().items.find((x) => x.k === f.item); f.d = {}; if (!it) return;
+  progRows(k).forEach((x) => { const r = progRec(x, it.k); if (r) f.d[x.id] = { s: r.s, v: r.v }; else if (!f.only) f.d[x.id] = { s: DONE(), v: null }; });
+}
+Object.assign(ACTIONS, {
+  pgTab: (d) => { pgState().tab = d.v; if (d.v === 'rec') pgInitDraft(corpsKey()); rerender(); },
+  pgSet: (d, t) => { const f = pgState(), k = corpsKey(); f[d.f] = t.type === 'checkbox' ? t.checked : t.value; if (d.f === 'phase') { f.domain = ''; if (f.tab === 'rec') f.item = ''; } if (d.f === 'domain' && f.tab === 'rec') f.item = ''; if (['item', 'only', 'team', 'phase', 'domain'].includes(d.f)) pgInitDraft(k); rerender(); },
+  pgMakeup: (d) => { const f = pgState(), it = PG().items.find((x) => x.k === d.item); Object.assign(f, { tab: 'rec', phase: it.phase, domain: it.domain, item: it.k, only: true }); pgInitDraft(corpsKey()); rerender(); window.scrollTo(0, 0); },
+  pgSoldier: (d, t, e) => { if (e) e.preventDefault(); A.ui.cand = null; A.ui.cf = null; Object.assign(pgState(), { tab: 'mk' }); go('program'); },
+  pgMark: (d) => { const q = pgState().d[d.id] || (pgState().d[d.id] = { v: null }); q.s = q.s === d.v ? '' : d.v; rerender(); },
+  pgVal: (d, t) => { const it = PG().items.find((x) => x.k === pgState().item), q = pgState().d[d.id] || (pgState().d[d.id] = { s: DONE() }); q.v = t.value.trim() === '' ? null : (it.kind === 'time' ? parseStat({ u: 'דק׳' }, t.value) : Number(String(t.value).replace(',', '.'))); t.classList.toggle('invalid', t.value.trim() !== '' && (q.v == null || isNaN(q.v))); },
+  pgAll: () => { const f = pgState(), k = corpsKey(); progRows(k).filter((x) => !f.only || makeups(k, x).some((it) => it.k === f.item)).forEach((x) => { if (!f.d[x.id] || !f.d[x.id].s) f.d[x.id] = { s: DONE(), v: null }; }); rerender(); },
+  pgSave: async () => {
+    const k = corpsKey(), f = pgState(), it = PG().items.find((x) => x.k === f.item); if (!it) return;
+    const rows = progRows(k).filter((x) => { const q = f.d[x.id]; if (!q || q.s === undefined) return false; const r = progRec(x, it.k); return (q.s || r) && (!r || r.s !== q.s || (q.s === DONE() && it.kind !== 'done' && String(r.v) !== String(q.v))); }).map((x) => ({ id: x.id, s: f.d[x.id].s, v: f.d[x.id].v }));
+    if (it.kind !== 'done' && rows.some((r) => r.s === DONE() && (r.v == null || isNaN(r.v)))) { toast(it.kind === 'time' ? 'הזינו זמן לכל מי שסומן/ה "' + DONE() + '"' : 'הזינו ציון לכל מי שסומן/ה "' + DONE() + '"', true); return; }
+    try { const r = await api('prog', { corps: k, item: it.k, rows }); toast(it.l + ': נשמרו ' + r.saved + ' רישומים'); pgInitDraft(k); rerender(); } catch (x) { /* toast shown */ }
+  },
+  pgExport: () => { const k = corpsKey(), name = 'program-' + k + '-' + A.S.today + '.xlsx'; auditEvent('export', 'program xlsx'); downloadBook(name, [['תוכנית הכשרה', progAoa(k)]]); toast(name + ' הורד'); },
+});
 </script>
 <script>// Standalone glue: route api()/refresh()/SSE to the in-browser LocalServer
 // confirm() is blocked in sandboxed viewers; actions are already explicit button clicks

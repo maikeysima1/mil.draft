@@ -91,23 +91,43 @@ const TARGETS = { recon: ['פלס״ר (סיור)', 'פלחה״ן (חבלה וה�
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'complete', 'regroup', 'evalbulk', 'settings', 'factory'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, תיעוד התנסויות, הגדרות, משתמשים ואיפוס. תהליך ההדחה (שיחות וועדות) אינו שלו/ה.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'eval'], desc: 'מתעד/ת התנסויות וסטטוס תקופתי, פותח/ת בדיקת הדחה, מתעד/ת שיחות ואת הוועדות בתהליך ההדחה ומחליט/ה בהן, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'complete', 'regroup', 'evalbulk', 'settings', 'factory', 'prog'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, תיעוד התנסויות, הגדרות, משתמשים ואיפוס. תהליך ההדחה (שיחות וועדות) אינו שלו/ה.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'eval', 'prog'], desc: 'מתעד/ת התנסויות וסטטוס תקופתי, פותח/ת בדיקת הדחה, מתעד/ת שיחות ואת הוועדות בתהליך ההדחה ומחליט/ה בהן, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
   // training staff (סגל הכשרה): the platoon / company commanders are responsible for filling in the data; the squad commander may only update basic data
-  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד השיחות בתהליך. ההחלטה – בוועדה.' },
-  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד שיחת המ״מ.' },
-  'מ״כ': { layer: 5, scope: 'group', home: 'eval', staff: true, pages: ['roster', 'eval'], can: ['evalmini', 'attend'], desc: 'סגל הכשרה – מפקד/ת כיתה. רואה את חיילי הצוות, ויכול/ה לעדכן רק נתונים בסיסיים: מדדים (קליעה, ריצה וכו׳) וסטטוס הגעה. שאר הנתונים באחריות המ״מ / המ״פ.' },
+  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend', 'prog'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד השיחות בתהליך. ההחלטה – בוועדה.' },
+  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'program', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend', 'prog'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד שיחת המ״מ.' },
+  'מ״כ': { layer: 5, scope: 'group', home: 'eval', staff: true, pages: ['roster', 'program', 'eval'], can: ['evalmini', 'attend', 'progmini'], desc: 'סגל הכשרה – מפקד/ת כיתה. רואה את חיילי הצוות, ויכול/ה לעדכן רק נתונים בסיסיים: מדדים (קליעה, ריצה וכו׳), ימי קליעה בתוכנית ההכשרה וסטטוס הגעה. שאר הנתונים באחריות המ״מ / המ״פ.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה בלבד בתמונת המצב של כל החילות. אין גישה לתיקי החיילים.' },
-  'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
-  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss'], desc: 'אחראי/ת על צוות אחד: תיעוד התנסויות של חיילי הצוות, דף מגבש ופתיחת בדיקת הדחה. השיחות וההחלטה בתהליך ההדחה – של הסגל והוועדה.' },
+  'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'program', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'program', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss', 'prog'], desc: 'אחראי/ת על צוות אחד: תיעוד התנסויות של חיילי הצוות, דף מגבש ופתיחת בדיקת הדחה. השיחות וההחלטה בתהליך ההדחה – של הסגל והוועדה.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה במספרים המסכמים בתמונת המצב בלבד, ללא שמות, תיקים או הרשאות פעולה.' },
 };
 // evaluators and training-staff teams per track (each team has one evaluator, one מ״מ and one מ״כ)
 const TEAMS = [1, 2];
+// Training program (תוכנית הכשרה): the fixed list of lessons, ranges, tests and drills every soldier must complete, by phase and domain.
+// Built from the column headers of a company's tracking workbook (item names only – no personal data). Replace with the real program per track.
+// kind: 'done' = took part / passed (yes / no) · 'score' = a test score (0–100) · 'time' = a time in minutes:seconds
+// A soldier needs a makeup (השלמה) for every item that was already held for the team and that the soldier missed or has no record of.
+const PROGRAM = (() => {
+  const items = [];
+  const add = (phase, domain, list) => list.forEach((x) => { const [l, kind] = Array.isArray(x) ? x : [x, 'done']; items.push({ k: 'p' + (items.length + 1), l, phase, domain, kind }); });
+  add('הכש״י', 'קליעה', ['ירי איפוס', 'סימולטור', 'יום קליעה 5 – יום', 'יום קליעה 5 – לילה', 'יום קליעה 6 – יום', 'יום קליעה 6 – לילה', 'יום קליעה 7', 'קליעה 8 – ירי בתנועה', 'קליעה 9 – טווחים קצרים', ['קליעה 11 – מסכם הכש״י', 'score']]);
+  add('הכש״י', 'שיעורים מקצועיים', ['שיעור קשר כיתתי', ['מבחן קשר', 'score'], 'פירוק והרכבה', 'יסודות ירי', 'מעצורים', ['מבחן נשק', 'score'], ['מבחן ב״מ', 'score'], 'שיעור אב״כ', ['בוחן שדאות', 'score']]);
+  add('הכש״י', 'חבלה', ['מבוא לחבלה', 'הפעלה קרבית', 'הפעלה חשמלית', 'מעגל רועם', ['מבחן חבלן בסיסי', 'score'], 'מטווח חבלה – פרט יום', 'מטווח חבלה – פרט לילה', 'מטווח חבלה – חוליה יום', 'מטווח חבלה – חוליה לילה']);
+  add('הכש״י', 'כושר', [['בוחן כש״ג ראשון', 'score'], 'ריצה 2 ק״מ', 'ריצה 3.5 ק״מ', 'ריצה 5 ק״מ', 'קרב מגע – אימון 1', 'קרב מגע – אימון 2', ['בוחן כש״ג שני', 'score']]);
+  add('הכש״י', 'מסעות', ['מסע 3', 'מסע 5', 'מסע 7+1', 'מסע 10+2']);
+  add('הכש״י', 'בטיחות וחינוך', [['בוחן בטיחות', 'score'], 'שעת בטיחות – רבעון', 'התנהגות ברשתות', 'בטיחות בדרכים', 'הר הרצל', 'יד ושם']);
+  add('הכש״מ', 'חבלה ומיקוש', ['מטען רעם', 'צפ״ח', 'מסגרת פריצה', 'חבלה במבנים', ['מבחן חבלן מתקדם', 'score'], 'מבוא למיקוש', ['מבחן מיקוש', 'score'], 'תרמ״ח מתחת לאדמה']);
+  add('הכש״מ', 'רק״ם', ['היכר רק״ם', 'טיפולים', 'החלפת גלגל', 'פריסת זחל', ['מבחן רק״ם', 'score']]);
+  add('הכש״מ', 'קליעה', ['קליעה 12 – מכסות', ['קליעה 14 – מסכם הכש״מ', 'score'], 'ירי מא״ג – יום']);
+  add('הכש״מ', 'שטח פתוח ותרגילים', [['בוחן בטיחות שטח פתוח', 'score'], 'פרט', 'פרט לילה', 'חוליה', 'חוליה לילה', 'כיתה', 'כיתה לילה', 'מחלקה', 'צוות יום', 'צוות לילה', ['בוחן מחלקה', 'score'], ['בחמ״ס', 'time'], ['בוחן לוחם', 'score']]);
+  add('הכש״מ', 'כושר ומסעות', ['ריצה 6 ק״מ', 'וסט + אלונקות 2.5', 'מסע 14+3', 'מסע 18+5', 'מסע כומתה', ['בוחן כש״ג סוף', 'score']]);
+  return { phases: ['הכש״י', 'הכש״מ'], items, marks: ['עשה', 'חסר', 'פטור'], squadDomains: ['קליעה'] }; // squadDomains: what a מ״כ may record
+})();
 const canDo = (user, action, k) => { const r = ROLES[user && user.role]; return !!r && r.can.includes(action) && (r.scope === 'all' || user.corps === k); };
 // Login step 1 ("חיל"): the five entrances. Users carry org / orgUnit / roleLabel for steps 1-3.
 const ORGS = [
   { key: 'recon', label: 'יח״טיות חטיבתיות' }, { key: 'special', label: 'יחידות מיוחדות' }, { key: 'pilot', label: 'קורס טיס' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
-module.exports={TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,RECS,WORDS:['בסיסי','טוב','בולט']};
+module.exports={PROGRAM,TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,RECS,WORDS:['בסיסי','טוב','בולט']};

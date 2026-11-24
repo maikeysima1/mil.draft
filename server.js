@@ -199,7 +199,7 @@ function nextStage(d) {
 }
 const logAct = (k, text) => { const e = { ts: Date.now(), corps: k, text }; state.log.push(e); if (state.log.length > 1500) state.log.shift(); if (typeof onLog === 'function') onLog(e); }; // onLog: the host may keep the full history (the database does)
 // training fields of a soldier who enters the system (event 1: intake)
-function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; c.events = []; return c; }
+function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; c.events = []; c.prog = {}; return c; }
 // demo history so the screens are not empty: a few daily entries, last period's status, and three soldiers in / after a dismissal review
 function seedTraining(k, cands) {
   const cf = cfg(k), now = Date.now(); let s = 5 + k.length;
@@ -217,6 +217,14 @@ function seedTraining(k, cands) {
     if (i % 5 !== 4) c.reviews.push({ period: prev.key, label: prev.label, ts: now - (60 + Math.floor(rnd() * 20)) * DAY, by: 'מפקד/ת הכשרה · ' + c.unit, lv: c.lv.slice(), rec: sum <= 4 ? C.TR.periodRec[1] : C.TR.periodRec[0], summary: (cf.traits.filter((t, j) => c.lv[j] === 2).length ? 'חוזקות: ' + cf.traits.filter((t, j) => c.lv[j] === 2).join(', ') + '. ' : 'תפקוד תקין ברוב התחומים. ') + (cf.traits.filter((t, j) => c.lv[j] === 0).length ? 'לחיזוק: ' + cf.traits.filter((t, j) => c.lv[j] === 0).join(', ') + '.' : 'אין תחום חריג לחיזוק.') });
     if (sum <= 4 && c.reviews.length) c.tstatus = 'במעקב';
   });
+  // program records: most of the first phase and the start of the second were held; some soldiers missed items (they need makeups)
+  const P = C.PROGRAM, held = P.items.filter((it) => it.phase === P.phases[0]).slice(0, -3).concat(P.items.filter((it) => it.phase === P.phases[1]).slice(0, 9));
+  cands.forEach((c) => { c.prog = {}; held.forEach((it, j) => {
+    const r = rnd(); if (r < 0.03) return; // no record at all: a gap
+    const s = r < 0.09 ? P.marks[1] : (r < 0.11 ? P.marks[2] : P.marks[0]);
+    const v = s === P.marks[0] && it.kind === 'score' ? Math.round(62 + rnd() * 36) : (s === P.marks[0] && it.kind === 'time' ? Math.round((7.8 + rnd() * 2.6) * 60) / 60 : null);
+    c.prog[it.k] = { s, v, ts: now - (95 - j) * DAY, by: 'מ״מ צוות ' + c.group + ' · ' + cf.short, byId: 'seed' };
+  }); });
   const low = cands.filter((c) => c.tstatus === 'במעקב');
   if (low[0]) { low[0].tstatus = 'בבדיקת הדחה'; low[0].dismiss.push({ id: 'd1', status: 'פתוחה', openedTs: now - 3 * DAY, openedBy: 'מגבש/ת צוות ' + low[0].group, reason: 'ירידה מתמשכת בתפקוד בשבועיים האחרונים וקושי לעמוד בעומס.', prev: 'במעקב', treat: 'שיחה אישית עם המ״מ ותגבור בתרגילי הצוות.', stages: [{ key: C.TR.stages[0].key, label: C.TR.stages[0].label, byId: 'seed', by: 'מ״מ צוות ' + low[0].group + ' · ' + cf.short, rec: C.TR.stances[0], summary: 'שלושה תרגילים רצופים שבהם לא עמד/ה בקצב הצוות, גם אחרי שיחה אישית.', ts: now - 2 * DAY }] }); }
   if (low[0]) low[0].events.push({ ts: now - 4 * DAY, by: 'מ״מ צוות ' + low[0].group + ' · ' + cf.short, byId: 'seed', kind: C.TR.eventKinds[1], text: 'לא הגיע/ה למסדר הבוקר ונמצא/ה רק אחרי שעה. שיחה מיידית עם המ״מ.' });
@@ -348,6 +356,25 @@ function apiHandle(p, b, user) {
     c.events = c.events || []; c.events.push({ ts: Date.now(), by: user.title, byId: user.id, kind: b.kind, text: txt });
     logAct(k, `${user.title} תיעד/ה אירוע חריג (${b.kind}) ל${c.name}`); save(); return { ok: true };
   }
+  // ---- training program (תוכנית הכשרה): one record per soldier per program item; a later save replaces it (that is how a makeup is recorded) ----
+  if (p === 'prog') {
+    needCorps(); const P = C.PROGRAM, it = P.items.find((x) => x.k === b.item); if (!it) throw new Error('הפריט לא נמצא בתוכנית ההכשרה');
+    const full = canDo(user, 'prog', k), squad = canDo(user, 'progmini', k);
+    if (!full && !(squad && P.squadDomains.includes(it.domain))) throw new Error(squad ? 'כמ״כ אפשר לתעד בתוכנית רק ' + P.squadDomains.join(' / ') : 'תיעוד בתוכנית ההכשרה שמור ל' + whoCan('prog'));
+    const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 300), now = Date.now(); let n = 0;
+    rows.forEach((r) => {
+      const c = soldier(r.id); mustBeActive(c); c.prog = c.prog || {};
+      if (r.s === '' || r.s == null) { if (c.prog[it.k]) { delete c.prog[it.k]; n++; } return; }
+      if (!P.marks.includes(r.s)) throw new Error('יש לסמן ' + P.marks.join(' / ') + ' ל' + c.name);
+      let v = null;
+      if (it.kind !== 'done' && r.s === P.marks[0]) {
+        v = toNum(r.v); const max = it.kind === 'time' ? 600 : 100;
+        if (v == null || v < 0 || v > max) throw new Error((it.kind === 'time' ? 'יש להזין זמן' : 'יש להזין ציון בין 0 ל-100') + ' ל' + c.name + ' ב' + it.l);
+      }
+      c.prog[it.k] = { s: r.s, v, ts: now, by: user.title, byId: user.id }; n++;
+    });
+    logAct(k, `${user.title} תיעד/ה בתוכנית ההכשרה: ${it.l} (${it.phase} · ${it.domain}) ל-${n} חיילים`); save(); return { ok: true, saved: n };
+  }
   // ---- event 3: periodic status (רבעון / חציון) ----
   if (p === 'periodic') {
     allow('periodic', 'סטטוס תקופתי מוזן ע״י מפקד/ת הכשרה'); const c = soldier(b.id); mustBeActive(c);
@@ -445,7 +472,7 @@ function normalize(st) {
   st.settings = Object.assign({ period: 'רבעון' }, st.settings); st.log = st.log || []; st.version = st.version || 1; st.corps = st.corps || {};
   Object.keys(C.corps).forEach((k) => {
     const c = st.corps[k] || (st.corps[k] = { cands: [], favs: {} }); c.cands = c.cands || []; c.favs = c.favs || {};
-        c.cands.forEach((x) => { x.daily = x.daily || []; x.reviews = x.reviews || []; x.dismiss = x.dismiss || []; x.events = x.events || []; if (!x.tstatus) x.tstatus = 'בהכשרה'; });
+        c.cands.forEach((x) => { x.daily = x.daily || []; x.reviews = x.reviews || []; x.dismiss = x.dismiss || []; x.events = x.events || []; x.prog = x.prog || {}; if (!x.tstatus) x.tstatus = 'בהכשרה'; });
   });
   return st;
 }
@@ -623,7 +650,7 @@ http.createServer(async (req, res) => {
       let lines = []; try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-150); } catch (e) { /* none yet */ }
       return json(res, 200, { events: lines.map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean).reverse() });
     }
-    if (p === '/api/config') return json(res, 200, { teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
+    if (p === '/api/config') return json(res, 200, { program: C.PROGRAM, teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
     if (p === '/api/state') { const gu = gate(); if (!gu) return; return json(res, 200, snapshot(AUTH ? gu.id : req.headers['x-user'])); }
     if (p === '/api/events') {
       const gu = gate(); if (!gu) return;
