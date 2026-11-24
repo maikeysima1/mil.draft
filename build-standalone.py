@@ -25,7 +25,7 @@ function save() { state.version++; persist(); if (L.onChange) L.onChange(); }
 state = load();
 if (!state) { state = freshState(); persist(); }
 window.addEventListener('storage', (e) => { if (e.key === KEY) { const f = load(); if (f) { state = f; if (L.onChange) L.onChange(); } } });
-L.config = () => ({ teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+L.config = () => ({ teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
 L.snapshot = () => makeSnapshot(L.me && L.me.id);
 L.handle = function (p, userId, b) { const user = userById(userId); L.me = user; if (!user) throw new Error('לא מחובר'); return apiHandle(p, b, user); };
 return L;

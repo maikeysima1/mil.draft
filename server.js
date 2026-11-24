@@ -46,7 +46,7 @@ Object.keys(C.corps).forEach((k) => {
 // extra evaluator-sheet values (kept separate from the 5 traits that drive the radar)
 function makeExtra(cf, role, lv, rec, rnd2) {
   const sum = lv.reduce((a, b) => a + b, 0), others = cf.roles.filter((r) => r !== role);
-  return { motivation: Math.max(1, Math.min(5, 2 + Math.floor(rnd2() * 3) + (sum >= 6 ? 1 : 0))), discipline: Math.min(2, Math.floor(rnd2() * 2.4) + (sum >= 7 ? 1 : 0)), potential: sum >= 7 ? 2 : (sum >= 5 ? 1 : (rnd2() < .3 ? 1 : 0)), confidence: 1 + (rnd2() > .45 ? 1 : 0), second: rnd2() < .55 ? others[Math.floor(rnd2() * others.length)] : '', follow: rec === C.RECS[2] || rnd2() < .14, medNote: '' };
+  return { motivation: Math.max(1, Math.min(5, 2 + Math.floor(rnd2() * 3) + (sum >= 6 ? 1 : 0))), discipline: Math.min(2, Math.floor(rnd2() * 2.4) + (sum >= 7 ? 1 : 0)), potential: sum >= 7 ? 2 : (sum >= 5 ? 1 : (rnd2() < .3 ? 1 : 0)), confidence: 1 + (rnd2() > .45 ? 1 : 0), second: rnd2() < .55 ? others[Math.floor(rnd2() * others.length)] : '', follow: rec === C.RECS[2] || rnd2() < .14 };
 }
 // soldier's own wishes (informational): preferred role + up to 3 ranked units. The draft itself follows unit needs.
 function makeWish(cf, role, pref, rnd2, motivation) {
@@ -73,8 +73,6 @@ function applyUpdate(cf, c, r) {
   if (cleanPhoto(r.photo)) { c.photo = r.photo; n++; }
   if (cf.roles.includes(r.role) && r.role !== c.role) { c.role = r.role; c.skills = cf.skills[r.role] || c.skills; n++; }
   if (C.RECS.includes(r.rec)) { c.rec = r.rec; n++; }
-  if (C.MEDS.includes(r.med)) { c.med = r.med; n++; }
-  if (toNum(r.profile) != null) { c.profile = toNum(r.profile); n++; }
   cf.stats.forEach((s) => { const v = toNum((r.stats || {})[s.k]); if (v != null) { c.stats[s.k] = v; n++; } });
   const mot = toNum(r.motivation); if (mot >= 1 && mot <= 5) { c.extra = Object.assign({}, c.extra, { motivation: Math.round(mot) }); n++; }
   const cb = toNum(r.combat); if (cb === 0 || cb === 1 || cb === 2) { c.wish = Object.assign({ role: '', units: [] }, c.wish, { combat: cb }); n++; }
@@ -89,7 +87,6 @@ function applyEval(cf, c, b, who) {
   if (Array.isArray(b.skills)) { c.skills = b.skills.slice(0, 6).map(String); n++; }
   if (b.stats) cf.stats.forEach((s) => { if (s.k in b.stats) { c.stats[s.k] = toNum(b.stats[s.k]); n++; } });
   if (C.RECS.includes(b.rec)) { c.rec = b.rec; n++; }
-  if (C.MEDS.includes(b.med)) { c.med = b.med; c.profile = b.med === C.MEDS[0] ? 97 : (b.med === C.MEDS[1] ? 72 : 64); n++; }
   if (typeof b.obs === 'string') { c.obs = b.obs.slice(0, 1500); n++; }
   if (typeof b.summary === 'string') { c.summary = b.summary.slice(0, 600); n++; }
   if (b.extra && Object.keys(b.extra).length) { c.extra = cleanExtra(cf, b.extra, c.extra); n++; }
@@ -105,7 +102,7 @@ function applyEval(cf, c, b, who) {
 }
 function newCand(cf, cst, name, role, group, source) {
   const max = cst.cands.reduce((m, c) => Math.max(m, parseInt(c.id.slice(cf.prefix.length), 10) || 0), 0) + 1, stats = {}; cf.stats.forEach((s) => { stats[s.k] = null; });
-  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => null), stats, rec: null, med: C.MEDS[0], profile: null, area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
+  const c = { id: cf.prefix + max, name, role, lv: cf.traits.map(() => null), stats, rec: null, area: '—', pref: '—', wish: { role: '', units: [], combat: null }, group, skills: cf.skills[role] || [], obs: '', summary: '', evaluated: false, source: source || 'ייבוא' };
   cst.cands.push(c); return c;
 }
 function cleanExtra(cf, x, old) { // only the fields present in x are touched; unknown stays unknown (null/undefined), never a made-up default
@@ -113,7 +110,6 @@ function cleanExtra(cf, x, old) { // only the fields present in x are touched; u
   [['motivation', 1, 5], ['discipline', 0, 2], ['potential', 0, 2], ['confidence', 0, 2]].forEach(([key, lo, hi]) => { if (key in x) { const v = num(x[key], lo, hi); if (v !== undefined) o[key] = v; else if (x[key] === null) o[key] = null; } });
   if ('second' in x) o.second = cf.roles.includes(x.second) ? x.second : '';
   if ('follow' in x) o.follow = !!x.follow;
-  if ('medNote' in x) o.medNote = String(x.medNote || '').slice(0, 200);
   return o;
 }
 // one שלישות user per unit, so every unit can have its own person in a shared draft
@@ -158,14 +154,11 @@ function seedCands() {
         stats[s.k] = Math.round(raw * f) / f;
       });
       if (i % 9 === 7) stats[cf.stats[i % cf.stats.length].k] = null;
-      const mr = rnd();
-      const med = mr < 0.78 ? C.MEDS[0] : (mr < 0.94 ? C.MEDS[1] : C.MEDS[2]);
       const top = lv.indexOf(Math.max.apply(null, lv));
       const weak = lv.indexOf(Math.min.apply(null, lv));
       out[key].push({
         id: cf.prefix + String(101 + i), name: C.NAMES[n % C.NAMES.length], role, lv, stats,
-        rec: sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2]), med,
-        profile: med === C.MEDS[0] ? (rnd() < 0.75 ? 97 : 82) : (med === C.MEDS[1] ? 72 : 64),
+        rec: sum >= 7 ? C.RECS[0] : (sum >= 4 ? C.RECS[1] : C.RECS[2]),
         area: C.AREAS[Math.floor(rnd() * C.AREAS.length)], pref: cf.units[Math.floor(rnd() * cf.units.length)].name,
         group: 1 + (i % TEAMS.length), skills: cf.skills[role] || [],
         obs: cf.obs[role] + ' ' + cf.good[top] + (lv[weak] < 2 ? ' ' + cf.weak[weak] : ''),
@@ -182,7 +175,7 @@ function seedCands() {
 // ---------- training model + api (shared with the standalone build) ----------
 const cfg = (k) => C.corps[k];
 const num = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
-const SCHEMA = 10;
+const SCHEMA = 11;
 const DAY = 86400e3;
 const dayKey = (ts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ts)); // YYYY-MM-DD, Israel time
 // current review period: quarter (רבעון) or half-year (חציון)
@@ -194,30 +187,19 @@ function periodOf(ts, type) {
 const periodType = () => (state.settings && C.TR.periods.includes(state.settings.period) ? state.settings.period : 'רבעון');
 const isActive = (c) => !['הודח/ה', 'סיים/ה הכשרה'].includes(c.tstatus);
 const openDismiss = (c) => (c.dismiss || []).find((d) => d.status === 'פתוחה');
-// where a dismissed soldier goes: the unit one level lower in the same track with the largest open need; null = leaves the track
-const unitTier = (k, name) => { const u = cfg(k).units.find((x) => x.name === name); return (u && u.tier) || 1; };
-const needOf = (k, name) => ((state.corps[k].needs || {})[name]) || 0;
-const byNeed = (k, us) => { const t = Math.min.apply(null, us.map((u) => u.tier || 1)); return us.filter((u) => (u.tier || 1) === t).sort((a, b) => needOf(k, b.name) - needOf(k, a.name))[0].name; };
-// { k, unit }: one level lower in the same track; if nothing is open there, the next track(s) in the chain; null = leaves to the fallback
-function nextPlace(k, c) {
-  const t = unitTier(k, c.unit), lower = cfg(k).units.filter((u) => (u.tier || 1) > t && needOf(k, u.name) > 0);
-  if (lower.length) return { k, unit: byNeed(k, lower) };
-  const seen = [k]; let n = cfg(k).nextTrack;
-  while (n && C.corps[n] && !seen.includes(n)) { const open = cfg(n).units.filter((u) => needOf(n, u.name) > 0); if (open.length) return { k: n, unit: byNeed(n, open) }; seen.push(n); n = cfg(n).nextTrack; }
+// dismissal review: the stages of the process (C.TR.stages). Returns the stage the review waits for, or null when none is open.
+function nextStage(d) {
+  const T = C.TR, rec = (key) => (d.stages || []).find((x) => x.key === key);
+  for (const st of T.stages) {
+    const r = rec(st.key);
+    if (st.optional) { const prev = rec(T.stages[T.stages.indexOf(st) - 1].key); if (!prev || prev.outcome !== T.escalate) return null; }
+    if (!r) return st;
+  }
   return null;
-}
-// move a soldier to another track: new id, the track's default role, only measures that mean the same thing, levels unknown; the whole history stays
-function moveTrack(k, c, k2, unit) {
-  const src = state.corps[k], dst = state.corps[k2], cf2 = cfg(k2), cf1 = cfg(k);
-  const max = dst.cands.reduce((m, x) => Math.max(m, parseInt(x.id.slice(cf2.prefix.length), 10) || 0), 0) + 1, stats = {};
-  cf2.stats.forEach((s2) => { const s1 = cf1.stats.find((x) => x.l === s2.l && x.u === s2.u); stats[s2.k] = s1 && c.stats[s1.k] != null ? c.stats[s1.k] : null; });
-  src.cands = src.cands.filter((x) => x.id !== c.id); Object.keys(src.favs || {}).forEach((u) => { src.favs[u] = src.favs[u].filter((id) => id !== c.id); });
-  c.prevIds = (c.prevIds || []).concat([c.id]); c.prevRole = c.role; c.id = cf2.prefix + max; c.role = cf2.roles[0]; c.skills = cf2.skills[c.role] || []; c.stats = stats; c.lv = cf2.traits.map(() => null);
-  c.unit = unit; c.target = ''; c.tstatus = 'בהכשרה'; dst.cands.push(c);
 }
 const logAct = (k, text) => { const e = { ts: Date.now(), corps: k, text }; state.log.push(e); if (state.log.length > 1500) state.log.shift(); if (typeof onLog === 'function') onLog(e); }; // onLog: the host may keep the full history (the database does)
 // training fields of a soldier who enters the system (event 1: intake)
-function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; return c; }
+function intakeFields(c, unit, target, who, ts) { c.unit = unit || ''; c.target = target || ''; c.tstatus = 'בהכשרה'; c.intakeTs = ts || Date.now(); c.intakeBy = who || ''; c.daily = []; c.reviews = []; c.dismiss = []; c.events = []; return c; }
 // demo history so the screens are not empty: a few daily entries, last period's status, and three soldiers in / after a dismissal review
 function seedTraining(k, cands) {
   const cf = cfg(k), now = Date.now(); let s = 5 + k.length;
@@ -227,23 +209,25 @@ function seedTraining(k, cands) {
     intakeFields(c, cf.units[i % cf.units.length].name, C.TARGETS[k][i % C.TARGETS[k].length], 'שלישות ' + cf.units[i % cf.units.length].name, now - (120 + Math.floor(rnd() * 60)) * DAY);
     const sum = c.lv.reduce((a, b) => a + (b || 0), 0), base = sum >= 7 ? 2 : (sum >= 4 ? 1 : 0), ev = 'מגבש/ת צוות ' + c.group, top = c.lv.indexOf(Math.max.apply(null, c.lv)), weak = c.lv.indexOf(Math.min.apply(null, c.lv));
     for (let d = 24; d >= 1; d--) { // the last weeks, with gaps like real life (today is left empty on purpose)
-      if (rnd() < (d > 4 ? 0.4 : 0.2)) continue;
+      if (d % 3 === 1 || rnd() < 0.15) continue; // experiences happen a few times a week, not every day
       const lvl = Math.max(0, Math.min(2, base + (rnd() < 0.25 ? -1 : (rnd() > 0.8 ? 1 : 0)))), att = rnd() < 0.06 ? C.TR.attend[2] : C.TR.attend[0];
-      c.daily.push({ d: dayKey(now - d * DAY), ts: now - d * DAY, by: ev, byId: 'seed', level: lvl, att, text: lvl === 2 ? cf.good[top] : (lvl === 0 ? cf.weak[weak] : 'יום אימונים רגיל, עמד/ה במשימות.') });
+      const xt = C.TR.expTypes[(d + 3) % (C.TR.expTypes.length - 1)];
+      c.daily.push({ d: dayKey(now - d * DAY), ts: now - d * DAY, by: ev, byId: 'seed', sid: 'seed' + k + d, exp: xt.l, title: xt.l + ' ' + (25 - d), score: xt.score ? Math.round(55 + lvl * 15 + rnd() * 15) : undefined, level: lvl, att, text: lvl === 2 ? cf.good[top] : (lvl === 0 ? cf.weak[weak] : 'יום אימונים רגיל, עמד/ה במשימות.') });
     }
     if (i % 5 !== 4) c.reviews.push({ period: prev.key, label: prev.label, ts: now - (60 + Math.floor(rnd() * 20)) * DAY, by: 'מפקד/ת הכשרה · ' + c.unit, lv: c.lv.slice(), rec: sum <= 4 ? C.TR.periodRec[1] : C.TR.periodRec[0], summary: (cf.traits.filter((t, j) => c.lv[j] === 2).length ? 'חוזקות: ' + cf.traits.filter((t, j) => c.lv[j] === 2).join(', ') + '. ' : 'תפקוד תקין ברוב התחומים. ') + (cf.traits.filter((t, j) => c.lv[j] === 0).length ? 'לחיזוק: ' + cf.traits.filter((t, j) => c.lv[j] === 0).join(', ') + '.' : 'אין תחום חריג לחיזוק.') });
     if (sum <= 4 && c.reviews.length) c.tstatus = 'במעקב';
   });
   const low = cands.filter((c) => c.tstatus === 'במעקב');
-  if (low[0]) { low[0].tstatus = 'בבדיקת הדחה'; low[0].dismiss.push({ id: 'd1', status: 'פתוחה', openedTs: now - 3 * DAY, openedBy: 'מגבש/ת צוות ' + low[0].group, reason: 'ירידה מתמשכת בתפקוד בשבועיים האחרונים וקושי לעמוד בעומס.', prev: 'במעקב', opinions: [{ byId: 'seed', by: 'מגבש/ת צוות ' + low[0].group, stance: C.TR.stances[0], text: 'שלושה תרגילים רצופים שבהם לא עמד/ה בקצב הצוות, גם אחרי שיחה אישית.', ts: now - 3 * DAY }] }); }
-  if (low[1]) { low[1].tstatus = 'הודח/ה'; low[1].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 30 * DAY, openedBy: 'מפקד/ת הכשרה · ' + low[1].unit, reason: 'אי עמידה ברף המקצועי לאחר תקופת מעקב.', prev: 'במעקב', decision: 'הודח/ה', decidedBy: 'מפקד/ת הכשרה · ' + low[1].unit, decidedTs: now - 24 * DAY, note: 'הוחלט לאחר שיחה עם החייל/ת ועם המגבש/ת. מומלץ לשיבוץ בתפקיד אחר.', from: low[1].unit, exitTo: cf.fallback }); low[1].exitTo = cf.fallback; }
+  if (low[0]) { low[0].tstatus = 'בבדיקת הדחה'; low[0].dismiss.push({ id: 'd1', status: 'פתוחה', openedTs: now - 3 * DAY, openedBy: 'מגבש/ת צוות ' + low[0].group, reason: 'ירידה מתמשכת בתפקוד בשבועיים האחרונים וקושי לעמוד בעומס.', prev: 'במעקב', treat: 'שיחה אישית עם המ״מ ותגבור בתרגילי הצוות.', stages: [{ key: C.TR.stages[0].key, label: C.TR.stages[0].label, byId: 'seed', by: 'מ״מ צוות ' + low[0].group + ' · ' + cf.short, rec: C.TR.stances[0], summary: 'שלושה תרגילים רצופים שבהם לא עמד/ה בקצב הצוות, גם אחרי שיחה אישית.', ts: now - 2 * DAY }] }); }
+  if (low[0]) low[0].events.push({ ts: now - 4 * DAY, by: 'מ״מ צוות ' + low[0].group + ' · ' + cf.short, byId: 'seed', kind: C.TR.eventKinds[1], text: 'לא הגיע/ה למסדר הבוקר ונמצא/ה רק אחרי שעה. שיחה מיידית עם המ״מ.' });
+  if (low[1]) { low[1].tstatus = 'הודח/ה'; low[1].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 30 * DAY, openedBy: 'מפקד/ת הכשרה · ' + low[1].unit, reason: 'אי עמידה ברף המקצועי לאחר תקופת מעקב.', prev: 'במעקב', decision: 'הודח/ה', decidedBy: 'מפקד/ת הכשרה · ' + low[1].unit, decidedTs: now - 24 * DAY, note: 'הוחלט בוועדה לאחר שיחות עם המ״מ ועם הדוברת. חוזר/ת למיטב.', exitTo: C.TR.exitTo, stages: C.TR.stages.slice(0, 3).map((st, j) => ({ key: st.key, label: st.label, byId: 'seed', by: j < 2 ? (j ? 'מ״פ · ' : 'מ״מ צוות ' + low[1].group + ' · ') + cf.short : 'מפקד/ת הכשרה · ' + low[1].unit, ts: now - (29 - j * 2) * DAY, summary: ['שיחה על הקושי המתמשך ועל מה שנדרש לשיפור.', 'שיחה נוספת; לא נראה שיפור לאחר שבועיים.', 'הוחלט לאחר שיחות עם המ״מ ועם הדוברת. חוזר/ת למיטב.'][j], [j < 2 ? 'rec' : 'outcome']: j < 2 ? C.TR.stances[0] : C.TR.decisions[2] })) }); low[1].exitTo = C.TR.exitTo; }
   if (low[2]) { low[2].dismiss.push({ id: 'd1', status: 'נסגרה', openedTs: now - 45 * DAY, openedBy: 'מגבש/ת צוות ' + low[2].group, reason: 'קושי בעבודת צוות.', prev: 'בהכשרה', decision: 'נשאר/ת במעקב', decidedBy: 'מפקד/ת הכשרה · ' + low[2].unit, decidedTs: now - 40 * DAY, note: 'שיפור ניכר לאחר שיחה. ממשיך/ה במעקב צמוד.' }); }
   return cands;
 }
 function freshState() {
   const cands = seedCands();
   const st = { corps: {}, log: [], version: 1, schema: SCHEMA, settings: { period: 'רבעון' } };
-  Object.keys(C.corps).forEach((k) => { const needs = {}; C.corps[k].units.forEach((u) => { needs[u.name] = u.need || 0; }); st.corps[k] = { cands: seedTraining(k, cands[k]), favs: {}, needs }; });
+  Object.keys(C.corps).forEach((k) => { st.corps[k] = { cands: seedTraining(k, cands[k]), favs: {} }; });
   return st;
 }
 // What a client receives - decided on the server, by role. The screen is not the security boundary:
@@ -262,7 +246,7 @@ function makeSnapshot(userId) {
     const cst = state.corps[k], f = cst.favs || {}, mine = userId && f[userId] ? { [userId]: f[userId] } : {};
     let cands = [];
     if (R && (R.scope === 'all' || user.corps === k)) cands = !files ? cst.cands.map(anon) : (R.scope === 'group' ? cst.cands.filter((c) => c.group === user.group) : cst.cands);
-    o.corps[k] = { cands, favs: files ? mine : {}, needs: cst.needs || {} };
+    o.corps[k] = { cands, favs: files ? mine : {} };
   });
   if (R && files && R.scope !== 'group') o.log = state.log.filter((l) => R.scope === 'all' || !l.corps || l.corps === user.corps).slice(-400).reverse();
   return o;
@@ -320,7 +304,7 @@ function apiHandle(p, b, user) {
     if (!C.TARGETS[k].includes(b.target)) throw new Error('יש לבחור את היחידה המיוחדת שאליה החייל/ת מועמד/ת');
     const g = parseInt(b.group, 10); if (!TEAMS.includes(g)) throw new Error('יש לבחור צוות ' + TEAM_TXT);
     const c = intakeFields(newCand(cf, cst, name, b.role, g, 'גיוס'), unit, b.target, user.title);
-    applyUpdate(cf, c, { med: b.med, profile: b.profile, stats: b.stats || {}, photo: b.photo });
+    applyUpdate(cf, c, { stats: b.stats || {}, photo: b.photo });
     logAct(k, `${user.title} גייס/ה את ${c.name} (${c.role}) ל${unit} · מועמד/ת ל${b.target}`); save(); return { ok: true, id: c.id };
   }
   if (p === 'import') {
@@ -339,18 +323,30 @@ function apiHandle(p, b, user) {
     });
     logAct(k, `${user.title} גייס/ה ${added} מועמדים מקובץ`); save(); return { ok: true, added, skipped };
   }
-  // ---- daily follow-up: one entry per author per soldier per day (a second save the same day replaces the first) ----
+  // ---- experiences (התנסויות): one entry per soldier per experience per author; saving the same experience again (same sid) replaces it.
+  //      An entry without a sid (older clients) keeps the old rule: one per author per soldier per day.
   if (p === 'daily') {
-    allow('daily', 'מעקב יומי מוזן ע״י מפקד/ת הכשרה או מגבש/ת הצוות');
+    allow('daily', 'תיעוד התנסויות שמור ל' + whoCan('daily'));
     const rows = Array.isArray(b.rows) ? b.rows.slice(0, 300) : [b], now = Date.now(), d = dayKey(now); let n = 0;
+    const ex = T.expTypes.find((x) => x.l === b.exp) ? b.exp : '', title = text(b.title, 80), sid = /^[a-z0-9]{6,24}$/.test(String(b.sid || '')) ? String(b.sid) : '';
     rows.forEach((r) => {
       const c = soldier(r.id); mustBeActive(c);
-      const level = parseInt(r.level, 10); if (![0, 1, 2].includes(level)) throw new Error('יש לבחור רמה יומית ל' + c.name);
+      const level = parseInt(r.level, 10); if (![0, 1, 2].includes(level)) throw new Error('יש לבחור רמה ל' + c.name);
       const e = { d, ts: now, by: user.title, byId: user.id, level, att: T.attend.includes(r.att) ? r.att : T.attend[0], text: text(r.text, 500) };
-      const i = c.daily.findIndex((x) => x.d === d && x.byId === user.id); if (i >= 0) c.daily[i] = e; else c.daily.push(e);
+      if (ex) e.exp = ex; if (title) e.title = title; if (sid) e.sid = sid; const sc = toNum(r.score); if (sc != null && sc >= 0 && sc <= 1000) e.score = sc;
+      const i = c.daily.findIndex((x) => x.byId === user.id && (sid ? x.sid === sid : (!x.sid && x.d === d)));
+      if (i >= 0) { e.ts = c.daily[i].ts; e.d = c.daily[i].d; c.daily[i] = e; } else c.daily.push(e);
       if (c.daily.length > 400) c.daily.shift(); n++;
     });
-    logAct(k, `${user.title} הזינ/ה מעקב יומי ל-${n} חיילים`); save(); return { ok: true, saved: n };
+    logAct(k, `${user.title} תיעד/ה ${ex ? ex + (title ? ' – ' + title : '') : 'התנסות'} ל-${n} חיילים`); save(); return { ok: true, saved: n };
+  }
+  // exceptional event (אירוע חריג), positive or negative, documented in the soldier's file
+  if (p === 'event') {
+    allow('daily', 'תיעוד אירוע חריג שמור ל' + whoCan('daily')); const c = soldier(b.id);
+    if (!T.eventKinds.includes(b.kind)) throw new Error('יש לבחור סוג אירוע: ' + T.eventKinds.join(' / '));
+    const txt = text(b.text, 1000); if (txt.length < 10) throw new Error('יש לתאר את האירוע (לפחות 10 תווים)');
+    c.events = c.events || []; c.events.push({ ts: Date.now(), by: user.title, byId: user.id, kind: b.kind, text: txt });
+    logAct(k, `${user.title} תיעד/ה אירוע חריג (${b.kind}) ל${c.name}`); save(); return { ok: true };
   }
   // ---- event 3: periodic status (רבעון / חציון) ----
   if (p === 'periodic') {
@@ -370,52 +366,44 @@ function apiHandle(p, b, user) {
     else if (!openDismiss(c)) c.tstatus = b.rec === T.periodRec[1] ? 'במעקב' : 'בהכשרה';
     logAct(k, `${user.title} הזינ/ה סטטוס ${per.label} ל${c.name}: ${b.rec}${opened ? ' · נפתחה בדיקת הדחה' : ''}`); save(); return { ok: true, opened };
   }
-  // ---- event 2: dismissal review (בדיקת מועמד להדחה) ----
+  // ---- event 2: dismissal review (בדיקת מועמד להדחה): opened, then recorded stage by stage (C.TR.stages) ----
   if (p === 'dismiss-open') {
     allow('dismiss', 'אין הרשאה לפתוח בדיקת הדחה'); const c = soldier(b.id); mustBeActive(c);
     if (openDismiss(c)) throw new Error('כבר פתוחה בדיקת הדחה ל' + c.name);
     const reason = text(b.reason, 1000); if (reason.length < 10) throw new Error('יש לפרט את הסיבה לבדיקה (לפחות 10 תווים)');
-    c.dismiss.push({ id: 'd' + (c.dismiss.length + 1), status: 'פתוחה', openedTs: Date.now(), openedBy: user.title, reason, prev: c.tstatus, opinions: [] }); c.tstatus = 'בבדיקת הדחה';
+    c.dismiss.push({ id: 'd' + (c.dismiss.length + 1), status: 'פתוחה', openedTs: Date.now(), openedBy: user.title, reason, treat: text(b.treat, 1000), prev: c.tstatus, stages: [] }); c.tstatus = 'בבדיקת הדחה';
     logAct(k, `${user.title} פתח/ה בדיקת הדחה ל${c.name}`); save(); return { ok: true };
   }
-  // the dismissal room: one reasoned position per person per review (saving again replaces it)
-  if (p === 'dismiss-opinion') {
-    allow('opine', 'נימוק בחדר ההדחה נרשם ע״י מפקד/ת הכשרה או מגבש/ת הצוות'); const c = soldier(b.id), d = openDismiss(c);
+  // one stage of the process: a talk (with a recommendation) or a committee (with the outcome). Stages go in order; a committee closes the review
+  // unless it passes it on to the next level. A talk may be updated until the next stage is recorded.
+  if (p === 'dismiss-stage') {
+    needCorps(); const c = soldier(b.id), d = openDismiss(c);
     if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה. בדיקה נפתחת מתיק החייל/ת');
-    if (!T.stances.includes(b.stance)) throw new Error('יש לבחור עמדה: ' + T.stances.join(' / '));
-    const txt = text(b.text, 1000); if (txt.length < 10) throw new Error('יש לנמק את העמדה (לפחות 10 תווים)');
-    d.opinions = d.opinions || []; const o = { byId: user.id, by: user.title, stance: b.stance, text: txt, ts: Date.now() }, i = d.opinions.findIndex((x) => x.byId === user.id);
-    if (i >= 0) d.opinions[i] = o; else d.opinions.push(o);
-    logAct(k, `${user.title} רשמ/ה נימוק בחדר ההדחה על ${c.name}: ${b.stance}`); save(); return { ok: true };
-  }
-  if (p === 'dismiss-decide') {
-    allow('decide', 'הדחה והחלטה בבדיקה – רק באישור מפקד/ת ההכשרה'); const c = soldier(b.id), d = openDismiss(c);
-    if (!d) throw new Error('ל' + c.name + ' אין בדיקת הדחה פתוחה. בדיקה נפתחת מתיק החייל/ת');
-    if (!T.decisions.includes(b.decision)) throw new Error('יש לבחור החלטה: ' + T.decisions.join(' / '));
-    const note = text(b.note, 1000); if (note.length < 10) throw new Error('יש לנמק את ההחלטה (לפחות 10 תווים)');
-    const nOp = (d.opinions || []).length; if (b.decision === T.decisions[2] && nOp < T.minOpinions) throw new Error('אי אפשר להדיח לפני שנרשמו לפחות ' + T.minOpinions + ' נימוקים בחדר ההדחה (נרשמו ' + nOp + ')');
-    Object.assign(d, { status: 'נסגרה', decision: b.decision, decidedBy: user.title, decidedTs: Date.now(), note });
-    let movedTo = null, movedTrack = null;
-    if (b.decision === T.decisions[2]) { // dismissed from this unit: move one level down by the system's needs, or leave the track
-      const pl = nextPlace(k, c); d.from = c.unit;
-      if (pl) {
-        movedTo = pl.unit; state.corps[pl.k].needs[pl.unit]--; d.movedTo = pl.unit; if (pl.k !== k) { d.movedTrack = cfg(pl.k).corps; movedTrack = cfg(pl.k).corps; }
-        c.transfers = (c.transfers || []).concat([{ ts: Date.now(), from: c.unit, to: pl.unit, track: pl.k !== k ? cfg(pl.k).corps : '', by: user.title }]);
-        if (pl.k !== k) moveTrack(k, c, pl.k, pl.unit); else { c.unit = pl.unit; c.target = ''; c.tstatus = 'בהכשרה'; }
-      } else { d.exitTo = cf.fallback; c.exitTo = cf.fallback; c.tstatus = 'הודח/ה'; }
-    } else c.tstatus = b.decision === T.decisions[1] ? 'במעקב' : 'בהכשרה';
-    logAct(k, `${user.title} החליט/ה בבדיקת ההדחה של ${c.name}: ${b.decision}${b.decision === T.decisions[2] ? (movedTo ? ' · הועבר/ה אוטומטית ל' + movedTo + (movedTrack ? ' (' + movedTrack + ')' : '') : ' · יוצא/ת מהמסלול ל' + cf.fallback) : ''}`); save(); return { ok: true, movedTo, movedTrack, newId: movedTrack ? c.id : null, exitTo: movedTo ? null : (b.decision === T.decisions[2] ? cf.fallback : null) };
+    d.stages = d.stages || [];
+    const st = T.stages.find((x) => x.key === b.stage); if (!st) throw new Error(OOPS);
+    const due = nextStage(d), done = d.stages.find((x) => x.key === st.key), last = d.stages[d.stages.length - 1];
+    const updatingTalk = done && st.kind === 'talk' && last && last.key === st.key;
+    if (!updatingTalk && (!due || due.key !== st.key)) throw new Error(due ? 'קודם צריך לתעד את השלב "' + due.label + '"' : 'השלב "' + st.label + '" כבר תועד');
+    if (!st.who.includes(user.role)) throw new Error('את השלב "' + st.label + '" מתעד/ת ' + st.who.join(' / '));
+    const summary = text(b.summary, 1500); if (summary.length < 10) throw new Error('יש לכתוב סיכום של ה' + st.label + ' (לפחות 10 תווים)');
+    const r = { key: st.key, label: st.label, ts: Date.now(), by: user.title, byId: user.id, summary };
+    if (st.kind === 'talk') { if (!T.stances.includes(b.rec)) throw new Error('יש לבחור המלצה: ' + T.stances.join(' / ')); r.rec = b.rec; }
+    else {
+      const opts = T.decisions.concat(T.stages.indexOf(st) < T.stages.length - 1 ? [T.escalate] : []);
+      if (!opts.includes(b.outcome)) throw new Error('יש לבחור החלטה: ' + opts.join(' / ')); r.outcome = b.outcome;
+    }
+    if (updatingTalk) d.stages[d.stages.length - 1] = r; else d.stages.push(r);
+    let closed = false;
+    if (st.kind === 'committee' && r.outcome !== T.escalate) { // the committee decides: the review closes
+      closed = true; Object.assign(d, { status: 'נסגרה', decision: r.outcome, decidedBy: user.title, decidedTs: r.ts, note: summary });
+      if (r.outcome === T.decisions[2]) { d.exitTo = T.exitTo; c.exitTo = T.exitTo; c.tstatus = 'הודח/ה'; } else c.tstatus = r.outcome === T.decisions[1] ? 'במעקב' : 'בהכשרה';
+    }
+    logAct(k, `${user.title} תיעד/ה ${st.label} של ${c.name}: ${r.rec || r.outcome}${closed && r.outcome === T.decisions[2] ? ' · ' + T.exitTo : ''}`); save(); return { ok: true, closed, decision: closed ? r.outcome : null };
   }
   if (p === 'complete') {
     allow('complete', 'סיום הכשרה מסומן ע״י מפקד/ת הכשרה'); const c = soldier(b.id); mustBeActive(c);
     if (openDismiss(c)) throw new Error('יש לסגור קודם את בדיקת ההדחה הפתוחה');
     c.tstatus = 'סיים/ה הכשרה'; c.doneTs = Date.now(); logAct(k, `${user.title} סימנ/ה סיום הכשרה ל${c.name}`); save(); return { ok: true };
-  }
-  if (p === 'needs') { // open places per unit ("צורכי מערכת"), used to place dismissed soldiers
-    needCorps(); if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת מעדכן/ת את צורכי היחידות');
-    if (!cf.units.some((u) => u.name === b.unit)) throw new Error(OOPS);
-    const n = parseInt(b.need, 10); if (!(n >= 0 && n <= 99)) throw new Error('מספר המקומות הפתוחים צריך להיות בין 0 ל-99');
-    cst.needs = cst.needs || {}; cst.needs[b.unit] = n; logAct(k, `${user.title} עדכנ/ה צורך פתוח ב${b.unit}: ${n}`); save(); return { ok: true };
   }
   if (p === 'settings') {
     if (!canDo(user, 'settings', null)) throw new Error('רק מנהל/ת מערכת יכול/ה לשנות הגדרות');
@@ -444,14 +432,20 @@ const fatal = (what, e) => { console.error('FATAL: cannot read ' + what + ' (' +
 const DATA_MIGRATIONS = {
   // 10: four teams per track became two (צוות 3 -> 1, צוות 4 -> 2); the personal follow list (♥) was removed
   10: (st) => { Object.values(st.corps || {}).forEach((c) => { (c.cands || []).forEach((x) => { if (x.group > TEAMS.length) x.group = ((x.group - 1) % TEAMS.length) + 1; }); c.favs = {}; }); },
+  // 11: no medical data in the system (profile, medical limits and notes are deleted); attendance "פטור רפואי" -> "פטור/ה";
+  //     dismissal reviews move to stages, a dismissed soldier returns to מיטב
+  11: (st) => { Object.values(st.corps || {}).forEach((c) => { (c.cands || []).forEach((x) => {
+    delete x.med; delete x.profile; if (x.extra) delete x.extra.medNote;
+    const fx = (v) => (v === 'פטור רפואי' ? 'פטור/ה' : v); (x.daily || []).forEach((e) => { e.att = fx(e.att); }); if (x.arrive) x.arrive.v = fx(x.arrive.v);
+    (x.dismiss || []).forEach((d) => { d.stages = d.stages || []; });
+  }); delete c.needs; }); },
 };
 // fills whatever the current code expects and stored data may lack (new units, new tracks, new arrays). Runs on every load.
 function normalize(st) {
   st.settings = Object.assign({ period: 'רבעון' }, st.settings); st.log = st.log || []; st.version = st.version || 1; st.corps = st.corps || {};
   Object.keys(C.corps).forEach((k) => {
-    const c = st.corps[k] || (st.corps[k] = { cands: [], favs: {}, needs: {} }); c.cands = c.cands || []; c.favs = c.favs || {}; c.needs = c.needs || {};
-    C.corps[k].units.forEach((u) => { if (c.needs[u.name] == null) c.needs[u.name] = u.need || 0; });
-    c.cands.forEach((x) => { x.daily = x.daily || []; x.reviews = x.reviews || []; x.dismiss = x.dismiss || []; if (!x.tstatus) x.tstatus = 'בהכשרה'; });
+    const c = st.corps[k] || (st.corps[k] = { cands: [], favs: {} }); c.cands = c.cands || []; c.favs = c.favs || {};
+        c.cands.forEach((x) => { x.daily = x.daily || []; x.reviews = x.reviews || []; x.dismiss = x.dismiss || []; x.events = x.events || []; if (!x.tstatus) x.tstatus = 'בהכשרה'; });
   });
   return st;
 }
@@ -629,7 +623,7 @@ http.createServer(async (req, res) => {
       let lines = []; try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-150); } catch (e) { /* none yet */ }
       return json(res, 200, { events: lines.map((l) => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean).reverse() });
     }
-    if (p === '/api/config') return json(res, 200, { teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, MEDS: C.MEDS, RECS: C.RECS });
+    if (p === '/api/config') return json(res, 200, { teams: C.TEAMS, orgs: C.ORGS, roles: C.ROLES, TR: C.TR, TARGETS: C.TARGETS, corps: C.corps, users: USERS, words: C.WORDS, RECS: C.RECS });
     if (p === '/api/state') { const gu = gate(); if (!gu) return; return json(res, 200, snapshot(AUTH ? gu.id : req.headers['x-user'])); }
     if (p === '/api/events') {
       const gu = gate(); if (!gu) return;

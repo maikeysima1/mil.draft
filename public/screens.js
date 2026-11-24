@@ -5,8 +5,8 @@ function evalDraftKey(k, id) { return 'mil-eval-' + k + '-' + id; }
 function evalForm(k, c) { // working copy kept in A.ui.form until sent
   if (!A.ui.form || A.ui.form.id !== c.id || A.ui.form.k !== k) {
     let draft = null; try { draft = JSON.parse(localStorage.getItem(evalDraftKey(k, c.id))); } catch (e) { /* none */ }
-    A.ui.form = draft && draft.id === c.id ? draft : { id: c.id, k, lv: c.lv.slice(), role: c.role, skills: (c.skills || []).slice(), stats: Object.assign({}, c.stats), rec: c.rec || '', med: c.med, obs: c.obs || '', summary: c.summary || '' };
-    A.ui.form.extra = Object.assign({ second: '', follow: false, medNote: '' }, c.extra, A.ui.form.extra); // unknown values stay empty (null), never defaults
+    A.ui.form = draft && draft.id === c.id ? draft : { id: c.id, k, lv: c.lv.slice(), role: c.role, skills: (c.skills || []).slice(), stats: Object.assign({}, c.stats), rec: c.rec || '', obs: c.obs || '', summary: c.summary || '' };
+    A.ui.form.extra = Object.assign({ second: '', follow: false }, c.extra, A.ui.form.extra); // unknown values stay empty (null), never defaults
     if (!A.ui.form.wish) A.ui.form.wish = { role: (c.wish && c.wish.role) || '', units: [0, 1, 2].map((i) => (c.wish && c.wish.units[i]) || ''), combat: c.wish && c.wish.combat != null ? c.wish.combat : null };
   }
   return A.ui.form;
@@ -27,9 +27,9 @@ function evalFields(k) {
   c.traits.forEach((t, i) => f.push({ key: 't' + i, label: t, wants: [t] }));
   c.stats.forEach((s) => f.push({ key: 's:' + s.k, label: s.l + ' (' + s.u + ')', wants: [s.l] }));
   return f.concat([
-    { key: 'rec', label: 'המלצת מגבש', wants: ['המלצת מגבש', 'המלצה'] }, { key: 'med', label: 'מגבלות רפואיות', wants: ['מגבלות רפואיות', 'מגבלות'] },
+    { key: 'rec', label: 'המלצת מגבש', wants: ['המלצת מגבש', 'המלצה'] },
     { key: 'motivation', label: 'מוטיבציה (1–5)', wants: ['מוטיבציה'] }, { key: 'discipline', label: 'משמעת ואמינות', wants: ['משמעת'] }, { key: 'potential', label: 'פוטנציאל פיקודי', wants: ['פוטנציאל'] }, { key: 'confidence', label: 'ביטחון בהערכה', wants: ['ביטחון'] },
-    { key: 'second', label: 'תפקיד חלופי', wants: ['תפקיד חלופי'] }, { key: 'follow', label: 'דורש מעקב', wants: ['דורש מעקב', 'מעקב'] }, { key: 'medNote', label: 'הערה רפואית', wants: ['הערה רפואית'] },
+    { key: 'second', label: 'תפקיד חלופי', wants: ['תפקיד חלופי'] }, { key: 'follow', label: 'דורש מעקב', wants: ['דורש מעקב', 'מעקב'] },
     { key: 'wrole', label: 'תפקיד מבוקש', wants: ['תפקיד מבוקש'] }, { key: 'wu0', label: 'יחידה – בחירה 1', wants: ['יחידה – בחירה 1', 'יחידה - בחירה 1', 'יחידה 1'] }, { key: 'wu1', label: 'יחידה – בחירה 2', wants: ['יחידה – בחירה 2', 'יחידה - בחירה 2', 'יחידה 2'] }, { key: 'wu2', label: 'יחידה – בחירה 3', wants: ['יחידה – בחירה 3', 'יחידה - בחירה 3', 'יחידה 3'] },
     { key: 'combat', label: 'נכונות לתפקיד קרבי', wants: ['נכונות', 'קרבי'] }, { key: 'obs', label: 'תצפיות והתרשמות', wants: ['תצפיות'] }, { key: 'summary', label: 'סיכום המגבש', wants: ['סיכום'] },
   ]);
@@ -50,12 +50,10 @@ function evalRows(k) {
     c.traits.forEach((t, i) => { const v = wordIdx(cells(r, 't' + i), WORDS); if (v === null) row.lv.push(null); else if (Number.isNaN(v)) { row.lv.push(null); errs.push('רמה לא מוכרת: ' + t); } else { row.lv.push(v); row.fields++; } });
     c.stats.forEach((s) => { const raw = cells(r, 's:' + s.k); if (String(raw).trim() === '') return; const v = parseStat(s, raw); if (v != null) { row.stats[s.k] = v; row.fields++; } else errs.push('מדד לא תקין: ' + s.l); });
     const rec = txt(r, 'rec'); if (rec) { if (A.cfg.RECS.includes(rec)) put('rec', rec); else errs.push('המלצה לא מוכרת'); }
-    const med = txt(r, 'med'); if (med) { if (A.cfg.MEDS.includes(med)) put('med', med); else errs.push('מגבלה לא מוכרת'); }
     const mot = txt(r, 'motivation'); if (mot) { const v = Number(mot.replace(',', '.')); if (v >= 1 && v <= 5) { row.extra.motivation = Math.round(v); row.fields++; } else errs.push('מוטיבציה חייבת להיות 1–5'); }
     [['discipline', WORDS, 'משמעת'], ['potential', LOWHIGH, 'פוטנציאל'], ['confidence', LOWHIGH, 'ביטחון']].forEach(([key, words, lbl]) => { const v = wordIdx(cells(r, key), words); if (v === null) return; if (Number.isNaN(v)) errs.push('ערך לא מוכר: ' + lbl); else { row.extra[key] = v; row.fields++; } });
     const sec = txt(r, 'second'); if (sec) { if (c.roles.includes(sec)) { row.extra.second = sec; row.fields++; } else errs.push('תפקיד חלופי לא מוכר'); }
     const fo = txt(r, 'follow'); if (fo) { if (/^(כן|1|v|true|x|✓)$/i.test(fo)) { row.extra.follow = true; row.fields++; } else if (/^(לא|0|false)$/i.test(fo)) { row.extra.follow = false; row.fields++; } else errs.push('״דורש מעקב״: כן / לא'); }
-    const mn = txt(r, 'medNote'); if (mn) { row.extra.medNote = mn; row.fields++; }
     const wr = txt(r, 'wrole'); if (wr) { if (c.roles.includes(wr)) { row.wish.role = wr; row.fields++; } else errs.push('תפקיד מבוקש לא מוכר'); }
     const wu = [0, 1, 2].map((i) => txt(r, 'wu' + i)).filter(Boolean); if (wu.length) { if (wu.every((u) => c.units.some((x) => x.name === u))) { row.wish.units = wu; row.fields++; } else errs.push('יחידה מועדפת לא מוכרת'); }
     const cb = txt(r, 'combat'); if (cb) { const v = parseCombat(cb); if (v == null) errs.push('נכונות לקרבי לא מוכרת'); else { row.wish.combat = v; row.fields++; } }
@@ -70,7 +68,7 @@ function evalRows(k) {
 }
 function evalTemplateAoa(k, g, sample) {
   const c = cf(k), fl = evalFields(k), head = fl.map((x) => x.label), cands = cs(k).cands.filter((x) => x.group === g);
-  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => (v == null ? '' : WORDS[v])), c.stats.map((s) => cellVal(s, x.stats[s.k])), [x.rec || '', x.med, e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', e.medNote || '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', (w.combat == null ? '' : COMBAT[w.combat]), x.obs || '', x.summary || '']); };
+  const rowOf = (x) => { const e = x.extra || {}, w = x.wish || { units: [] }; return [x.id, x.name, x.role].concat(x.lv.map((v) => (v == null ? '' : WORDS[v])), c.stats.map((s) => cellVal(s, x.stats[s.k])), [x.rec || '', e.motivation || '', WORDS[e.discipline] || '', LOWHIGH[e.potential] || '', LOWHIGH[e.confidence] || '', e.second || '', e.follow ? 'כן' : '', w.role || '', w.units[0] || '', w.units[1] || '', w.units[2] || '', (w.combat == null ? '' : COMBAT[w.combat]), x.obs || '', x.summary || '']); };
   const rows = cands.map(rowOf);
   if (sample) {
     rows.slice(0, 3).forEach((r, i) => { const mi = head.indexOf('מוטיבציה (1–5)'), oi = head.indexOf('תצפיות והתרשמות'), ri = head.indexOf('המלצת מגבש'); r[mi] = [5, 4, 2][i]; r[oi] = ['הוביל את הצוות בתרגיל הלילי ושמר על קצב.', 'עבודה מסודרת, צריך לחזק ביטחון עצמי.', 'מתקשה כשהלחץ עולה.'][i]; r[ri] = A.cfg.RECS[i]; });
@@ -98,7 +96,7 @@ Object.assign(ACTIONS, {
   etemplate: () => { const k = corpsKey(), g = evalGroup(k); downloadX('mil-draft-evaluator-team' + g + '.xlsx', evalTemplateAoa(k, g, false)); },
   ecancel: () => { A.ui.ebulk = null; rerender(); },
   esave: async () => {
-    const k = corpsKey(), g = evalGroup(k), eb = A.ui.ebulk, rows = evalRows(k).filter((r) => r.ok).map((r) => ({ id: r.cand ? r.cand.id : r.id, name: r.name || (r.cand && r.cand.name) || '', role: r.role, lv: r.lv, stats: r.stats, rec: r.rec, med: r.med, obs: r.obs, summary: r.summary, extra: r.extra, wish: r.wish }));
+    const k = corpsKey(), g = evalGroup(k), eb = A.ui.ebulk, rows = evalRows(k).filter((r) => r.ok).map((r) => ({ id: r.cand ? r.cand.id : r.id, name: r.name || (r.cand && r.cand.name) || '', role: r.role, lv: r.lv, stats: r.stats, rec: r.rec, obs: r.obs, summary: r.summary, extra: r.extra, wish: r.wish }));
     const r = await api('eval-bulk', { corps: k, rows, addNew: !!eb.addNew, group: g }); A.ui.ebulk = null; A.ui.form = null; rerender();
     toast(`נקלטו נתוני ${r.updated + r.added} מועמדים${r.added ? ' (' + r.added + ' חדשים)' : ''}${r.foreign ? ' · ' + r.foreign + ' מצוות אחר נדחו' : ''}${r.notFound ? ' · ' + r.notFound + ' לא נמצאו' : ''}`);
   },
@@ -123,7 +121,7 @@ SCREENS.eval = (k) => {
   const prev = f && (() => {
     const str = c.traits.filter((t, i) => f.lv[i] === 2);
     return `<div class="card" style="background:var(--bg2)"><div class="mut small">תצוגה מקדימה – כך זה ייכנס לתיק המועמד</div><h3>${esc(cur.name)} <span class="mut small">· תיק מועמד · ${esc(c.corps)}</span></h3>
-     <div class="small"><b>תפקיד מומלץ:</b> ${esc(f.role)} · <b>חוזקות בולטות:</b> ${esc(str.join(', ') || '—')} · <b>המלצה:</b> ${esc(f.rec || '—')} · <b>מגבלות:</b> ${esc(f.med)}</div>
+     <div class="small"><b>תפקיד מומלץ:</b> ${esc(f.role)} · <b>חוזקות בולטות:</b> ${esc(str.join(', ') || '—')} · <b>המלצה:</b> ${esc(f.rec || '—')}</div>
      <div class="small">${c.stats.map((s) => `<b>${esc(s.l)}:</b> ${fmtStat(s, f.stats[s.k] === '' ? null : f.stats[s.k])}`).join(' · ')}</div>
      <div class="small"><b>העדפת החייל:</b> קרבי: ${f.wish.combat == null ? 'לא צוין' : COMBAT[f.wish.combat]} · תפקיד ${esc(f.wish.role || '—')} · יחידות ${esc(f.wish.units.filter(Boolean).join(' › ') || '—')}</div>
      <div class="small"><b>כישורים:</b> ${esc(f.skills.join(' · ') || '—')}</div>
@@ -147,8 +145,7 @@ SCREENS.eval = (k) => {
     <label>תפקיד מומלץ<br><select data-chg="fld" data-f="role">${c.roles.map((r) => `<option ${r === f.role ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
     <div><b>כישורים שנצפו</b><div class="row" style="margin-top:4px">${allSkills.map((s) => `<button type="button" class="sw ${f.skills.includes(s) ? 'on' : ''}" data-act="skill" data-s="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>
     <div><h3 style="font-size:16px">מדדים שנמדדו</h3><div class="mut small">ערכים אמיתיים מהמבחנים. מדד ריק יסומן בתיק כחסר.</div><div class="row" style="margin-top:6px">${mini ? '<span class="mut small">מתעדכנים בכרטיס "עדכון נתונים בסיסיים" למעלה.</span>' : statInputs(false)}</div></div>
-    <div class="row"><div class="${need(!f.rec).trim()}"${needAttr(!f.rec)}><b>המלצת מגבש</b><br><div class="seg">${A.cfg.RECS.map((r) => `<button type="button" class="${f.rec === r ? 'on' : ''}" data-act="rec" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div></div>
-     <div><b>מגבלות רפואיות (מצו ראשון)</b><br><div class="seg">${A.cfg.MEDS.map((r) => `<button type="button" class="${f.med === r ? 'on' : ''}" data-act="med" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div></div></div>
+    <div class="row"><div class="${need(!f.rec).trim()}"${needAttr(!f.rec)}><b>המלצת מגבש</b><br><div class="seg">${A.cfg.RECS.map((r) => `<button type="button" class="${f.rec === r ? 'on' : ''}" data-act="rec" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div></div></div>
     <div><h3 style="font-size:16px">ערכים נוספים</h3><div class="mut small">נתונים משלימים שנכנסים לתיק המועמד</div>
      <div class="row" style="gap:18px;margin-top:6px;align-items:flex-start">
       <div><b class="small">מוטיבציה (1–5)</b><br><div class="seg">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="${f.extra.motivation === n ? 'on' : ''}" data-act="ex" data-f="motivation" data-v="${n}">${n}</button>`).join('')}</div></div>
@@ -157,8 +154,7 @@ SCREENS.eval = (k) => {
       <div><b class="small">ביטחון בהערכה</b><br>${segW(f, 'confidence', LOWHIGH)}</div></div>
      <div class="row" style="margin-top:10px;align-items:flex-end">
       <label class="small mut">תפקיד חלופי<br><select data-chg="exfld" data-f="second"><option value="">— אין —</option>${c.roles.filter((r) => r !== f.role).map((r) => `<option ${r === f.extra.second ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
-      <label class="row small" style="gap:6px;min-height:38px"><input type="checkbox" data-chg="exfld" data-f="follow" ${f.extra.follow ? 'checked' : ''}> דורש מעקב</label>
-      <label class="small mut" style="flex:1;min-width:200px">הערה רפואית (אופציונלי)<br><input type="text" style="width:100%" id="x-med" data-inp="exfld" data-f="medNote" value="${esc(f.extra.medNote)}"></label></div></div>
+      <label class="row small" style="gap:6px;min-height:38px"><input type="checkbox" data-chg="exfld" data-f="follow" ${f.extra.follow ? 'checked' : ''}> דורש מעקב</label></div></div>
     <div><h3 style="font-size:16px">העדפת החייל</h3><div class="mut small">מה החייל ביקש בראיון. זו העדפה בלבד – השיבוץ נקבע לפי צורכי היחידות.</div>
      <div class="row" style="margin-top:6px;align-items:flex-end"><div><b class="small">נכונות לתפקיד קרבי</b><br><div class="seg">${COMBAT.map((t, i) => `<button type="button" class="${f.wish.combat === i ? 'on' : ''}" data-act="wishcombat" data-v="${i}">${t}</button>`).join('')}</div></div><label class="small mut">תפקיד מבוקש<br><select data-chg="wishrole"><option value="">— לא צוין —</option>${c.roles.map((r) => `<option ${r === f.wish.role ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
       ${[0, 1, 2].map((i) => `<label class="small mut">יחידה – בחירה ${i + 1}<br><select data-chg="wishunit" data-i="${i}"><option value="">— אין —</option>${c.units.map((u) => `<option ${u.name === f.wish.units[i] ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>`).join('')}</div></div>
@@ -190,7 +186,6 @@ Object.assign(ACTIONS, {
   evalPick: (d) => { A.ui.evalCand = d.id; A.ui.form = null; rerender(); },
   lv: (d) => { A.ui.form.lv[+d.i] = +d.v; rerender(); },
   rec: (d) => { A.ui.form.rec = d.v; rerender(); },
-  med: (d) => { A.ui.form.med = d.v; rerender(); },
   skill: (d) => { const s = A.ui.form.skills, i = s.indexOf(d.s); if (i >= 0) s.splice(i, 1); else s.push(d.s); rerender(); },
   fld: (d, t) => { A.ui.form[d.f] = t.value; if (d.f === 'role') { A.ui.form.skills = (cf(corpsKey()).skills[t.value] || []).slice(); } rerender(); },
   stat: (d, t) => { const s = cf(corpsKey()).stats.find((x) => x.k === d.f), v = t.value.trim() === '' ? null : parseStat(s, t.value), bad = t.value.trim() !== '' && v == null; A.ui.form.stats[d.f] = v; (A.ui.form.badStat = A.ui.form.badStat || {})[d.f] = bad; t.classList.toggle('invalid', bad); if (t.parentElement) t.parentElement.classList.toggle('need', v == null); t.title = bad ? 'פורמט לא תקין – למשל 12:30 או 12.5' : ''; },
@@ -203,12 +198,12 @@ Object.assign(ACTIONS, {
     const k = corpsKey(), f = A.ui.form;
     if (!f.rec) { toast('בחרו המלצת מגבש לפני השליחה', true); return; }
     if (Object.values(f.badStat || {}).some(Boolean)) { toast('תקנו מדד בפורמט לא תקין (זמן: 12:30)', true); return; }
-    await api('eval', { corps: k, id: f.id, lv: f.lv, role: f.role, skills: f.skills, stats: f.stats, rec: f.rec, med: f.med, obs: f.obs, summary: f.summary, extra: f.extra, wish: { role: f.wish.role, units: f.wish.units.filter(Boolean), combat: f.wish.combat } });
+    await api('eval', { corps: k, id: f.id, lv: f.lv, role: f.role, skills: f.skills, stats: f.stats, rec: f.rec, obs: f.obs, summary: f.summary, extra: f.extra, wish: { role: f.wish.role, units: f.wish.units.filter(Boolean), combat: f.wish.combat } });
     localStorage.removeItem(evalDraftKey(k, f.id)); A.ui.form = null; toast('ההתרשמות נשמרה בתיק המועמד. אפשר לעדכן ולשלוח שוב.'); rerender();
   },
 });
 
-function importFields(k) { return [['id', 'מס׳ (לזיהוי בעדכון)'], ['name', 'שם'], ['role', 'תפקיד'], ['rec', 'המלצת מגבש'], ['med', 'מגבלות רפואיות'], ['profile', 'פרופיל'], ['motivation', 'מוטיבציה (1–5)'], ['combat', 'נכונות לתפקיד קרבי']].concat(cf(k).stats.map((s) => ['s:' + s.k, s.l + ' (' + s.u + ')'])); }
+function importFields(k) { return [['id', 'מס׳ (לזיהוי בעדכון)'], ['name', 'שם'], ['role', 'תפקיד'], ['rec', 'המלצת מגבש'], ['motivation', 'מוטיבציה (1–5)'], ['combat', 'נכונות לתפקיד קרבי']].concat(cf(k).stats.map((s) => ['s:' + s.k, s.l + ' (' + s.u + ')'])); }
 function autoMapFields(k, fields, headers) {
   const m = {};
   fields.forEach(([key, label]) => {
@@ -222,7 +217,7 @@ function parseCombat(v) { const t = String(v == null ? '' : v).trim(); if (t ===
 function parseRow(k, r, map) {
   const g = (key) => (map[key] >= 0 ? r[map[key]] : '');
   const stats = {}, statErrs = []; cf(k).stats.forEach((s) => { const raw = g('s:' + s.k); if (String(raw).trim() === '') { stats[s.k] = ''; return; } const v = parseStat(s, raw); if (v == null) statErrs.push('מדד לא תקין: ' + s.l); stats[s.k] = v == null ? '' : v; });
-  return { statErrs, id: String(g('id') || '').trim(), name: String(g('name') || '').trim(), role: String(g('role') || '').trim(), rec: String(g('rec') || '').trim(), med: String(g('med') || '').trim(), profile: g('profile'), stats, motivation: g('motivation'), combat: parseCombat(g('combat')), unit: String(g('unit') || '').trim() };
+  return { statErrs, id: String(g('id') || '').trim(), name: String(g('name') || '').trim(), role: String(g('role') || '').trim(), rec: String(g('rec') || '').trim(), stats, motivation: g('motivation'), combat: parseCombat(g('combat')), unit: String(g('unit') || '').trim() };
 }
 function buildRows(k) {
   const im = A.ui.imp; if (!im) return [];
@@ -230,18 +225,15 @@ function buildRows(k) {
   return im.data.map((r, n) => {
     const row = parseRow(k, r, im.map), errs = row.statErrs.slice();
     if (mode === 'add') {
-      if (!row.med) row.med = 'ללא מגבלות';
       if (!row.name) errs.push('חסר שם');
       if (!cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
       if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
-      if (!A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
       if (cs(k).cands.some((c) => c.name === row.name)) errs.push('כבר קיים במאגר');
     } else {
       if (!row.id && !row.name) errs.push('חסר מס׳ או שם');
       else if (!cs(k).cands.some((c) => (row.id && c.id === row.id) || (row.name && c.name === row.name))) errs.push('לא נמצא במאגר');
       if (row.role && !cf(k).roles.includes(row.role)) errs.push('תפקיד לא מוכר');
       if (row.rec && !A.cfg.RECS.includes(row.rec)) errs.push('המלצה לא מוכרת');
-      if (row.med && !A.cfg.MEDS.includes(row.med)) errs.push('מגבלה לא מוכרת');
     }
     return Object.assign(row, { n: n + 2, errs });
   });
@@ -253,7 +245,7 @@ SCREENS.import = (k) => {
   return `<div class="row spread"><div>${corpsSwitcher()}<h1 style="font-size:28px;font-weight:800;margin-top:6px">הזנה וייבוא</h1><div class="mut small">קליטת מועמדים, עדכון נתונים קיימים ונתוני ייחוס – מקובץ אקסל או CSV, לפי חיל</div></div></div>
    <div class="grid g3"><div class="kpi"><b>${cs(k).cands.length}</b><span>מועמדים במאגר</span></div><div class="kpi"><b>${A.ui.imported || 0}</b><span>יובאו בטעינה זו</span></div><div class="kpi"><b>${miss}</b><span>תיקים עם נתונים חסרים</span></div></div>
    <div class="card"><h2>1. בחירת קובץ</h2><div class="seg" style="margin-bottom:10px">${[['add', 'הוספת מועמדים חדשים'], ['update', 'עדכון מועמדים קיימים']].map((m) => `<button type="button" class="${(A.ui.impMode || 'add') === m[0] ? 'on' : ''}" data-act="impmode" data-m="${m[0]}">${m[1]}</button>`).join('')}</div>
-    ${(A.ui.impMode || 'add') === 'update' ? '<p class="mut small">העמודות: מס׳ <b>או</b> שם (לזיהוי המועמד במאגר) ועוד כל שדה שרוצים לעדכן. שדות ריקים לא ידרסו נתונים קיימים.</p>' : ''}<p class="mut small" ${(A.ui.impMode || 'add') === 'update' ? 'hidden' : ''}>עמודות נדרשות: שם, תפקיד, המלצת מגבש, מגבלות רפואיות, פרופיל, ${c.stats.map((s) => esc(s.l + ' (' + s.u + ')')).join(', ')}. שורה אחת לכל מועמד/ת.</p>
+    ${(A.ui.impMode || 'add') === 'update' ? '<p class="mut small">העמודות: מס׳ <b>או</b> שם (לזיהוי המועמד במאגר) ועוד כל שדה שרוצים לעדכן. שדות ריקים לא ידרסו נתונים קיימים.</p>' : ''}<p class="mut small" ${(A.ui.impMode || 'add') === 'update' ? 'hidden' : ''}>עמודות נדרשות: שם, תפקיד, המלצת מגבש, ${c.stats.map((s) => esc(s.l + ' (' + s.u + ')')).join(', ')}. שורה אחת לכל מועמד/ת.</p>
     ${!canImp ? '<div class="demo-note">ייבוא זמין לשלישות החיל בלבד.</div>' : ''}
     <div class="drop"><input type="file" id="file" accept=".xlsx,.xls,.csv" data-chg="file" ${canImp ? '' : 'disabled'}><div class="row" style="justify-content:center;margin-top:10px"><button class="btn sec sm" data-act="sample" ${canImp ? '' : 'disabled'}>טעינת קובץ לדוגמה</button><button class="btn sec sm" data-act="template">הורדת תבנית אקסל</button></div><div class="mut small" style="margin-top:6px">הקובץ נקרא בדפדפן ונשלח לשרת רק בלחיצה על ״ייבוא״. אין להעלות נתוני אמת באב־טיפוס.</div></div></div>
    ${im ? `<div class="card"><h2>2. התאמת עמודות</h2><div class="row">${importFields(k).map(([key, label]) => `<label class="small mut">${esc(label)}<br><select data-chg="map" data-f="${esc(key)}" style="min-width:150px"><option value="-1">— לא ממופה —</option>${im.headers.map((h, i) => `<option value="${i}" ${im.map[key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`).join('')}</div></div>
@@ -269,15 +261,15 @@ function setImport(k, aoa) {
   const headers = (aoa[0] || []).map((h) => String(h)), data = aoa.slice(1).filter((r) => r.some((v) => String(v).trim() !== ''));
   A.ui.imp = { headers, data, map: autoMap(k, headers) }; rerender();
 }
-function sheetRows(k) { const c = cf(k); return [['שם', 'תפקיד', 'המלצת מגבש', 'מגבלות רפואיות', 'פרופיל'].concat(c.stats.map((s) => s.l + ' (' + s.u + ')'))]; }
+function sheetRows(k) { const c = cf(k); return [['שם', 'תפקיד', 'המלצת מגבש'].concat(c.stats.map((s) => s.l + ' (' + s.u + ')'))]; }
 function downloadX(name, aoa) { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'מועמדים'); wb.Workbook = { Views: [{ RTL: true }] }; XLSX.writeFile(wb, name); }
-const poolRows = (k) => sheetRows(k).concat(cs(k).cands.map((x) => [x.name, x.role, x.rec || '', x.med, x.profile].concat(cf(k).stats.map((s) => cellVal(s, x.stats[s.k])))));
+const poolRows = (k) => sheetRows(k).concat(cs(k).cands.map((x) => [x.name, x.role, x.rec || ''].concat(cf(k).stats.map((s) => cellVal(s, x.stats[s.k])))));
 Object.assign(ACTIONS, {
   file: async (d, t) => { const f = t.files[0]; if (!f) return; const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); setImport(corpsKey(), XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' })); },
   map: (d, t) => { A.ui.imp.map[d.f] = +t.value; rerender(); },
   sample: () => {
     const k = corpsKey(), c = cf(k), aoa = sheetRows(k), names = ['נועה ל.', 'איתי ר.', 'שירה מ.', 'עומר ש.', 'מאיה ד.', 'דניאל כ.'];
-    names.forEach((n, i) => aoa.push([n, c.roles[i % c.roles.length], A.cfg.RECS[i % 3], A.cfg.MEDS[i % 3 === 2 ? 1 : 0], 97].concat(c.stats.map((s) => (i === 4 && s === c.stats[0] ? '' : cellVal(s, +(s.min + (s.max - s.min) * (0.4 + 0.1 * i)).toFixed(s.d)))))));
+    names.forEach((n, i) => aoa.push([n, c.roles[i % c.roles.length], A.cfg.RECS[i % 3]].concat(c.stats.map((s) => (i === 4 && s === c.stats[0] ? '' : cellVal(s, +(s.min + (s.max - s.min) * (0.4 + 0.1 * i)).toFixed(s.d)))))));
     setImport(k, aoa);
   },
   template: () => downloadX('mil-draft-template.xlsx', sheetRows(corpsKey()).concat([['דוגמה ד.', cf(corpsKey()).roles[0], 'מומלץ', 'ללא מגבלות', 97].concat(cf(corpsKey()).stats.map((s) => cellVal(s, s.min)))])),

@@ -27,7 +27,7 @@ const K = 'recon', find = async (id) => (await api('state', 'a1')).json.corps[K]
   db.prepare("UPDATE meta SET value = '8' WHERE key = 'data_version'").run(); db.prepare("UPDATE corps_state SET data = ? WHERE corps = ?").run(JSON.stringify({ favs: {} }), K); db.close();
   p = await start(dir); let c1 = await find(c0.id), s1 = (await api('state', 'a1')).json;
   ok(!/demo data/.test(p.out()) && s1.corps[K].cands.length === n0 && c1.daily.some((e) => e.text === 'נשמר במסד'), 'restart keeps the data, and older stored data is upgraded instead of wiped');
-  ok(Object.keys(s1.corps[K].needs).length > 0, 'fields missing in stored data are filled in on load');
+  ok(s1.corps[K].cands.every((x) => Array.isArray(x.events) && Array.isArray(x.daily)), 'fields missing in stored data are filled in on load');
   await stop(p); db = new DatabaseSync(dbf); ok(db.prepare("SELECT value FROM meta WHERE key = 'data_version'").get().value !== '8', 'the stored data version is brought up to date');
   db.prepare("UPDATE meta SET value = '99' WHERE key = 'data_version'").run(); db.close();
   p = await start(dir); await sleep(300); ok(p.exitCode === 1 && /newer than this server/.test(p.out()), 'data from a newer version: the server refuses to start instead of damaging it'); await stop(p);

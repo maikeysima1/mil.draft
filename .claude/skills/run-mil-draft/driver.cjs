@@ -67,61 +67,60 @@ async function main() {
       ok(all.every((x) => x.unit && x.target && x.intakeTs), 'every seeded soldier has a unit, a target and an intake date');
       ok(all.every((x) => cfg.teams.includes(x.group)) && cfg.teams.length === 2 && Object.keys(cfg.corps).every((k) => cfg.users.filter((u) => u.role === 'מגבש/ת' && u.corps === k).length === 2), 'two teams and two evaluators per track');
       ok(Object.keys(cfg.corps).every((k) => ['מ״פ', 'מ״מ', 'מ״כ'].every((r) => cfg.users.some((u) => u.role === r && u.corps === k))), 'training staff (מ״פ / מ״מ / מ״כ) exists in every track');
-      // daily follow-up
-      ok((await api('daily', 'u4', { corps: K, id: t3.id, level: 2, text: 'בדיקה' })).status === 200, 'evaluator of team 2 writes a daily entry for a team-2 soldier');
-      await deny('u4', 'daily', { corps: K, id: t1.id, level: 1 }, 'evaluator of team 2 on a team-1 soldier');
-      await deny('u1', 'daily', { corps: K, id: t1.id, level: 1 }, 'שלישות writing a daily entry');
-      await deny('o1', 'daily', { corps: K, id: t1.id, level: 1 }, 'observer writing a daily entry');
-      await api('daily', 'u4', { corps: K, id: t3.id, level: 0, text: 'עדכון' });
-      const d3 = by(await st(), t3.id).daily.filter((e) => e.byId === 'u4'); ok(d3.length === 1 && d3[0].level === 0, 'a second entry the same day replaces the first (one per author per day)');
-      // periodic status -> dismissal review -> decision
+      // experiences (התנסויות): one entry per soldier per experience; the same experience saved again replaces it
+      const sidA = 'testsid01', exr = (id, lv, more) => Object.assign({ id, level: lv }, more || {});
+      ok((await api('daily', 'u4', { corps: K, exp: 'מטווח', title: 'מטווח 50 מ׳', sid: sidA, rows: [exr(t3.id, 2, { score: 88, text: 'בדיקה' })] })).status === 200, 'evaluator of team 2 records an experience for a team-2 soldier');
+      ok(by(await st(), t3.id).daily.some((e) => e.sid === sidA && e.exp === 'מטווח' && e.score === 88 && e.title === 'מטווח 50 מ׳'), 'the entry keeps the experience type, name and score');
+      await deny('u4', 'daily', { corps: K, exp: 'מטווח', sid: sidA, rows: [exr(t1.id, 1)] }, 'evaluator of team 2 on a team-1 soldier');
+      await deny('u1', 'daily', { corps: K, exp: 'מטווח', sid: sidA, rows: [exr(t1.id, 1)] }, 'שלישות recording an experience');
+      await deny('o1', 'daily', { corps: K, exp: 'מטווח', sid: sidA, rows: [exr(t1.id, 1)] }, 'observer recording an experience');
+      await api('daily', 'u4', { corps: K, exp: 'מטווח', title: 'מטווח 50 מ׳', sid: sidA, rows: [exr(t3.id, 0, { text: 'עדכון' })] });
+      const d3 = by(await st(), t3.id).daily.filter((e) => e.sid === sidA); ok(d3.length === 1 && d3[0].level === 0, 'saving the same experience again replaces the entry');
+      await api('daily', 'u4', { corps: K, exp: 'מסע', title: 'מסע 8 ק״מ', sid: 'testsid02', rows: [exr(t3.id, 1)] });
+      ok(by(await st(), t3.id).daily.filter((e) => e.byId === 'u4' && e.sid).length === 2, 'two experiences on the same day are two entries');
+      // exceptional events
+      await deny('u4', 'event', { corps: K, id: t3.id, kind: 'שלילי', text: 'קצר' }, 'exceptional event without a description');
+      await deny('k-recon-2', 'event', { corps: K, id: t3.id, kind: 'שלילי', text: 'איחור של שעה למסדר הבוקר' }, 'מ״כ recording an exceptional event');
+      ok((await api('event', 'u4', { corps: K, id: t3.id, kind: 'שלילי', text: 'איחור של שעה למסדר הבוקר' })).status === 200 && by(await st(), t3.id).events.some((e) => e.kind === 'שלילי'), 'exceptional event recorded in the file');
+      // no medical data anywhere
+      ok(!('MEDS' in cfg) && (await st()).every((x) => x.med === undefined && x.profile === undefined && !(x.extra && 'medNote' in x.extra)) && !cfg.TR.attend.some((a) => /רפוא/.test(a)), 'no medical data in the config or in any soldier file');
+      // periodic status -> dismissal review
       await deny('u4', 'periodic', { corps: K, id: t3.id, rec: 'ממשיך/ה', summary: 'סיכום תקופתי לבדיקה' }, 'evaluator writing a periodic status');
       await deny('u3', 'periodic', { corps: K, id: t1.id, rec: 'ממשיך/ה', summary: 'קצר' }, 'periodic status without a real summary');
       ok((await api('periodic', 'u3', { corps: K, id: t1.id, rec: 'במעקב', summary: 'נדרש חיזוק בניווט ובעבודת צוות', lv: [1, 0, 1, 1, 0] })).status === 200, 'training commander saves a periodic status');
       ok(by(await st(), t1.id).tstatus === 'במעקב', 'recommendation "במעקב" moves the soldier to follow-up');
       const pr = await api('periodic', 'u3', { corps: K, id: t1.id, rec: 'מועמד/ת להדחה', summary: 'ירידה מתמשכת בתפקוד לאורך התקופה' });
       const c1 = by(await st(), t1.id); ok(pr.json.opened === true && c1.tstatus === 'בבדיקת הדחה' && c1.reviews.filter((r) => r.period === c1.reviews[c1.reviews.length - 1].period).length === 1, '"מועמד/ת להדחה" opens a dismissal review; one status per period');
-      await deny('u4', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'נימוק ארוך מספיק לבדיקה' }, 'evaluator deciding a dismissal review');
-      await deny('u1', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'נימוק ארוך מספיק לבדיקה' }, 'שלישות deciding a dismissal review');
-      await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: '' }, 'decision without a written reason');
-      // dismissal room: reasoned positions first, then the decision
-      await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' }, 'dismissal before 2 positions were written in the room');
-      await deny('u1', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'נימוק ארוך מספיק לבדיקה' }, 'שלישות writing a position in the dismissal room');
-      await deny('u4', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'נימוק ארוך מספיק לבדיקה' }, 'evaluator of team 2 writing a position on a team-1 soldier');
-      await deny('u3', 'dismiss-opinion', { corps: K, id: t1.id, stance: 'להדיח', text: 'קצר' }, 'position without a real reason');
-      await api('dismiss-opinion', 'u3', { corps: K, id: t1.id, stance: 'להשאיר במעקב', text: 'עדיין רואה פוטנציאל לשיפור' });
-      await api('dismiss-opinion', 'u3', { corps: K, id: t1.id, stance: 'להדיח', text: 'אחרי שבוע נוסף אין שיפור בתפקוד' });
-      let ops = by(await st(), t1.id).dismiss.find((d) => d.status === 'פתוחה').opinions; ok(ops.length === 1 && ops[0].stance === 'להדיח', 'one position per person: saving again replaces it');
-      await deny('u3', 'dismiss-decide', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' }, 'dismissal with only 1 position');
-      ok((await api('dismiss-opinion', 'e-recon-1', { corps: K, id: t1.id, stance: 'להדיח', text: 'לא עומד בקצב הצוות כבר חודש' })).status === 200, 'evaluator of team 1 writes a position on an own-team soldier');
-      ok((await api('dismiss-decide', 'u3', { corps: K, id: t1.id, decision: 'הודח/ה', note: 'הוחלט לאחר שיחה עם החייל ועם המגבש' })).status === 200, 'training commander decides after 2 positions: dismissed');
-      ok(by(await st(), t1.id).tstatus === 'הודח/ה', 'soldier status is now dismissed');
-      await deny('u3', 'daily', { corps: K, id: t1.id, level: 1 }, 'daily entry for a dismissed soldier');
-      ok((await api('dismiss-open', 'u4', { corps: K, id: t3.id, reason: 'שלושה ימים רצופים של קושי בעומס' })).status === 200, 'evaluator recommends a dismissal review for an own-team soldier');
+      // the review goes stage by stage: שיחת מ״מ -> שיחת דוברת -> ועדה אצל מפקדת הגדוד (-> ועדה בדרג נוסף)
+      const stg = (u, id, stage, more) => api('dismiss-stage', u, Object.assign({ corps: K, id, stage, summary: 'סיכום מפורט של השלב לבדיקה' }, more));
+      await deny('u3', 'dismiss-stage', { corps: K, id: t1.id, stage: 'bn', outcome: 'הודח/ה', summary: 'ניסיון לדלג על השיחות' }, 'committee before the talks were recorded');
+      await deny('u1', 'dismiss-stage', { corps: K, id: t1.id, stage: 'mm', rec: 'להדיח', summary: 'שלישות מתעדת שיחה' }, 'שלישות recording a talk');
+      await deny('u4', 'dismiss-stage', { corps: K, id: t1.id, stage: 'mm', rec: 'להדיח', summary: 'מגבש מתעד שיחת מ״מ' }, 'evaluator recording the platoon commander talk');
+      await deny('m-recon-2', 'dismiss-stage', { corps: K, id: t1.id, stage: 'mm', rec: 'להדיח', summary: 'מ״מ של צוות אחר' }, 'מ״מ of team 2 on a team-1 soldier');
+      await deny('m-recon-1', 'dismiss-stage', { corps: K, id: t1.id, stage: 'mm', rec: 'להדיח', summary: 'קצר' }, 'talk without a real summary');
+      ok((await stg('m-recon-1', t1.id, 'mm', { rec: 'להדיח' })).status === 200, 'מ״מ of team 1 records the platoon commander talk');
+      ok((await stg('m-recon-1', t1.id, 'mm', { rec: 'להשאיר במעקב' })).status === 200 && by(await st(), t1.id).dismiss.find((d) => d.status === 'פתוחה').stages.length === 1, 'the talk can be corrected until the next stage (no duplicate)');
+      await deny('m-recon-1', 'dismiss-stage', { corps: K, id: t1.id, stage: 'dov', rec: 'להדיח', summary: 'מ״מ מתעד שיחת דוברת' }, 'מ״מ recording the second talk');
+      ok((await stg('p-recon', t1.id, 'dov', { rec: 'להדיח' })).status === 200, 'מ״פ records the second talk');
+      await deny('m-recon-1', 'dismiss-stage', { corps: K, id: t1.id, stage: 'mm', rec: 'להדיח', summary: 'תיקון אחרי השלב הבא' }, 'correcting a talk after the next stage');
+      await deny('a1', 'dismiss-stage', { corps: K, id: t1.id, stage: 'bn', outcome: 'הודח/ה', summary: 'מנהל מערכת מחליט' }, 'admin deciding in the committee');
+      await deny('p-recon', 'dismiss-stage', { corps: K, id: t1.id, stage: 'bn', outcome: 'הודח/ה', summary: 'מ״פ מחליט בוועדה' }, 'מ״פ deciding in the committee');
+      await deny('u3', 'dismiss-stage', { corps: K, id: t1.id, stage: 'bn', outcome: 'מעבר ליחידה אחרת', summary: 'תוצאה לא קיימת בוועדה' }, 'committee with an unknown outcome');
+      const bn = await stg('u3', t1.id, 'bn', { outcome: 'הודח/ה' }), c1d = by(await st(), t1.id);
+      ok(bn.json.closed === true && c1d.tstatus === 'הודח/ה' && c1d.exitTo === cfg.TR.exitTo && c1d.dismiss.find((d) => d.decision === 'הודח/ה').stages.length === 3, 'the committee decides: dismissed, returns to ' + cfg.TR.exitTo + ' with the 3 stages in the file');
+      await deny('u3', 'daily', { corps: K, exp: 'מטווח', sid: 'testsid03', rows: [exr(t1.id, 1)] }, 'experience for a dismissed soldier');
+      // escalation: the committee passes the review on, the higher committee decides
+      ok((await api('dismiss-open', 'u4', { corps: K, id: t3.id, reason: 'שלושה ימים רצופים של קושי בעומס', treat: 'שיחה אישית ותגבור' })).status === 200 && by(await st(), t3.id).dismiss.slice(-1)[0].treat === 'שיחה אישית ותגבור', 'evaluator opens a dismissal review with the treatment so far');
       await deny('u3', 'complete', { corps: K, id: t3.id }, 'completing training while a dismissal review is open');
-      ok((await api('dismiss-decide', 'u3', { corps: K, id: t3.id, decision: 'נשאר/ת במעקב', note: 'שיפור אחרי שיחה, ממשיך במעקב' })).status === 200 && by(await st(), t3.id).tstatus === 'במעקב', 'review closed: stays in follow-up');
+      await stg('m-recon-2', t3.id, 'mm', { rec: 'להשאיר במעקב' }); await stg('p-recon', t3.id, 'dov', { rec: 'להדיח' });
+      await deny('u3', 'dismiss-stage', { corps: K, id: t3.id, stage: 'up', outcome: 'הודח/ה', summary: 'ועדה בדרג נוסף בלי העברה' }, 'higher committee without an escalation');
+      const es = await stg('u3', t3.id, 'bn', { outcome: cfg.TR.escalate }); ok(es.json.closed === false && by(await st(), t3.id).tstatus === 'בבדיקת הדחה', 'the committee passes the review on: it stays open');
+      ok((await stg('u3', t3.id, 'up', { outcome: 'נשאר/ת במעקב' })).json.closed === true && by(await st(), t3.id).tstatus === 'במעקב', 'the higher committee decides: stays in follow-up');
       ok((await api('complete', 'u3', { corps: K, id: s2.id })).status === 200 && by(await st(), s2.id).tstatus === 'סיים/ה הכשרה', 'training commander marks training as completed');
-      // dismissal -> automatic move one level down by the system's needs (same track); only the training commander decides
-      const I = 'special', sti = async () => (await api('state', 'a1')).json.corps[I], i0 = await sti(), sp = i0.cands.find((x) => x.unit === 'שייטת 13' && x.tstatus === 'בהכשרה');
-      await api('dismiss-open', 'u3', { corps: I, id: sp.id, reason: 'בדיקה: אי עמידה ברף המסלול' });
-      await api('dismiss-opinion', 'u3', { corps: I, id: sp.id, stance: 'להדיח', text: 'לא עומד ברף לאורך זמן' });
-      await api('dismiss-opinion', 'e-special-' + sp.group, { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }).then(async (r) => { if (r.status !== 200) await api('dismiss-opinion', 'u5', { corps: I, id: sp.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' }); });
-      await deny('a1', 'dismiss-decide', { corps: I, id: sp.id, decision: 'הודח/ה', note: 'ניסיון החלטה של מנהל מערכת' }, 'admin deciding a dismissal (only the training commander may)');
-      const dz = await api('dismiss-decide', 'u3', { corps: I, id: sp.id, decision: 'הודח/ה', note: 'הוחלט לאחר שמיעת כל הנימוקים' }), i1 = await sti(), sp1 = i1.cands.find((x) => x.id === sp.id);
-      ok(dz.json.movedTo === 'דובדבן' && sp1.unit === 'דובדבן' && sp1.tstatus === 'בהכשרה' && sp1.transfers.length === 1, 'dismissed from a tier-1 unit: moved automatically to the tier-2 unit with the largest open need (דובדבן)');
-      ok(i1.needs['דובדבן'] === i0.needs['דובדבן'] - 1, 'the open need of the receiving unit went down by one');
-      // no open place left in the track -> the dismissed soldier moves to the next track (special units -> brigade recon units)
-      await api('needs', 'a1', { corps: I, unit: 'מגלן', need: 0 }); await api('needs', 'a1', { corps: I, unit: 'דובדבן', need: 0 });
-      const mt = (await sti()).cands.find((x) => x.unit === 'סיירת מטכ״ל' && x.tstatus === 'בהכשרה'), ev2 = cfg.users.find((u) => u.role === 'מגבש/ת' && u.corps === I && u.group === mt.group).id, c0 = await st();
-      await api('dismiss-open', 'u3', { corps: I, id: mt.id, reason: 'בדיקה: מעבר בין מסלולים' });
-      await api('dismiss-opinion', 'u3', { corps: I, id: mt.id, stance: 'להדיח', text: 'לא עומד ברף לאורך זמן' }); await api('dismiss-opinion', ev2, { corps: I, id: mt.id, stance: 'להדיח', text: 'קושי מתמשך בעומס' });
-      const xz = await api('dismiss-decide', 'u3', { corps: I, id: mt.id, decision: 'הודח/ה', note: 'הוחלט לאחר שמיעת כל הנימוקים' }), c1x = await st(), mv = c1x.find((x) => (x.prevIds || []).includes(mt.id));
-      ok(xz.json.movedTo === 'גדס״ר גולני' && !!xz.json.movedTrack && !(await sti()).cands.some((x) => x.id === mt.id) && c1x.length === c0.length + 1, 'no open place in the track: moved to the next track, to its unit with the largest open need');
-      ok(!!mv && mv.id === xz.json.newId && mv.unit === 'גדס״ר גולני' && mv.tstatus === 'בהכשרה' && mv.role === cfg.corps[K].roles[0] && mv.lv.every((v) => v == null) && mv.dismiss.length >= 1 && mv.daily.length === mt.daily.length, 'moved soldier: new id, default role of the new track, levels unknown, full history kept');
-      ok(mv.stats.run === mt.stats.run && mv.stats.shoot === mt.stats.shoot && mv.stats.push == null, 'only measures that mean the same thing are carried over; the rest stay unknown');
-      await deny('u1', 'needs', { corps: K, unit: 'גדס״ר גולני', need: 3 }, 'שלישות editing the system needs');
-      ok((await api('needs', 'a1', { corps: I, unit: 'מגלן', need: 9 })).status === 200 && (await sti()).needs['מגלן'] === 9, 'admin updates the open places of a unit');
-      ok(by(await st(), t1.id).exitTo === cfg.corps[K].fallback, 'no lower unit in the track: the dismissed soldier leaves to the fallback destination');
+      const I = 'special';
+      await deny('u3', 'dismiss-decide', { corps: K, id: t3.id, decision: 'הודח/ה', note: 'הנתיב הישן של החלטה' }, 'removed one-step decision');
+      await deny('a1', 'needs', { corps: I, unit: 'מגלן', need: 9 }, 'removed unit needs (no automatic placement)');
+      ok(!('needs' in (await api('state', 'a1')).json.corps[K]), 'no unit needs in the state');
       // intake
       await deny('u3', 'intake', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], unit: cfg.corps[K].units[0].name, target: cfg.TARGETS[K][0], group: 1 }, 'training commander doing intake');
       await deny('u1', 'intake', { corps: K, name: 'בדיקה א.', role: cfg.corps[K].roles[0], group: 1 }, 'intake without a target unit');
@@ -140,9 +139,9 @@ async function main() {
       ok((await api('attend', kc, { corps: K, id: t3.id, att: 'חסר/ה' })).status === 200 && by(await st(), t3.id).arrive.v === 'חסר/ה', 'מ״כ updates the arrival status');
       await deny(kc, 'attend', { corps: K, id: s2.id, att: 'נוכח/ת' }, 'מ״כ of team 2 on a team-1 soldier');
       ok((await api('eval', mm, { corps: K, id: t3.id, rec: otherRec })).status === 200 && by(await st(), t3.id).rec === otherRec, 'מ״מ fills in the evaluator-sheet data');
-      ok((await api('daily', mm, { corps: K, id: t3.id, level: 1 })).status === 200, 'מ״מ writes a daily entry for an own-team soldier');
+      ok((await api('daily', mm, { corps: K, exp: 'תרגיל', sid: 'testsid04', rows: [exr(t3.id, 1)] })).status === 200, 'מ״מ records an experience for an own-team soldier');
       await deny(mm, 'daily', { corps: K, id: s2.id, level: 1 }, 'מ״מ of team 2 on a team-1 soldier');
-      await deny(mm, 'dismiss-decide', { corps: K, id: t3.id, decision: 'נשאר/ת בהכשרה', note: 'נימוק ארוך מספיק לבדיקה' }, 'מ״מ deciding a dismissal');
+
       const t1b = (await st()).find((x) => x.group === 1 && x.tstatus === 'בהכשרה'), pd = await api('daily', 'p-recon', { corps: K, id: t1b.id, level: 2 });
       ok(pd.status === 200, 'מ״פ writes a daily entry on any team of the track ' + (pd.json.error || ''));
       const pS = (await api('state', 'p-recon')).json, kS = (await api('state', kc)).json;
@@ -161,19 +160,23 @@ async function main() {
       // UI flows
       const ev = await session(browser, 'u4'); await go(ev.page, 'daily');
       ok(!(await ev.page.locator('main').innerText()).includes(t1.name) || t1.group === 2, 'evaluator sees only the own team in the daily screen');
-      await ev.page.locator('[data-act=ddLv][data-v="1"]').nth(1).click(); await ev.page.waitForTimeout(300); await ev.page.click('[data-act=ddSave]'); await ev.page.waitForTimeout(600);
-      ok(/נשמרו 1/.test(await ev.page.locator('#toast').innerText()), 'daily quick entry saved from the screen');
+      ok(await ev.page.locator('[data-act=exSave][disabled]').count() === 1, 'saving needs an experience type and at least one mark');
+      await ev.page.click('[data-act=exType][data-v="ניווט"]'); await ev.page.waitForTimeout(200); await ev.page.locator('[data-act=exLv][data-v="1"]').nth(1).click(); await ev.page.waitForTimeout(200);
+      await ev.page.locator('.excard').nth(1).locator('[data-act=exPh]').first().click(); await ev.page.waitForTimeout(200);
+      ok(await ev.page.evaluate(() => { const r = Object.values(A.ui.ex.rows).find((q) => q.level === 1); return !!r && r.text === TR().phrases.good[0] && !!localStorage.getItem(EXK()); }), 'a ready-made phrase fills the note; the draft is kept on the device');
+      await ev.page.click('[data-act=exSave]'); await ev.page.waitForTimeout(600);
+      ok(/נשמרו 1/.test(await ev.page.locator('#toast').innerText()) && await ev.page.evaluate(() => !localStorage.getItem(EXK())), 'experience saved from the team screen; the device draft is cleared');
+      ok(await ev.page.locator('[data-act=exOpen]').count() >= 1, 'recent experiences are listed and can be reopened');
       const cm = await session(browser, 'u3'); await go(cm.page, 'roster');
       await cm.page.fill('#rf-q', nc.name); await cm.page.waitForTimeout(400); ok(await cm.page.locator('tr.clk').count() === 1, 'roster search finds the new soldier');
       await cm.page.locator('tr.clk .clink').first().click(); await cm.page.waitForSelector('.drawer');
       await cm.page.click('[data-act=cfOpen][data-t=periodic]'); await cm.page.selectOption('select[data-f=rec]', 'ממשיך/ה'); await cm.page.fill('#cf-strong', 'משתלב/ת מהר בצוות'); await cm.page.fill('#cf-plan', 'להמשיך במסלול הרגיל'); await cm.page.click('[data-act=cfSave]'); await cm.page.waitForTimeout(600);
       ok(/הסטטוס נשמר/.test(await cm.page.locator('#toast').innerText()) && /סטטוס/.test(await cm.page.locator('.drawer .tl').first().innerText()), 'periodic status entered from the soldier file and shown in the timeline');
       await api('dismiss-open', 'u3', { corps: K, id: nc.id, reason: 'בדיקה לצורך הדגמת חדר ההדחה' }); await go(cm.page, 'dismiss');
-      ok(await cm.page.locator('.room').count() >= 1 && /נימוקים נדרשים/.test(await cm.page.locator('.room').first().innerText()), 'dismissal room lists the open candidates with the positions counter');
-      const rc = cm.page.locator('#room-' + nc.id); await rc.locator('[data-act=opStance]').nth(1).click(); await cm.page.waitForTimeout(300);
-      await cm.page.fill('#op-' + nc.id, 'נימוק שנכתב מתוך חדר ההדחה'); await cm.page.locator('#room-' + nc.id + ' [data-act=opSave]').click(); await cm.page.waitForTimeout(600);
-      ok(/נרשם/.test(await cm.page.locator('#toast').innerText()) && await cm.page.locator('#room-' + nc.id + ' .opn').count() === 1, 'position written from the dismissal room and listed there');
-      ok(await cm.page.locator('#room-' + nc.id + ' select[data-f=decision] option[disabled]').count() === 1, '"הודח/ה" is disabled in the room until enough positions exist');
+      ok(await cm.page.locator('#room-' + nc.id + ' .stages li.cur').count() === 1 && /ממתין לשיחת מ״מ/.test(await cm.page.locator('#room-' + nc.id).innerText()), 'dismissal room shows the stages and the one it waits for');
+      await cm.page.locator('#room-' + nc.id + ' [data-act=stgPick]').nth(1).click(); await cm.page.waitForTimeout(200);
+      await cm.page.fill('#stg-' + nc.id, 'שיחה שתועדה מתוך חדר ההדחה'); await cm.page.locator('#room-' + nc.id + ' [data-act=stgSave]').click(); await cm.page.waitForTimeout(600);
+      ok(/תועד/.test(await cm.page.locator('#toast').innerText()) && await cm.page.locator('#room-' + nc.id + ' .stages li.done').count() === 1 && /ממתין לשיחת דוברת/.test(await cm.page.locator('#room-' + nc.id).innerText()), 'a talk recorded from the room moves the review to the next stage');
       // roster: filters per sub-topic, Excel export of the filtered rows, no ♥
       await go(cm.page, 'roster'); await cm.page.fill('#rf-q', ''); await cm.page.waitForTimeout(300);
       const role0 = cfg.corps[K].roles[0]; await cm.page.selectOption('select[data-f=role]', role0); await cm.page.waitForTimeout(300);
@@ -204,12 +207,10 @@ async function main() {
       await cm.page.click('[data-act=cfCancel]'); await cm.page.keyboard.press('Escape');
       // "my day" (evaluator) and the automatic weekly summary (commander)
       const td = await session(browser, 'e-recon-1'); ok(await td.page.evaluate(() => location.hash) === '#/today' && /היום שלי – צוות 1/.test(await td.page.locator('main h1').innerText()), 'evaluator lands on "my day" for the own team');
-      const pend0 = await td.page.evaluate(() => visible('recon').filter(isActive).filter((x) => !myToday(x)).length), tid = await td.page.locator('[data-act=tdLv]').first().getAttribute('data-id');
-      await td.page.locator(`[data-act=tdLv][data-id="${tid}"][data-v="1"]`).first().click(); await td.page.waitForTimeout(600);
-      const tdE = by(await st(), tid).daily.filter((e) => e.byId === 'e-recon-1'); ok(tdE.length === 1 && tdE[0].level === 1 && (await td.page.evaluate(() => visible('recon').filter(isActive).filter((x) => !myToday(x)).length)) === pend0 - 1, 'one tap on "my day" saves the daily entry and shortens the waiting list');
+      ok(await td.page.locator('main a[href="#/daily"]').count() >= 1 && /התנסויות/.test(await td.page.locator('main').innerText()), '"my day" leads to recording an experience');
       ok(!(await td.page.locator('main').innerText()).includes(t1.name) || t1.group === 1, '"my day" shows only the evaluator\'s own team');
       await go(cm.page, 'weekly'); const wt = await cm.page.locator('main').innerText();
-      ok(/סיכום שבועי/.test(wt) && /איך זה מחושב/.test(wt) && /בלי רישום השבוע/.test(wt), 'weekly summary renders with its calculation rule');
+      ok(/סיכום שבועי/.test(wt) && /איך זה מחושב/.test(wt) && /בלי התנסות מתועדת השבוע/.test(wt), 'weekly summary renders with its calculation rule');
       const wk = await cm.page.evaluate(() => { const w = weekly('recon', ''); return { act: w.act.length, covered: w.covered, none: w.none.length, cmp: w.compared, bad: w.down.concat(w.up).filter((r) => r.a.length < 2 || r.b.length < 2).length, txt: weeklyText('recon', '') }; });
       ok(wk.covered + wk.none === wk.act && wk.bad === 0, 'weekly summary: every active soldier is either covered or listed as "no entry"; trends need 2+ entries in each week');
       ok(wk.txt.split('\n').length >= 8 && /חדר הדחה/.test(wk.txt), 'weekly summary is available as plain text');

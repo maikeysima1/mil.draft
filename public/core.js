@@ -73,7 +73,7 @@ const PAGES = [
   { id: 'dash', name: 'תמונת מצב', icon: 'chart' },
   { id: 'weekly', name: 'סיכום שבועי', icon: 'cal' },
   { id: 'roster', name: 'חיילים בהכשרה', icon: 'users' },
-  { id: 'daily', name: 'מעקב יומי', icon: 'clip' },
+  { id: 'daily', name: 'התנסויות', icon: 'clip' },
   { id: 'periodic', name: 'סטטוס תקופתי', icon: 'grid' },
   { id: 'dismiss', name: 'חדר הדחה', icon: 'flag' },
   { id: 'intake', name: 'גיוס מועמד', icon: 'upload' },
@@ -175,7 +175,7 @@ function loginAuto() { // skip steps that have a single option
   const units = loginUnits(org); if (!A.ui.lunit && units.length === 1) A.ui.lunit = units[0];
   if (A.ui.lunit && !A.ui.sel) { const rs = loginRoles(org, A.ui.lunit); if (rs.length === 1) A.ui.sel = rs[0].id; }
 }
-const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'מעקב יומי', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', opine: 'נימוק בחדר ההדחה', decide: 'החלטה בהדחה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', evalmini: 'עדכון מדדים', attend: 'סטטוס הגעה', settings: 'הגדרות', factory: 'איפוס מערכת' };
+const ACTION_TXT = { intake: 'גיוס מועמד', import: 'ייבוא', daily: 'תיעוד התנסויות', periodic: 'סטטוס תקופתי', dismiss: 'פתיחת בדיקת הדחה', opine: 'שיחות בתהליך הדחה', decide: 'ועדות הדחה', complete: 'סיום הכשרה', eval: 'דף מגבש', evalbulk: 'קליטת קובץ מגבש', regroup: 'העברת צוות', evalmini: 'עדכון מדדים', attend: 'סטטוס הגעה', settings: 'הגדרות', factory: 'איפוס מערכת' };
 function layerMatrix(selRole) {
   const rows = Object.keys(A.cfg.roles).sort((a, b) => roleOf(a).layer - roleOf(b).layer);
   return `<div class="card matrix"><h2>שכבות סיווג והרשאות</h2><div class="mut small" style="margin-bottom:10px">כל שכבה רואה ומפעילה רק את מה שנקבע לה (העמודות: חדר בחירה, לוח, דף מגבש, תמונת מצב, ייבוא). השרת בודק כל פעולה מחדש.</div>
@@ -193,8 +193,8 @@ function loginView() {
   const target = o ? PAGES.find((p) => p.id === o.home).name : '';
   return `<div class="login"><section class="hero"><div class="logo big">${icon('shield', 34)}<span>MIL-TRACK</span></div>
    <h1>מהגיוס ועד סיום ההכשרה – <em>תמונה אחת</em> של כל חייל/ת</h1>
-   <p>מעקב אחרי חיילים בהכשרה שמועמדים ליחידות מיוחדות: גיוס המועמד, מעקב יומי, סטטוס תקופתי ובדיקת הדחה – עם תיק אחד לכל חייל/ת.</p>
-   <div class="chips"><span>3 אירועים מרכזיים</span><span>מעקב יומי</span><span>6 שכבות סיווג</span></div>
+   <p>מעקב אחרי חיילים בהכשרה שמועמדים ליחידות מיוחדות: גיוס המועמד, תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי ובדיקת הדחה בשלבים – עם תיק אחד לכל חייל/ת.</p>
+   <div class="chips"><span>3 אירועים מרכזיים</span><span>תיעוד התנסויות</span><span>6 שכבות סיווג</span></div>
    ${layerMatrix(u ? u.role : null)}
    <div class="demo-note">${A.auth ? 'הכניסה מוגנת בסיסמה אישית. ניסיונות כושלים חוסמים את החשבון זמנית, וכל כניסה נרשמת ביומן אבטחה.' : 'אב־טיפוס לדמו – המשתמשים פיקטיביים. הפעלת <b>AUTH=1</b> בשרת מחליפה את הבחירה החופשית בכניסה עם סיסמה אישית.'}</div></section>
    <section class="picker"><div class="row spread"><h2>כניסה למערכת</h2><button class="iconbtn" data-act="theme" aria-label="החלפת ערכת נושא">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 18)}</button></div>

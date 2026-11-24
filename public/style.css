@@ -418,3 +418,24 @@ label.need,div.need{color:var(--navy)}
 .pill.linkpill{cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .clk{cursor:pointer}
 .room.flash{box-shadow:0 0 0 3px var(--blue),var(--sh);transition:box-shadow .3s}
+/* dismissal review stages */
+.stages{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.stages li{border:1px solid var(--line);border-radius:12px;padding:8px 12px;border-inline-start:4px solid var(--line)}
+.stages li.done{border-inline-start-color:var(--green)}
+.stages li.cur{border-inline-start-color:var(--orange);background:var(--orange-l)}
+.stages li.todo{opacity:.65}
+/* experience recording (התנסות): one card per soldier, big tap targets, save bar fixed to the bottom */
+.exlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.excard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--sh)}
+.excard.set{border-color:color-mix(in srgb,var(--green) 55%,transparent)}
+.excard .att{max-width:110px;font-size:13px}
+.seg.big{display:flex}.seg.big button{flex:1;min-height:44px;font-weight:700}
+.phrases{display:flex;flex-wrap:wrap;gap:6px}
+.phr{border:1px solid var(--line);background:var(--bg2);border-radius:999px;padding:6px 12px;font-size:13px;min-height:34px}
+.phr.on{background:var(--navy);color:var(--card);border-color:var(--navy)}
+.phr.g.on{background:var(--green);border-color:var(--green);color:#fff}
+.phr.w.on{background:var(--orange);border-color:var(--orange);color:#fff}
+.exbar{position:sticky;bottom:0;z-index:5;display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 14px;box-shadow:0 -6px 20px -10px rgba(0,0,0,.25)}
+@media(max-width:900px){.exbar{bottom:calc(80px + env(safe-area-inset-bottom))}}
+@media(max-width:600px){.exlist{grid-template-columns:1fr}.exbar .btn{flex:1}}
+.exbar .btn{white-space:nowrap}

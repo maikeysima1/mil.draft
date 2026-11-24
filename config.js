@@ -1,7 +1,7 @@
 // Static per-corps configuration (units, quotas, thresholds, traits, stats) ported from the MIL-DRAFT mockup.
 const NAMES = ['איתמר ל.', 'יונתן ר.', 'עידו מ.', 'אורי ש.', 'נדב ד.', 'אלון כ.', 'רועי ב.', 'תומר ג.', 'אדם פ.', 'נתנאל ש.', 'הראל ק.', 'ינון ד.', 'עילאי מ.', 'שקד ב.', 'בן א.', 'גיא ה.', 'מתן ק.', 'שי ר.', 'ליאם ו.', 'עמית צ.', 'יואב מ.', 'אלעד ח.', 'נועה ל.', 'איתי ר.', 'שירה מ.', 'עומר ש.', 'מאיה ד.', 'דניאל כ.', 'יעל ב.', 'אור ג.', 'הדר פ.', 'ליאור ס.', 'רותם א.', 'גל ש.', 'אביגיל מ.', 'עמרי כ.', 'טל ר.', 'יובל נ.', 'רוני א.', 'תמר ש.', 'ניר ב.', 'עדי ל.', 'אלה ר.', 'עוז מ.', 'מיכל ט.', 'אריאל נ.', 'שני ק.', 'דור ח.', 'נגה ע.', 'אייל ס.', 'קרן ג.', 'אסף ו.', 'ליה פ.', 'סהר י.'];
 const AREAS=['צפון','מרכז','דרום','ירושלים'];
-const MEDS=['ללא מגבלות','מגבלה קלה','מגבלה בינונית'];
+// no medical / personnel (ת״ש) data is kept in the system: training domains only
 const RECS=['מומלץ','מומלץ בהסתייגות','לא מומלץ'];
 // Three training tracks for candidates to special units (keys: recon / special / pilot). Unit names, stages and tracks follow general public descriptions and are NOT verified against
 // official IDF data - replace them with the real structure before any real use. Measures (stats) are illustrative.
@@ -57,35 +57,49 @@ const corps = {
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own evaluator group
 // Training-follow-up model. The system tracks soldiers in training who are candidates for a special unit (יח״ט / יחידה מיוחדת).
 // Three core events per soldier: (1) intake – גיוס המועמד, (2) dismissal review – בדיקת מועמד להדחה, (3) periodic status – סטטוס רבעוני / חציוני.
-// Between them: a short daily entry by the training commander / the team's evaluator.
+// Between them: experiences (התנסויות – range, march, test...) and exceptional events, recorded by the training staff.
 const TR = {
   statuses: ['בהכשרה', 'במעקב', 'בבדיקת הדחה', 'הודח/ה', 'סיים/ה הכשרה'],
-  daily: ['מתקשה', 'תקין', 'מצטיין'],                       // daily level 0..2
-  attend: ['נוכח/ת', 'חסר/ה', 'פטור רפואי'],
+  daily: ['מתקשה', 'תקין', 'מצטיין'],                       // level in an experience 0..2
+  // experiences (התנסויות): what is recorded, when it happens – not every day. `score`: the unit of an optional numeric result.
+  expTypes: [
+    { k: 'range', l: 'מטווח', score: '% פגיעה' }, { k: 'test', l: 'מבחן', score: 'ציון' }, { k: 'fit', l: 'אימון כושר', score: 'תוצאה' },
+    { k: 'march', l: 'מסע' }, { k: 'nav', l: 'ניווט' }, { k: 'drill', l: 'תרגיל' }, { k: 'other', l: 'אחר' },
+  ],
+  // ready-made feedback phrases: one tap adds the phrase to the note, so less typing in the field
+  phrases: { good: ['עמד/ה בקצב', 'ביצוע מדויק', 'הוביל/ה את הצוות', 'שיפור ניכר', 'עזר/ה לחברים'], weak: ['דורש/ת חיזוק', 'קושי בעומס', 'צריך/ה חזרה', 'איחור / חוסר ציוד', 'קושי בהבנת ההנחיות'] },
+  eventKinds: ['חיובי', 'שלילי'],                            // exceptional events (אירוע חריג)
+  attend: ['נוכח/ת', 'חסר/ה', 'פטור/ה'],
   periodRec: ['ממשיך/ה', 'במעקב', 'מועמד/ת להדחה'],        // outcome of a periodic status
   decisions: ['נשאר/ת בהכשרה', 'נשאר/ת במעקב', 'הודח/ה'],   // outcome of a dismissal review
   periods: ['רבעון', 'חציון'],
-  // dismissal room: every commander / the team's evaluator writes a reasoned position; a dismissal needs at least minOpinions of them
-  stances: ['להדיח', 'להשאיר במעקב', 'להשאיר בהכשרה'], minOpinions: 2,
+  // dismissal review (בדיקת הדחה), recorded stage by stage. A talk ends with a recommendation (stances); a committee decides (decisions)
+  // or passes the review on to the next level (escalate). The last stage is optional: only after an escalation.
+  // `who`: the roles that record the stage. Stage names follow the interview with the training staff – edit them here.
+  stances: ['להדיח', 'להשאיר במעקב', 'להשאיר בהכשרה'],
+  stages: [
+    { key: 'mm', label: 'שיחת מ״מ', kind: 'talk', who: ['מ״מ', 'מ״פ', 'מפקד/ת הכשרה'] },
+    { key: 'dov', label: 'שיחת דוברת', kind: 'talk', who: ['מ״פ', 'מפקד/ת הכשרה'] },
+    { key: 'bn', label: 'ועדה אצל מפקדת הגדוד', kind: 'committee', who: ['מפקד/ת הכשרה'] },
+    { key: 'up', label: 'ועדה בדרג נוסף', kind: 'committee', who: ['מפקד/ת הכשרה'], optional: true },
+  ],
+  escalate: 'העברה לוועדה בדרג נוסף',
+  exitTo: 'חזרה למיטב',                                      // where a dismissed soldier goes
 };
-// After a dismissal the soldier moves automatically to a unit one level lower IN THE SAME TRACK that has an open need (unit.tier: 1 = highest;
-// unit.need = open places, editable in the settings screen). The tiers below are an ILLUSTRATION ONLY, not an official ranking of units.
-// When no lower unit in the track has an open need, the soldier moves to the next track (corps.nextTrack: flight course -> special units ->
-// brigade recon units - also an illustration), to its unit with the largest open need. With no next track / no open need: corps.fallback.
 // special units the soldiers are candidates for (generic names – replace with the real ones)
 const TARGETS = { recon: ['פלס״ר (סיור)', 'פלחה״ן (חבלה והנדסה)', 'פלנ״ט (נ״ט)'], special: ['לוחמה', 'צליפה', 'חבלה', 'רפואה'], pilot: ['קרב', 'מסוקים', 'תובלה', 'ניווט'] };
 // Classification layers: who can open which screen, which actions they may run, and how much data they see.
 // scope: 'all' = every corps · 'corps' = only own corps · 'group' = only own team
 const ROLES = {
-  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'opine', 'complete', 'regroup', 'evalbulk', 'settings', 'factory'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, מעקב, נימוקים בחדר ההדחה, צורכי היחידות, הגדרות, משתמשים ואיפוס. ההחלטה על הדחה אינה שלו/ה – היא של מפקד/ת ההכשרה בלבד.' },
-  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'eval'], desc: 'מזין/ה מעקב יומי וסטטוס תקופתי, פותח/ת בדיקת הדחה, רושם/ת נימוק בחדר ההדחה ומחליט/ה, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
+  'מנהל/ת מערכת': { layer: 1, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'intake', 'eval', 'log', 'settings'], can: ['intake', 'import', 'daily', 'periodic', 'dismiss', 'complete', 'regroup', 'evalbulk', 'settings', 'factory'], desc: 'ניהול המערכת בכל המסלולים: גיוס מועמדים, תיעוד התנסויות, הגדרות, משתמשים ואיפוס. תהליך ההדחה (שיחות וועדות) אינו שלו/ה.' },
+  'מפקד/ת הכשרה': { layer: 2, scope: 'all', home: 'dash', pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'decide', 'complete', 'eval'], desc: 'מתעד/ת התנסויות וסטטוס תקופתי, פותח/ת בדיקת הדחה, מתעד/ת שיחות ואת הוועדות בתהליך ההדחה ומחליט/ה בהן, ומסמן/ת סיום הכשרה. יכול/ה גם לעדכן נתונים בדף המגבש.' },
   // training staff (סגל הכשרה): the platoon / company commanders are responsible for filling in the data; the squad commander may only update basic data
-  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: מעקב יומי, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ונימוק בחדר ההדחה. ההחלטה על הדחה – של מפקד/ת ההכשרה.' },
-  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: מעקב יומי, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ונימוק בחדר ההדחה.' },
+  'מ״פ': { layer: 2, scope: 'corps', home: 'roster', staff: true, pages: ['dash', 'weekly', 'roster', 'daily', 'periodic', 'dismiss', 'eval', 'log'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת פלוגה. אחראי/ת על מילוי הנתונים בכל המסלול: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד השיחות בתהליך. ההחלטה – בוועדה.' },
+  'מ״מ': { layer: 2, scope: 'group', home: 'today', staff: true, pages: ['today', 'roster', 'daily', 'periodic', 'dismiss', 'eval'], can: ['daily', 'periodic', 'dismiss', 'opine', 'eval', 'attend'], desc: 'סגל הכשרה – מפקד/ת מחלקה. אחראי/ת על מילוי הנתונים של הצוות: תיעוד התנסויות ואירועים חריגים, סטטוס תקופתי, נתוני דף המגבש, פתיחת בדיקת הדחה ותיעוד שיחת המ״מ.' },
   'מ״כ': { layer: 5, scope: 'group', home: 'eval', staff: true, pages: ['roster', 'eval'], can: ['evalmini', 'attend'], desc: 'סגל הכשרה – מפקד/ת כיתה. רואה את חיילי הצוות, ויכול/ה לעדכן רק נתונים בסיסיים: מדדים (קליעה, ריצה וכו׳) וסטטוס הגעה. שאר הנתונים באחריות המ״מ / המ״פ.' },
   'ראש מטה': { layer: 3, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה בלבד בתמונת המצב של כל החילות. אין גישה לתיקי החיילים.' },
   'שלישות': { layer: 4, scope: 'corps', home: 'roster', pages: ['dash', 'roster', 'periodic', 'dismiss', 'intake', 'eval', 'log'], can: ['intake', 'import'], desc: 'מגייסת מועמדים למערכת (ידנית או מקובץ) ועוקבת אחרי מצבם. רואה סטטוס תקופתי, בדיקות הדחה ודפי מגבש בצפייה בלבד.' },
-  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss', 'opine'], desc: 'אחראי/ת על צוות אחד: מעקב יומי על חיילי הצוות, דף מגבש, פתיחת בדיקת הדחה ורישום נימוק בחדר ההדחה על חיילי הצוות. ההחלטה היא של מפקד/ת ההכשרה.' },
+  'מגבש/ת': { layer: 5, scope: 'group', home: 'today', pages: ['today', 'daily', 'dismiss', 'eval'], can: ['eval', 'regroup', 'evalbulk', 'daily', 'dismiss'], desc: 'אחראי/ת על צוות אחד: תיעוד התנסויות של חיילי הצוות, דף מגבש ופתיחת בדיקת הדחה. השיחות וההחלטה בתהליך ההדחה – של הסגל והוועדה.' },
   'צופה/ת': { layer: 6, scope: 'all', home: 'dash', pages: ['dash'], can: [], desc: 'צפייה במספרים המסכמים בתמונת המצב בלבד, ללא שמות, תיקים או הרשאות פעולה.' },
 };
 // evaluators and training-staff teams per track (each team has one evaluator, one מ״מ and one מ״כ)
@@ -96,4 +110,4 @@ const ORGS = [
   { key: 'recon', label: 'יח״טיות חטיבתיות' }, { key: 'special', label: 'יחידות מיוחדות' }, { key: 'pilot', label: 'קורס טיס' },
   { key: 'hr', label: 'משאבי אנוש' }, { key: 'dev', label: 'פיתוח' },
 ];
-module.exports={TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,MEDS,RECS,WORDS:['בסיסי','טוב','בולט']};
+module.exports={TEAMS,ORGS,ROLES,canDo,TR,TARGETS,corps,NAMES,AREAS,RECS,WORDS:['בסיסי','טוב','בולט']};
